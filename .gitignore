@@ -8,3 +8,4 @@ dist-preview/
 _source-assets/
 .localdb/
 api/dist/
+!.env.example
