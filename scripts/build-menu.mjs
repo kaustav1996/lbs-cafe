@@ -69,6 +69,9 @@ export interface MenuItem { id: string; name: string; description?: string; hasV
 export interface MenuCategory { id: string; name: string; color: string; kind: 'drink' | 'food'; min: number; max: number; items: MenuItem[] }
 `;
 fs.writeFileSync('web/src/data/menu.ts', header + `export const MENU: MenuCategory[] = ${JSON.stringify(cats, null, 2)};\n`);
+// The API seeds an empty database from the same data.
+fs.mkdirSync('api/seed', { recursive: true });
+fs.writeFileSync('api/seed/menu.json', JSON.stringify(cats, null, 2) + '\n');
 const n = cats.reduce((a, c) => a + c.items.length, 0), o = cats.reduce((a, c) => a + c.items.reduce((b, i) => b + i.options.length, 0), 0);
 console.log('categories', cats.length, 'rows', n, 'priced options', o);
 console.log('unknown diet:', cats.flatMap(c => c.items.filter(i => i.options.some(x => x.diet === 'unknown')).map(i => i.name)).join(', '));

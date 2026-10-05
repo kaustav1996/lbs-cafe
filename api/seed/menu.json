@@ -1,0 +1,1565 @@
+[
+  {
+    "id": "bandit-brews",
+    "name": "Bandit Brews",
+    "color": "#FF8F1F",
+    "kind": "drink",
+    "min": 169,
+    "max": 329,
+    "items": [
+      {
+        "id": "bandit-brews-affogato",
+        "name": "Affogato",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 209
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-americano",
+        "name": "Americano",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 209
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-cafe-latte",
+        "name": "Cafe Latte",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 189
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-cappuccino",
+        "name": "Cappuccino",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 209
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-classic-cold-coffee",
+        "name": "Classic Cold Coffee",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 229
+          }
+        ],
+        "hasVariants": true
+      },
+      {
+        "id": "bandit-brews-coffee-tonic",
+        "name": "Coffee Tonic",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 229
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-espresso",
+        "name": "Espresso",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 169
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-hazelnut-cold-coffee",
+        "name": "Hazelnut Cold Coffee",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 249
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-hazelnut-latte",
+        "name": "Hazelnut Latte",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 209
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-mocha",
+        "name": "Mocha",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 189
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-strawberry-cold-coffee",
+        "name": "Strawberry Cold Coffee",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 249
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-strawberry-cream-coffee",
+        "name": "Strawberry Cream Coffee",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 279
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-tiramisu-iced-latte",
+        "name": "Tiramisu Iced Latte",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 329
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-vanilla-cold-coffee",
+        "name": "Vanilla Cold Coffee",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 249
+          }
+        ]
+      },
+      {
+        "id": "bandit-brews-vanilla-latte",
+        "name": "Vanilla Latte",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 209
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "galaxy-sips",
+    "name": "Galaxy Sips",
+    "color": "#A58BFF",
+    "kind": "drink",
+    "min": 349,
+    "max": 369,
+    "items": [
+      {
+        "id": "galaxy-sips-acid-drops",
+        "name": "Acid Drops",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 369
+          }
+        ]
+      },
+      {
+        "id": "galaxy-sips-dirty-matcha",
+        "name": "Dirty Matcha",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 369
+          }
+        ]
+      },
+      {
+        "id": "galaxy-sips-matcha-iced-latte",
+        "name": "Matcha Iced Latte",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 369
+          }
+        ]
+      },
+      {
+        "id": "galaxy-sips-purple-haze",
+        "name": "Purple Haze",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 369
+          }
+        ]
+      },
+      {
+        "id": "galaxy-sips-strawberry-matcha",
+        "name": "Strawberry Matcha",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "galaxy-sips-ube-latte",
+        "name": "Ube Latte",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 369
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mutant-milks",
+    "name": "Mutant Milks",
+    "color": "#FF5CBE",
+    "kind": "drink",
+    "min": 449,
+    "max": 459,
+    "items": [
+      {
+        "id": "mutant-milks-blue-voltage",
+        "name": "Blue Voltage",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 459
+          }
+        ]
+      },
+      {
+        "id": "mutant-milks-cyan-rush",
+        "name": "Cyan Rush",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 449
+          }
+        ]
+      },
+      {
+        "id": "mutant-milks-emerald-run",
+        "name": "Emerald Run",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 459
+          }
+        ]
+      },
+      {
+        "id": "mutant-milks-pink-riot",
+        "name": "Pink Riot",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 449
+          }
+        ]
+      },
+      {
+        "id": "mutant-milks-tropical-outlaw",
+        "name": "Tropical Outlaw",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 459
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "elixirs",
+    "name": "Elixirs",
+    "color": "#63E8CF",
+    "kind": "drink",
+    "min": 179,
+    "max": 209,
+    "items": [
+      {
+        "id": "elixirs-berry-bandit",
+        "name": "Berry Bandit",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 179
+          }
+        ]
+      },
+      {
+        "id": "elixirs-blueprint",
+        "name": "Blueprint",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 189
+          }
+        ]
+      },
+      {
+        "id": "elixirs-clean-getaway",
+        "name": "Clean Getaway",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 179
+          }
+        ]
+      },
+      {
+        "id": "elixirs-cool-contra",
+        "name": "Cool Contra",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 189
+          }
+        ]
+      },
+      {
+        "id": "elixirs-hibiscus-spritz",
+        "name": "Hibiscus Spritz",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 209
+          }
+        ]
+      },
+      {
+        "id": "elixirs-melon-heist",
+        "name": "Melon Heist",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 189
+          }
+        ]
+      },
+      {
+        "id": "elixirs-neon-lagoon",
+        "name": "Neon Lagoon",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 189
+          }
+        ]
+      },
+      {
+        "id": "elixirs-raspberry-riot",
+        "name": "Raspberry Riot",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 189
+          }
+        ]
+      },
+      {
+        "id": "elixirs-red-handed",
+        "name": "Red Handed",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 179
+          }
+        ]
+      },
+      {
+        "id": "elixirs-sour-diesel",
+        "name": "Sour Diesel",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 189
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "starters",
+    "name": "Starters",
+    "color": "#FFE24A",
+    "kind": "food",
+    "min": 229,
+    "max": 773,
+    "items": [
+      {
+        "id": "starters-burritos",
+        "name": "Burritos",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 249
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 359
+          }
+        ]
+      },
+      {
+        "id": "starters-calamari-golden-fried",
+        "name": "Calamari Golden Fried",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 659
+          }
+        ]
+      },
+      {
+        "id": "starters-chicken-65",
+        "name": "Chicken 65",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 339
+          }
+        ]
+      },
+      {
+        "id": "starters-chicken-lollipop",
+        "name": "Chicken Lollipop",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "starters-chilli-fish",
+        "name": "Chilli Fish",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 439
+          }
+        ]
+      },
+      {
+        "id": "starters-chilli-prawns",
+        "name": "Chilli Prawns",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 409
+          }
+        ]
+      },
+      {
+        "id": "starters-classic-chicken-bruschetta",
+        "name": "Classic Chicken Bruschetta",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 449
+          }
+        ]
+      },
+      {
+        "id": "starters-cottage-cheese-ball",
+        "name": "Cottage Cheese Ball",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 334
+          }
+        ]
+      },
+      {
+        "id": "starters-cottage-cheese-zucchini-poppers",
+        "name": "Cottage Cheese Zucchini Poppers",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 334
+          }
+        ]
+      },
+      {
+        "id": "starters-crispy-corn",
+        "name": "Crispy Corn",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 229
+          }
+        ]
+      },
+      {
+        "id": "starters-dragon-chicken",
+        "name": "Dragon Chicken",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "starters-dry-chilli-chicken",
+        "name": "Dry Chilli Chicken",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "starters-egg-chilli",
+        "name": "Egg Chilli",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 239
+          }
+        ]
+      },
+      {
+        "id": "starters-fish-rava-fry",
+        "name": "Fish Rava Fry",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 659
+          }
+        ]
+      },
+      {
+        "id": "starters-gobi-manchurian",
+        "name": "Gobi Manchurian",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 229
+          }
+        ]
+      },
+      {
+        "id": "starters-honey-chilli-potato",
+        "name": "Honey Chilli Potato",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 269
+          }
+        ]
+      },
+      {
+        "id": "starters-mushroom-chilli-dry",
+        "name": "Mushroom Chilli Dry",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 279
+          }
+        ]
+      },
+      {
+        "id": "starters-nachos",
+        "name": "Nachos",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 249
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 359
+          }
+        ]
+      },
+      {
+        "id": "starters-paneer-chilli-dry",
+        "name": "Paneer Chilli Dry",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "starters-prawn-and-mushroom-bruschetta",
+        "name": "Prawn and Mushroom Bruschetta",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 419
+          }
+        ]
+      },
+      {
+        "id": "starters-prawn-rava-fry",
+        "name": "Prawn Rava Fry",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 659
+          }
+        ]
+      },
+      {
+        "id": "starters-recheado-masala",
+        "name": "Recheado Masala",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 773
+          }
+        ]
+      },
+      {
+        "id": "starters-schezwan-chicken",
+        "name": "Schezwan Chicken",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "starters-spring-roll",
+        "name": "Spring Roll",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 299
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 329
+          }
+        ]
+      },
+      {
+        "id": "starters-taco",
+        "name": "Taco",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 229
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 329
+          }
+        ]
+      },
+      {
+        "id": "starters-veg-chilli-dry",
+        "name": "Veg Chilli Dry",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 339
+          }
+        ]
+      },
+      {
+        "id": "starters-veg-spring-roll",
+        "name": "Veg Spring Roll",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 279
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "soups",
+    "name": "Soups",
+    "color": "#FF6A4D",
+    "kind": "food",
+    "min": 229,
+    "max": 399,
+    "items": [
+      {
+        "id": "soups-clear-soup",
+        "name": "Clear Soup",
+        "options": [
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 269
+          }
+        ]
+      },
+      {
+        "id": "soups-cream-of-beetroot",
+        "name": "Cream of Beetroot",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 299
+          }
+        ]
+      },
+      {
+        "id": "soups-cream-of-broccoli",
+        "name": "Cream of Broccoli",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 329
+          }
+        ]
+      },
+      {
+        "id": "soups-hot-and-sour",
+        "name": "Hot and Sour",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 239
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 269
+          }
+        ]
+      },
+      {
+        "id": "soups-khao-suey",
+        "name": "Khao Suey",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 229
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "soups-lemon-coriander",
+        "name": "Lemon Coriander",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 239
+          }
+        ]
+      },
+      {
+        "id": "soups-roasted-pumpkin",
+        "name": "Roasted Pumpkin",
+        "options": [
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 399
+          }
+        ]
+      },
+      {
+        "id": "soups-sweet-corn",
+        "name": "Sweet Corn",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 269
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "salads",
+    "name": "Salads",
+    "color": "#B8EE4F",
+    "kind": "food",
+    "min": 429,
+    "max": 479,
+    "items": [
+      {
+        "id": "salads-fruit-bowl",
+        "name": "Fruit Bowl",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 479
+          }
+        ],
+        "description": "Avocado, muskmelon, watermelon, papaya, apple, grapes"
+      },
+      {
+        "id": "salads-caesar-salad",
+        "name": "Caesar Salad",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 429
+          }
+        ]
+      },
+      {
+        "id": "salads-chicken-caesar-salad",
+        "name": "Chicken Caesar Salad",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 469
+          }
+        ]
+      },
+      {
+        "id": "salads-sprout-chickpea-corn-salad",
+        "name": "Sprout Chickpea Corn Salad",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 429
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 469
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "main-course",
+    "name": "Main Course",
+    "color": "#46BFD2",
+    "kind": "food",
+    "min": 249,
+    "max": 689,
+    "items": [
+      {
+        "id": "main-course-baked-fish-with-bell-pepper-sauce",
+        "name": "Baked Fish with Bell Pepper Sauce",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 689
+          }
+        ]
+      },
+      {
+        "id": "main-course-baked-pesto-chicken",
+        "name": "Baked Pesto Chicken",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 539
+          }
+        ]
+      },
+      {
+        "id": "main-course-barbeque-baked-chicken",
+        "name": "Barbeque Baked Chicken",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 539
+          }
+        ]
+      },
+      {
+        "id": "main-course-chicken-fish-in-hot-garlic",
+        "name": "Chicken / Fish in Hot Garlic",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 459
+          }
+        ]
+      },
+      {
+        "id": "main-course-chicken-burnt-garlic-hakka-noodles",
+        "name": "Chicken Burnt Garlic Hakka Noodles",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 299
+          }
+        ]
+      },
+      {
+        "id": "main-course-chicken-cantonese-noodles",
+        "name": "Chicken Cantonese Noodles",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 359
+          }
+        ]
+      },
+      {
+        "id": "main-course-chicken-schezwan-noodles",
+        "name": "Chicken Schezwan Noodles",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 329
+          }
+        ]
+      },
+      {
+        "id": "main-course-chilli-gravy-egg-chicken",
+        "name": "Chilli Gravy Egg / Chicken",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 359
+          }
+        ]
+      },
+      {
+        "id": "main-course-chilli-gravy-mushroom-red",
+        "name": "Chilli Gravy Mushroom Red",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 399
+          }
+        ]
+      },
+      {
+        "id": "main-course-chilli-gravy-paneer",
+        "name": "Chilli Gravy Paneer",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 359
+          }
+        ]
+      },
+      {
+        "id": "main-course-creamy-chicken",
+        "name": "Creamy Chicken",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 559
+          }
+        ]
+      },
+      {
+        "id": "main-course-egg-burnt-garlic-hakka-noodles",
+        "name": "Egg Burnt Garlic Hakka Noodles",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 279
+          }
+        ]
+      },
+      {
+        "id": "main-course-egg-schezwan-noodles",
+        "name": "Egg Schezwan Noodles",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 289
+          }
+        ]
+      },
+      {
+        "id": "main-course-exotic-veg-in-hot-garlic",
+        "name": "Exotic Veg in Hot Garlic",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 329
+          }
+        ]
+      },
+      {
+        "id": "main-course-fish-in-cauliflower-sauce",
+        "name": "Fish in Cauliflower Sauce",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 689
+          }
+        ]
+      },
+      {
+        "id": "main-course-ginger-thai-rice",
+        "name": "Ginger Thai Rice",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 279
+          }
+        ]
+      },
+      {
+        "id": "main-course-herbed-rice",
+        "name": "Herbed Rice",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 399
+          }
+        ]
+      },
+      {
+        "id": "main-course-jeera-rice",
+        "name": "Jeera Rice",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 249
+          }
+        ]
+      },
+      {
+        "id": "main-course-lemongrass-rice",
+        "name": "Lemongrass Rice",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 439
+          }
+        ]
+      },
+      {
+        "id": "main-course-manchurian-gravy-chicken",
+        "name": "Manchurian Gravy Chicken",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 369
+          }
+        ]
+      },
+      {
+        "id": "main-course-manchurian",
+        "name": "Manchurian",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 299
+          }
+        ]
+      },
+      {
+        "id": "main-course-mexican-rice",
+        "name": "Mexican Rice",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 429
+          }
+        ]
+      },
+      {
+        "id": "main-course-mix-burnt-garlic-hakka-noodles",
+        "name": "Mix Burnt Garlic Hakka Noodles",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "main-course-mix-schezwan-noodles",
+        "name": "Mix Schezwan Noodles",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "main-course-mixed-fried-rice",
+        "name": "Mixed Fried Rice",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 389
+          }
+        ]
+      },
+      {
+        "id": "main-course-non-veg-fried-rice",
+        "name": "Non-Veg Fried Rice",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 299
+          }
+        ]
+      },
+      {
+        "id": "main-course-prawn-in-hot-garlic",
+        "name": "Prawn in Hot Garlic",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 519
+          }
+        ]
+      },
+      {
+        "id": "main-course-schezwan-fried-rice",
+        "name": "Schezwan Fried Rice",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 279
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 329
+          }
+        ]
+      },
+      {
+        "id": "main-course-thai-curry-red-prawn",
+        "name": "Thai Curry Red Prawn",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 449
+          }
+        ]
+      },
+      {
+        "id": "main-course-veg-burnt-garlic-hakka-noodles",
+        "name": "Veg Burnt Garlic Hakka Noodles",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 249
+          }
+        ]
+      },
+      {
+        "id": "main-course-veg-fried-rice",
+        "name": "Veg Fried Rice",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 249
+          }
+        ]
+      },
+      {
+        "id": "main-course-veg-schezwan-noodles",
+        "name": "Veg Schezwan Noodles",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 279
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "pasta",
+    "name": "Pasta",
+    "color": "#F4EBDD",
+    "kind": "food",
+    "min": 349,
+    "max": 478,
+    "items": [
+      {
+        "id": "pasta-basil-pesto-spaghetti",
+        "name": "Basil Pesto Spaghetti",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 349
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 469
+          }
+        ]
+      },
+      {
+        "id": "pasta-mix-pink-sauce",
+        "name": "Mix Pink Sauce",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 370
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 442
+          }
+        ]
+      },
+      {
+        "id": "pasta-penne-alfredo",
+        "name": "Penne Alfredo",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 359
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 419
+          }
+        ]
+      },
+      {
+        "id": "pasta-penne-arrabbiata",
+        "name": "Penne Arrabbiata",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 349
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 409
+          }
+        ]
+      },
+      {
+        "id": "pasta-spaghetti-aglio-olio",
+        "name": "Spaghetti Aglio Olio",
+        "options": [
+          {
+            "label": "Veg",
+            "diet": "veg",
+            "price": 389
+          },
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 469
+          }
+        ]
+      },
+      {
+        "id": "pasta-spaghetti-carbonara",
+        "name": "Spaghetti Carbonara",
+        "options": [
+          {
+            "label": "Non-veg",
+            "diet": "nonveg",
+            "price": 478
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "pizza",
+    "name": "Pizza",
+    "color": "#FF4646",
+    "kind": "food",
+    "min": 349,
+    "max": 599,
+    "items": [
+      {
+        "id": "pizza-basil-pesto-chicken",
+        "name": "Basil Pesto Chicken",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 549
+          }
+        ]
+      },
+      {
+        "id": "pizza-classic-margherita",
+        "name": "Classic Margherita",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 349
+          }
+        ]
+      },
+      {
+        "id": "pizza-classic-prawns",
+        "name": "Classic Prawns",
+        "options": [
+          {
+            "label": "",
+            "diet": "nonveg",
+            "price": 599
+          }
+        ]
+      },
+      {
+        "id": "pizza-exotic-vegetables",
+        "name": "Exotic Vegetables",
+        "options": [
+          {
+            "label": "",
+            "diet": "veg",
+            "price": 499
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "desserts",
+    "name": "Desserts",
+    "color": "#F2B8FF",
+    "kind": "food",
+    "min": 119,
+    "max": 369,
+    "items": [
+      {
+        "id": "desserts-basque-cheesecake",
+        "name": "Basque Cheesecake",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 299
+          }
+        ]
+      },
+      {
+        "id": "desserts-biscoff-cheesecake",
+        "name": "Biscoff Cheesecake",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 369
+          }
+        ]
+      },
+      {
+        "id": "desserts-blueberry-cheesecake",
+        "name": "Blueberry Cheesecake",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 369
+          }
+        ]
+      },
+      {
+        "id": "desserts-blueberry-limon-cake",
+        "name": "Blueberry Limon Cake",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 209
+          }
+        ]
+      },
+      {
+        "id": "desserts-choco-fudge-brownie",
+        "name": "Choco Fudge Brownie",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 209
+          }
+        ]
+      },
+      {
+        "id": "desserts-coffee-tiramisu",
+        "name": "Coffee Tiramisu",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 299
+          }
+        ]
+      },
+      {
+        "id": "desserts-double-choco-cookie",
+        "name": "Double Choco Cookie",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 119
+          }
+        ]
+      },
+      {
+        "id": "desserts-strawberry-cheesecake",
+        "name": "Strawberry Cheesecake",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 369
+          }
+        ]
+      },
+      {
+        "id": "desserts-white-choco-blueberry-cookie",
+        "name": "White Choco Blueberry Cookie",
+        "options": [
+          {
+            "label": "",
+            "diet": "unknown",
+            "price": 119
+          }
+        ]
+      }
+    ]
+  }
+]
