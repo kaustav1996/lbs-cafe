@@ -5,3 +5,4 @@ dist-preview/
 .env
 .env.*
 .DS_Store
+_source-assets/

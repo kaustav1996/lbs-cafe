@@ -42,8 +42,8 @@ create; add those in Hostinger's DNS zone editor (apex + `www` for Netlify, a CN
 
 ## To confirm with the cafe
 
-- **Opening hours.** The old site listed three different sets. `site.ts` currently uses Mon–Thu 10 am–10 pm,
-  Fri–Sun 11 am–11 pm.
+Opening hours are confirmed: 10 am to 10 pm, every day.
+
 - **Veg / non-veg** for: Recheado Masala, Herbed Rice, Lemongrass Rice, Mexican Rice, Mix Burnt Garlic Hakka
   Noodles, Mix Schezwan Noodles, Mixed Fried Rice, and all 9 desserts (egg or eggless?). These show no mark
   until confirmed.

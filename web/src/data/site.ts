@@ -22,17 +22,8 @@ export const SITE = {
   facebook: '',
   payments: 'cash, cards and UPI',
   gstRate: 0.05,
-  // TO CONFIRM with the cafe: the old site listed three different sets of hours.
-  // Index 0 = Sunday.
-  hours: [
-    { open: '11:00', close: '23:00' },
-    { open: '10:00', close: '22:00' },
-    { open: '10:00', close: '22:00' },
-    { open: '10:00', close: '22:00' },
-    { open: '10:00', close: '22:00' },
-    { open: '11:00', close: '23:00' },
-    { open: '11:00', close: '23:00' },
-  ] as DayHours[],
+  // Confirmed by the cafe (Oct 2026): 10 am to 10 pm, every day. Index 0 = Sunday.
+  hours: Array.from({ length: 7 }, () => ({ open: '10:00', close: '22:00' })) as DayHours[],
 };
 
 export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

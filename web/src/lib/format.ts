@@ -62,7 +62,9 @@ export function hourRows(hours: DayHours[] = SITE.hours) {
   return rows.map(r => ({
     ...r,
     label:
-      r.days.length === 1
+      r.days.length === 7
+        ? 'Every day'
+        : r.days.length === 1
         ? DAY_NAMES[r.days[0]]
         : `${DAY_NAMES[r.days[0]]} to ${DAY_NAMES[r.days[r.days.length - 1]]}`,
     time: `${clock(r.open)} to ${clock(r.close)}`,

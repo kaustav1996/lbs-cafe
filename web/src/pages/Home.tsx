@@ -182,7 +182,7 @@ export default function Home() {
               <table className="hours">
                 <tbody>
                   {rows.map(r => (
-                    <tr key={r.label} className={r.days.includes(status.today) ? 'is-today' : ''}>
+                    <tr key={r.label} className={r.days.includes(status.today) && r.days.length < 7 ? 'is-today' : ''}>
                       <th scope="row">{r.label}</th>
                       <td>{r.time}</td>
                     </tr>
