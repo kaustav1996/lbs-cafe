@@ -1,0 +1,38 @@
+// Everything the cafe might want to change lives here until the admin's CMS takes over.
+
+export interface DayHours { open: string; close: string } // 24h "HH:MM"
+
+export const SITE = {
+  name: "LB's Hemp Cafe & Lounge",
+  short: "LB's",
+  domain: 'lbscafe.com',
+  address: {
+    line1: 'BJ-29, Salt Lake',
+    city: 'Kolkata',
+    full: "LB's Hemp Cafe & Lounge, BJ-29, Salt Lake, Kolkata",
+  },
+  phone: '+91 98754 31882',
+  phoneHref: 'tel:+919875431882',
+  email: 'lbsfrequency@gmail.com',
+  mapsUrl:
+    'https://www.google.com/maps/search/?api=1&query=' +
+    encodeURIComponent("LB's Hemp Cafe & Lounge, BJ-29, Salt Lake, Kolkata"),
+  // Leave blank to hide. Fill in once confirmed.
+  instagram: '',
+  facebook: '',
+  payments: 'cash, cards and UPI',
+  gstRate: 0.05,
+  // TO CONFIRM with the cafe: the old site listed three different sets of hours.
+  // Index 0 = Sunday.
+  hours: [
+    { open: '11:00', close: '23:00' },
+    { open: '10:00', close: '22:00' },
+    { open: '10:00', close: '22:00' },
+    { open: '10:00', close: '22:00' },
+    { open: '10:00', close: '22:00' },
+    { open: '11:00', close: '23:00' },
+    { open: '11:00', close: '23:00' },
+  ] as DayHours[],
+};
+
+export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

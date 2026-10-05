@@ -1,0 +1,242 @@
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { MENU, type MenuCategory, type MenuItem } from '../data/menu';
+import { SITE } from '../data/site';
+import { Footer, Nav } from '../components/Chrome';
+import { DietMark } from '../components/DietMark';
+import { Stepper } from '../components/Panels';
+import { Vinyl } from '../components/Vinyl';
+import { useCart } from '../state/cart';
+import { useUi } from '../state/ui';
+import { inr } from '../lib/format';
+
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
+
+function filterMenu(q: string, vegOnly: boolean): MenuCategory[] {
+  const words = norm(q).split(/\s+/).filter(Boolean);
+  return MENU.map(c => {
+    const catHit = words.length > 0 && words.every(w => norm(c.name).includes(w));
+    const items = c.items
+      .map(i => (vegOnly ? { ...i, options: i.options.filter(o => o.diet === 'veg') } : i))
+      .filter(i => i.options.length > 0)
+      .filter(i => !words.length || catHit || words.every(w => norm(i.name + ' ' + (i.description ?? '')).includes(w)));
+    return { ...c, items };
+  }).filter(c => c.items.length > 0);
+}
+
+export default function Menu() {
+  const [q, setQ] = useState('');
+  const [vegOnly, setVegOnly] = useState(false);
+  const cart = useCart();
+  const { open, say } = useUi();
+  const [params] = useSearchParams();
+  const loc = useLocation();
+  const cats = useMemo(() => filterMenu(q, vegOnly), [q, vegOnly]);
+  const [active, setActive] = useState(MENU[0].id);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  // QR codes on tables point at /menu?table=7
+  useEffect(() => {
+    const t = params.get('table');
+    if (t) {
+      cart.dispatch({ type: 'table', table: t });
+      cart.dispatch({ type: 'mode', mode: 'table' });
+      say(`Ordering for table ${t}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+
+  useEffect(() => {
+    const id = loc.hash.replace('#', '');
+    if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
+    else window.scrollTo(0, 0);
+  }, [loc.hash]);
+
+  // Highlight the section being read.
+  useEffect(() => {
+    const els = cats.map(c => document.getElementById(c.id)).filter(Boolean) as HTMLElement[];
+    const io = new IntersectionObserver(
+      entries => {
+        const vis = entries.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (vis[0]) setActive(vis[0].target.id);
+      },
+      { rootMargin: '-90px 0px -60% 0px' },
+    );
+    els.forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, [cats]);
+
+  useEffect(() => {
+    const bar = barRef.current;
+    const chip = bar?.querySelector<HTMLElement>(`[data-cat="${active}"]`);
+    if (!chip || !bar) return;
+    const pad = parseFloat(getComputedStyle(bar).paddingLeft) || 16;
+    const left = chip.offsetLeft;
+    const right = left + chip.offsetWidth;
+    if (left < bar.scrollLeft + pad || right > bar.scrollLeft + bar.clientWidth - pad) {
+      bar.scrollTo({ left: Math.max(0, left - pad), behavior: 'smooth' });
+    }
+  }, [active]);
+
+  const jump = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const shown = cats.reduce((a, c) => a + c.items.length, 0);
+
+  return (
+    <div className="zone-night menu-page">
+      <Nav tone="night" />
+      <header className="wrap menu-head">
+        <h1 className="display">The menu</h1>
+        <p className="menu-sub">
+          Prices in rupees. {Math.round(SITE.gstRate * 100)}% GST is added to the bill. Tell us about allergies before you order.
+        </p>
+        <div className="menu-tools">
+          <label className="search" htmlFor="menu-search">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" />
+              <path d="m16 16 4.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <input
+              id="menu-search"
+              type="search"
+              placeholder="Search: latte, paneer, pasta…"
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <label className="switch" htmlFor="veg-only">
+            <input id="veg-only" type="checkbox" checked={vegOnly} onChange={e => setVegOnly(e.target.checked)} />
+            <span className="switch-ui" aria-hidden="true" />
+            Veg only
+          </label>
+        </div>
+        {(q || vegOnly) && shown > 0 && (
+          <p className="menu-count" aria-live="polite">
+            Showing {shown} of {MENU.reduce((a, c) => a + c.items.length, 0)}
+          </p>
+        )}
+      </header>
+
+      {cats.length > 0 && (
+        <nav className="catbar" aria-label="Menu sections">
+          <div className="catbar-row" ref={barRef}>
+            {cats.map(c => (
+              <button
+                key={c.id}
+                type="button"
+                data-cat={c.id}
+                className={`chip ${active === c.id ? 'on' : ''}`}
+                style={{ '--label': c.color } as CSSProperties}
+                onClick={() => jump(c.id)}
+                aria-current={active === c.id ? 'true' : undefined}
+              >
+                <i aria-hidden="true" />
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </nav>
+      )}
+
+      <div className="wrap menu-body">
+        {cats.map(c => (
+          <section key={c.id} id={c.id} className="cat" style={{ '--label': c.color } as CSSProperties} aria-labelledby={`${c.id}-h`}>
+            <div className="sleeve">
+              <div className="sleeve-face">
+                <h2 id={`${c.id}-h`} className="display">
+                  {c.name}
+                </h2>
+                <p className="num">
+                  {c.items.length} {c.items.length === 1 ? 'item' : 'items'}, {inr(c.min)} to {inr(c.max)}
+                </p>
+              </div>
+              <Vinyl color={c.color} className="sleeve-disc" />
+            </div>
+            <ul className="tracks">
+              {c.items.map(i => (
+                <Track key={i.id} item={i} />
+              ))}
+            </ul>
+          </section>
+        ))}
+
+        {cats.length === 0 && (
+          <div className="empty empty-menu">
+            <p>
+              Nothing on the menu matches “{q}”{vegOnly ? ' in veg' : ''}. Try a shorter word, or clear the search.
+            </p>
+            <button
+              type="button"
+              className="btn btn-lemon"
+              onClick={() => {
+                setQ('');
+                setVegOnly(false);
+              }}
+            >
+              Clear search
+            </button>
+          </div>
+        )}
+      </div>
+
+      {cart.mode === 'table' && cart.table && (
+        <button type="button" className="waiter-fab" onClick={() => open('waiter')}>
+          Call a server
+        </button>
+      )}
+
+      <Footer />
+    </div>
+  );
+}
+
+function Track({ item }: { item: MenuItem }) {
+  const cart = useCart();
+  const paired = item.options.length > 1;
+  return (
+    <li className={`track ${paired ? 'track-pair' : ''}`}>
+      <div className="track-main">
+        <span className="track-name">{item.name}</span>
+        {item.description && <span className="track-desc">{item.description}</span>}
+      </div>
+      <span className="leader" aria-hidden="true" />
+      <div className="track-buy">
+        {item.options.map(o => {
+          const key = `${item.id}|${o.label}`;
+          const qty = cart.qtyOf(key);
+          const what = `${item.name}${o.label ? `, ${o.label.toLowerCase()}` : ''}`;
+          return qty > 0 ? (
+            <span key={key} className="buy buy-on">
+              <DietMark diet={o.diet} />
+              {o.label && <span className="buy-opt">{o.label}</span>}
+              <Stepper
+                qty={qty}
+                name={what}
+                onMinus={() => cart.dispatch({ type: 'qty', key, delta: -1 })}
+                onPlus={() => cart.dispatch({ type: 'add', item, option: o })}
+              />
+            </span>
+          ) : (
+            <button
+              key={key}
+              type="button"
+              className="buy"
+              onClick={() => cart.dispatch({ type: 'add', item, option: o })}
+              aria-label={`Add ${what}, ${inr(o.price)}`}
+            >
+              <DietMark diet={o.diet} />
+              {o.label && <span className="buy-opt">{o.label}</span>}
+              <span className="num buy-price">{inr(o.price)}</span>
+              <span className="buy-plus" aria-hidden="true">
+                +
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </li>
+  );
+}

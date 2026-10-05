@@ -1,0 +1,71 @@
+{
+  "brand": {
+    "name": "LB's Hemp Cafe & Lounge",
+    "short": "LB's",
+    "origin": "Limon Bandits — a creative world built around music, culture and individuality",
+    "taglines": [
+      "A little Wild. A lot Zestylicious",
+      "Your kind of place. Your kind of chaos",
+      "Where good food meets good vibes",
+      "Eat loud. Sip wild. Stay curious.",
+      "Eat loud. Stay late. Be a Bandit."
+    ],
+    "about": "LB's comes from Limon Bandits — a creative world built around music, culture and individuality. We wanted to bring that energy off the stage and into a space where everyone could hang out, eat, create, connect and simply be themselves. Our menu blends comfort, creativity and unexpected flavours, while the space brings together retro nostalgia with a modern edge.",
+    "welcome": "A café born from the world of Limon Bandits, where food, music, art and culture collide. LB's is built for the curious, the creative and the unapologetically different. From comfort food and experimental drinks to late-night conversations and good music, this is more than a place to eat — it's a place to belong.",
+    "address": "BJ 29, Salt Lake, Kolkata",
+    "phone": "+91 9875431882",
+    "hours_conflict_note": "Site shows inconsistent hours: About page says Mon–Thu 10am–10pm, Fri–Sun '11pm–11pm' (typo); FAQ says daily 11am–11pm; sidebar has template placeholder (London address, 9.30–2.30). Confirm with owner.",
+    "payments": "Cash, cards, UPI/digital",
+    "domain_current": "lbs-cafe.foduu.com",
+    "logo": "https://lbs-cafe.foduu.com/images/2026/09/25/logo-removebg-preview-c74e6baf.webp",
+    "about_images": [
+      "https://lbs-cafe.foduu.com/images/2026/09/25/Untitled-2-1fda1b09.webp",
+      "https://lbs-cafe.foduu.com/images/2026/09/25/aboutImg-d2709831.webp"
+    ]
+  },
+  "public_pages": ["/", "/home", "/about-us", "/menu", "/contact-us (name, email, message)", "/faq", "/cart", "/checkout", "/checkout/table-cart", "/checkout/table-feed", "/active-order (order status)", "/login (email + OTP)", "/weather/recommendations?limit=8", "/product/{slug}"],
+  "public_features": ["Weather-based recommendations", "Featured dishes", "Variants + add-ons modal", "Cart & checkout", "QR table ordering (dine-in table N)", "Call Waiter (Water / Bill)", "Order status tracking", "Email + OTP login/register", "Book a table"],
+  "menu": {
+    "Bandit Brews": [
+      ["Affogato", 209, "https://lbs-cafe.foduu.com/images/2026/10/05/affogato-60fb98c8.webp"],
+      ["Americano", 209, "https://lbs-cafe.foduu.com/images/2026/10/05/americano-cf21bbfa.avif"],
+      ["Cafe Latte", 189, "https://lbs-cafe.foduu.com/images/2026/10/05/latte-2c727b48.webp"],
+      ["Cappuccino", 209, "https://lbs-cafe.foduu.com/images/2026/10/05/cappunico-daa663b9.jpg"],
+      ["Classic Cold Coffee", 229, "https://lbs-cafe.foduu.com/images/2026/10/05/cold-coffee-a025d924.webp", "has variants"],
+      ["Coffee Tonic", 229, "https://lbs-cafe.foduu.com/images/2026/10/05/coffee-tonic-0565df9c.webp"],
+      ["Espresso", 169, "https://lbs-cafe.foduu.com/images/2026/10/05/espresso-pic-a3a0a24c.webp"],
+      ["Hazelnut Cold Coffee", 249, "https://lbs-cafe.foduu.com/images/2026/10/05/hazelnut-cc-76065abb.webp"],
+      ["Hazelnut Latte", 209, "https://lbs-cafe.foduu.com/images/2026/10/05/latte-hz-af0fb9f2.webp"],
+      ["Mocha", 189, "https://lbs-cafe.foduu.com/images/2026/10/05/mocha-3cad6686.webp"],
+      ["Strawberry Cold Coffee", 249, "https://lbs-cafe.foduu.com/images/2026/10/05/strawberry-cc-d7198b77.webp"],
+      ["Strawberry Cream Coffee", 279, "https://lbs-cafe.foduu.com/images/2026/10/05/idk-6c748bef.webp"],
+      ["Tiramisu Iced Latte", 329, "https://lbs-cafe.foduu.com/images/2026/10/05/tiramisu-2853c410.webp"],
+      ["Vanilla Cold Coffee", 249, "https://lbs-cafe.foduu.com/images/2026/10/05/vanilla-cc-3efb8c3e.webp"],
+      ["Vanilla Latte", 209, "https://lbs-cafe.foduu.com/images/2026/10/05/iced-vanilla-d67a8efa.webp"]
+    ],
+    "Mutant Milks": [["Blue Voltage", 459], ["Cyan Rush", 449], ["Emerald Run", 459], ["Pink Riot", 449], ["Tropical Outlaw", 459]],
+    "Salads": [["Fruit Bowl (Avocado, Muskmelon, Watermelon, Papaya, Apple, Grapes)", 479], ["Caesar Salad", 429], ["Chicken Caesar Salad", 469], ["Sprout Chickpea Corn Salad (Non-Veg)", 469], ["Sprout Chickpea Corn Salad (Veg)", 429]],
+    "Soups": [["Clear Soup (Non-Veg)", 269], ["Cream of Beetroot", 299], ["Cream of Broccoli", 329], ["Hot and Sour (Veg)", 239], ["Hot and Sour (Non-Veg)", 269], ["Khao Suey (Non-Veg)", 349], ["Khao Suey (Veg)", 229], ["Lemon Coriander", 239], ["Roasted Pumpkin (Non-Veg)", 399], ["Sweet Corn", 269]],
+    "Starters": [["Burritos (Non-Veg)", 359], ["Burritos (Veg)", 249], ["Calamari Golden Fried", 659], ["Chicken 65", 339], ["Chicken Lollipop", 349], ["Chilli Fish", 439], ["Chilli Prawns", 409], ["Classic Chicken Bruschetta", 449], ["Cottage Cheese Ball", 334], ["Cottage Cheese Zucchini Poppers", 334], ["Crispy Corn", 229], ["Dragon Chicken", 349], ["Dry Chilli Chicken", 349], ["Egg Chilli", 239], ["Fish Rava Fry", 659], ["Gobi Manchurian", 229], ["Honey Chilli Potato", 269], ["Mushroom Chilli Dry", 279], ["Nachos (Non-Veg)", 359], ["Nachos (Veg)", 249], ["Paneer Chilli Dry", 349], ["Prawn and Mushroom Bruschetta", 419], ["Prawn Rava Fry", 659], ["Recheado Masala", 773], ["Schezwan Chicken", 349], ["Spring Roll (Non-Veg)", 329], ["Spring Roll (Veg)", 299], ["Taco (Veg)", 229], ["Taco (Non-Veg)", 329], ["Veg Chilli Dry", 339], ["Veg Spring Roll", 279]],
+    "Main Course": [["Baked Fish with Bell Pepper Sauce", 689], ["Baked Pesto Chicken", 539], ["Barbeque Baked Chicken", 539], ["Chicken / Fish in Hot Garlic", 459], ["Chicken Burnt Garlic Hakka Noodles", 299], ["Chicken Cantonese Noodles", 359], ["Chicken Schezwan Noodles", 329], ["Chilli Gravy Egg / Chicken", 359], ["Chilli Gravy Mushroom Red", 399], ["Chilli Gravy Paneer", 359], ["Creamy Chicken", 559], ["Egg Burnt Garlic Hakka Noodles", 279], ["Egg Schezwan Noodles", 289], ["Exotic Veg in Hot Garlic", 329], ["Fish in Cauliflower Sauce", 689], ["Ginger Thai Rice (Veg)", 279], ["Herbed Rice", 399], ["Jeera Rice", 249], ["Lemongrass Rice", 439], ["Manchurian Gravy Chicken", 369], ["Manchurian (Veg)", 299], ["Mexican Rice", 429], ["Mix Burnt Garlic Hakka Noodles", 349], ["Mix Schezwan Noodles", 349], ["Mixed Fried Rice", 389], ["Non-Veg Fried Rice", 299], ["Prawn in Hot Garlic", 519], ["Schezwan Fried Rice (Non-Veg)", 329], ["Schezwan Fried Rice (Veg)", 279], ["Thai Curry Red Prawn", 449], ["Veg Burnt Garlic Hakka Noodles", 249], ["Veg Fried Rice", 249], ["Veg Schezwan Noodles", 279]],
+    "Desserts": [["Basque Cheesecake", 299], ["Biscoff Cheesecake", 369], ["Blueberry Cheesecake", 369], ["Blueberry Limon Cake", 209], ["Choco Fudge Brownie", 209, "has variants"], ["Coffee Tiramisu", 299], ["Double Choco Cookie", 119, "has variants"], ["Strawberry Cheesecake", 369], ["White Choco Blueberry Cookie", 119, "has variants"]],
+    "Elixirs": [["Berry Bandit", 179], ["Blueprint", 189], ["Clean Getaway", 179], ["Cool Contra", 189], ["Hibiscus Spritz", 209], ["Melon Heist", 189], ["Neon Lagoon", 189], ["Raspberry Riot", 189], ["Red Handed", 179], ["Sour Diesel", 189]],
+    "Galaxy Sips": [["Acid Drops", 369], ["Dirty Matcha", 369], ["Matcha Iced Latte", 369], ["Purple Haze", 369], ["Strawberry Matcha", 349], ["Ube Latte", 369]],
+    "Pasta": [["Basil Pesto Spaghetti (Non-Veg)", 469], ["Basil Pesto Spaghetti (Veg)", 349], ["Mix Pink Sauce (Non-Veg)", 442], ["Mix Pink Sauce (Veg)", 370], ["Penne Alfredo (Non-Veg)", 419], ["Penne Alfredo (Veg)", 359], ["Penne Arrabbiata (Non-Veg)", 409], ["Penne Arrabbiata (Veg)", 349], ["Spaghetti Aglio Olio (Non-Veg)", 469], ["Spaghetti Aglio Olio (Veg)", 389], ["Spaghetti Carbonara (Non-Veg)", 478]],
+    "Pizza": [["Basil Pesto Chicken", 549], ["Classic Margherita", 349], ["Classic Prawns", 599], ["Exotic Vegetables", 499]]
+  },
+  "admin_modules_from_screenshots": {
+    "Dashboards": ["Website Analytics (sales, revenue, visitors, orders, unpaid, customers, pages, inquiries, products, QR scans, live visitors, top sellers 7d, 6-month earnings)", "Live Traffic (country map, realtime visitors, browser, device, OS, page titles)", "Traffic Analytics (visitors, page views, avg duration, bounce, traffic overview, peak heatmap, geo, device/retention, top pages, sources, visitor log)", "Sales Dashboard (total/unpaid/paid, due orders, payment methods, daily by method, today's/due orders, download)"],
+    "Product": ["All products (stats, search, MRP/sale, status, actions)", "Create product (title, description, bought-together, add-ons, variants, price/discount/barcode, quantity, publish date/status, flags: featured/hot/trending/recommended/jain/chef special/best seller, slug, tax rules, category, brand, recipe link, departments, gallery, external image URL)", "Trash (restore/delete, empty)", "Upload Menu"],
+    "Inventory": ["Inventory report (160 ingredients, out/low/in stock, expiry batches, stocks, recent transactions)", "Ingredients (SKU, units, avg purchase price, expiry, Upload Bill OCR ₹2/image)", "Recipes (ingredient quantities, links to products)"],
+    "Order": ["All orders (cards: id, items, ready status, customer, phone, dine-in table / takeaway, amount, payment method, paid/unpaid, status, invoice, export/import)", "Create order (customer, addresses, payment status, status, tags, method, items, custom product, notes, coupon, owner discount, tax)", "Trash"],
+    "Create order totals": ["Coupon code + Apply", "Owner discount (FLAT/%)", "Taxable amount", "Tax (CGST/SGST)", "Parcel charges (exclude toggle)", "Grand total", "Amount due", "Transactions table (amount, currency, method, status) + Add Transaction (split/partial payments)"],
+    "Table Reservations": ["New reservation", "Reservation settings (online booking on/off)", "Status tabs: pending/confirmed/completed/cancelled/rejected", "Filter by date range + name/mobile/reference", "Columns: reference, guest, when, party size, tables, status, actions"],
+    "Order Report (GST)": ["This/last month + date range", "Cards: subtotal, discount (coupon+owner), taxable sales, GST collected (CGST/SGST split), total sales", "Per-order table: customer, date, subtotal, discount, taxable, CGST/SGST, total GST, total", "Export GST report"],
+    "CMS": ["Pages", "Blogs", "Navigation", "FAQ", "Slider (hero)", "Support Ticket"],
+    "Reviews": ["Filters: search, rating, date range", "Columns: customer, rating, items, order, submitted on, review", "Product comments view"],
+    "Customers": ["List: name/email, status, contact, gender, DOB, created", "Export/Import", "Test customers (fixed OTP, max 3)"],
+    "Master": ["Category (multi-line create, type product/blog, parent, featured, image, icon; tree with module toggle). Product categories: Pasta, Chinese, Pizza, Galaxy Sips, Elixirs, Bandit Brews, Cosmic Sips, Mutant Milks, Salads, Soups (has children), Breads, Wraps, Burgers, Starters, Main Course, Platters, Desserts. Blog: Others", "Tags (multi-line, typed)", "Brands"],
+    "Other": ["POS", "Store Hours", "Printers toggle (QZ Tray)", "Desktop POS app", "Plugins (soon)", "Marketing (soon)", "Dev mode toggle", "Global search Ctrl+Space", "Notifications bell"]
+  }
+}
