@@ -1,7 +1,8 @@
 import { SITE, DAY_NAMES, type DayHours } from '../data/site';
 
 export const inr = (n: number) =>
-  '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: Number.isInteger(n) ? 0 : 2, minimumFractionDigits: Number.isInteger(n) ? 0 : 2 });
+  (n < 0 ? '−₹' : '₹') +
+  Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: Number.isInteger(n) ? 0 : 2, minimumFractionDigits: Number.isInteger(n) ? 0 : 2 });
 
 /** "22:00" -> "10 pm", "10:30" -> "10:30 am" */
 export function clock(hhmm: string) {

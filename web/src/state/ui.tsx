@@ -45,6 +45,3 @@ export function useUi() {
 }
 
 export const asset = (p: string) => `${import.meta.env.BASE_URL}${p}`;
-
-/** True in the shareable design preview, where there is no backend yet. */
-export const IS_PREVIEW = import.meta.env.MODE === 'preview' || !import.meta.env.VITE_API_URL;

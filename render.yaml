@@ -1,0 +1,29 @@
+# Render Blueprint: the LB's API. The database is Supabase (paste its pooler URL as DATABASE_URL).
+services:
+  - type: web
+    name: lbs-cafe-api
+    runtime: node
+    region: singapore          # closest Render region to Kolkata
+    plan: starter              # free instances sleep after 15 idle minutes; live orders need it awake
+    rootDir: api
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL       # Supabase > Connect > Session pooler URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OWNER_EMAIL        # first owner login, created once on an empty database
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false
+      - key: OWNER_NAME
+        value: Sayan
+      - key: CORS_ORIGINS
+        value: https://lbscafe.com,https://www.lbscafe.com
+      - key: PUBLIC_SITE_URL
+        value: https://lbscafe.com

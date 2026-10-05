@@ -1,17 +1,18 @@
 import { useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MENU } from '../data/menu';
 import { SITE } from '../data/site';
 import { Checker, Footer, Nav } from '../components/Chrome';
 import { Vinyl } from '../components/Vinyl';
 import { asset, useUi } from '../state/ui';
+import { useLive } from '../state/live';
 import { hourRows, inr, openState } from '../lib/format';
 
 export default function Home() {
   const { open } = useUi();
   const loc = useLocation();
-  const status = useMemo(() => openState(), []);
-  const rows = useMemo(() => hourRows(), []);
+  const { menu: MENU, settings } = useLive();
+  const status = useMemo(() => openState(settings.hours), [settings.hours]);
+  const rows = useMemo(() => hourRows(settings.hours), [settings.hours]);
   const totalItems = MENU.reduce((a, c) => a + c.items.length, 0);
   const cheapest = Math.min(...MENU.map(c => c.min));
 
@@ -75,7 +76,7 @@ export default function Home() {
               Pick a record.
             </h2>
             <p>
-              Eleven sections, {totalItems} dishes and drinks, starting at {inr(cheapest)}. Tap a record to open that part of the menu.
+              {MENU.length} sections, {totalItems} dishes and drinks, starting at {inr(cheapest)}. Tap a record to open that part of the menu.
             </p>
           </div>
           <ul className="wall-grid">

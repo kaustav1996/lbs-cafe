@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { MENU, type MenuCategory, type MenuItem } from '../data/menu';
-import { SITE } from '../data/site';
+import type { MenuCategory, MenuItem } from '../data/types';
 import { Footer, Nav } from '../components/Chrome';
 import { DietMark } from '../components/DietMark';
 import { Stepper } from '../components/Panels';
 import { Vinyl } from '../components/Vinyl';
 import { useCart } from '../state/cart';
 import { useUi } from '../state/ui';
+import { useLive } from '../state/live';
 import { inr } from '../lib/format';
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
 
-function filterMenu(q: string, vegOnly: boolean): MenuCategory[] {
+function filterMenu(MENU: MenuCategory[], q: string, vegOnly: boolean): MenuCategory[] {
   const words = norm(q).split(/\s+/).filter(Boolean);
   return MENU.map(c => {
     const catHit = words.length > 0 && words.every(w => norm(c.name).includes(w));
@@ -31,8 +31,9 @@ export default function Menu() {
   const { open, say } = useUi();
   const [params] = useSearchParams();
   const loc = useLocation();
-  const cats = useMemo(() => filterMenu(q, vegOnly), [q, vegOnly]);
-  const [active, setActive] = useState(MENU[0].id);
+  const { menu: MENU, settings } = useLive();
+  const cats = useMemo(() => filterMenu(MENU, q, vegOnly), [MENU, q, vegOnly]);
+  const [active, setActive] = useState(MENU[0]?.id ?? '');
   const barRef = useRef<HTMLDivElement>(null);
 
   // QR codes on tables point at /menu?table=7
@@ -90,7 +91,7 @@ export default function Menu() {
       <header className="wrap menu-head">
         <h1 className="display">The menu</h1>
         <p className="menu-sub">
-          Prices in rupees. {Math.round(SITE.gstRate * 100)}% GST is added to the bill. Tell us about allergies before you order.
+          Prices in rupees. {Math.round(settings.gstRate * 100)}% GST is added to the bill. Tell us about allergies before you order.
         </p>
         <div className="menu-tools">
           <label className="search" htmlFor="menu-search">
@@ -196,13 +197,17 @@ export default function Menu() {
 function Track({ item }: { item: MenuItem }) {
   const cart = useCart();
   const paired = item.options.length > 1;
+  const soldOut = item.available === false;
   return (
-    <li className={`track ${paired ? 'track-pair' : ''}`}>
+    <li className={`track ${paired ? 'track-pair' : ''} ${soldOut ? 'track-out' : ''}`}>
       <div className="track-main">
         <span className="track-name">{item.name}</span>
         {item.description && <span className="track-desc">{item.description}</span>}
       </div>
       <span className="leader" aria-hidden="true" />
+      {soldOut ? (
+        <span className="sold-out">Sold out today</span>
+      ) : (
       <div className="track-buy">
         {item.options.map(o => {
           const key = `${item.id}|${o.label}`;
@@ -237,6 +242,7 @@ function Track({ item }: { item: MenuItem }) {
           );
         })}
       </div>
+      )}
     </li>
   );
 }

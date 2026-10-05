@@ -1,4 +1,4 @@
-import type { Diet } from '../data/menu';
+import type { Diet } from '../data/types';
 
 /** The FSSAI veg / non-veg symbols every Indian menu uses. Unknown keeps the slot empty. */
 export function DietMark({ diet }: { diet: Diet }) {

@@ -1455,3 +1455,100 @@ textarea {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Sold out & order status ---------- */
+.track-out .track-name {
+  color: var(--night-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.sold-out {
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--night-muted);
+  border: 1.5px dashed var(--night-line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+.status-page {
+  padding-block: clamp(20px, 4vw, 48px) clamp(64px, 10vw, 120px);
+  display: grid;
+  gap: 28px;
+  max-width: 760px;
+}
+.status-page h1 {
+  font-size: var(--t-3xl);
+  color: var(--lemon);
+}
+.status-meta {
+  color: var(--night-muted);
+  margin: 10px 0 0;
+}
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-weight: 700;
+  font-size: var(--t-sm);
+  color: var(--night-muted);
+}
+.steps li::before {
+  content: '';
+  height: 8px;
+  border-radius: 4px;
+  background: var(--night-line);
+}
+.steps li.done {
+  color: var(--night-ink);
+}
+.steps li.done::before {
+  background: var(--lemon);
+}
+.steps li.now::before {
+  background: var(--lemon);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.status-now {
+  font-size: var(--t-xl);
+  font-weight: 750;
+  margin: 0;
+}
+.bill {
+  background: var(--night-raised);
+  border: 1.5px solid var(--night-line);
+  border-radius: var(--radius);
+  padding: 8px 20px 16px;
+}
+.bill .line {
+  border-color: var(--night-line);
+}
+.bill .line-name small {
+  color: var(--night-muted);
+}
+.bill .totals {
+  margin-top: 12px;
+}
+.status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.btn-outline-night {
+  border-color: var(--night-ink);
+  color: var(--night-ink);
+  background: transparent;
+}
