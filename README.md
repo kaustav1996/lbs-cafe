@@ -42,7 +42,7 @@ create; add those in Hostinger's DNS zone editor (apex + `www` for Netlify, a CN
 
 ## To confirm with the cafe
 
-Opening hours are confirmed: 10 am to 10 pm, every day.
+Confirmed: opening hours 10 am to 10 pm every day; GST 18% (9% CGST + 9% SGST).
 
 - **Veg / non-veg** for: Recheado Masala, Herbed Rice, Lemongrass Rice, Mexican Rice, Mix Burnt Garlic Hakka
   Noodles, Mix Schezwan Noodles, Mixed Fried Rice, and all 9 desserts (egg or eggless?). These show no mark
@@ -51,5 +51,4 @@ Opening hours are confirmed: 10 am to 10 pm, every day.
 - **Variants** the old site had but didn't list: Classic Cold Coffee, Choco Fudge Brownie, Double Choco Cookie,
   White Choco Blueberry Cookie.
 - **Instagram / Facebook links** (hidden until filled in `site.ts`).
-- **GST rate** (5% assumed).
 - Spellings corrected from the old menu: Caesar, Arrabbiata, Aglio Olio, Margherita, Recheado, Taco, Avocado.

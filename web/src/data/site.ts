@@ -21,7 +21,7 @@ export const SITE = {
   instagram: '',
   facebook: '',
   payments: 'cash, cards and UPI',
-  gstRate: 0.05,
+  gstRate: 0.18, // Confirmed by the cafe (Oct 2026). Split 9% CGST + 9% SGST on bills.
   // Confirmed by the cafe (Oct 2026): 10 am to 10 pm, every day. Index 0 = Sunday.
   hours: Array.from({ length: 7 }, () => ({ open: '10:00', close: '22:00' })) as DayHours[],
 };

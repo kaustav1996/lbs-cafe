@@ -109,8 +109,12 @@ export function CartDrawer() {
               <dd className="num">{inr(cart.subtotal)}</dd>
             </div>
             <div>
-              <dt>GST ({Math.round(SITE.gstRate * 100)}%)</dt>
-              <dd className="num">{inr(cart.gst)}</dd>
+              <dt>CGST ({(SITE.gstRate * 50).toFixed(1).replace(/\.0$/, '')}%)</dt>
+              <dd className="num">{inr(cart.gst / 2)}</dd>
+            </div>
+            <div>
+              <dt>SGST ({(SITE.gstRate * 50).toFixed(1).replace(/\.0$/, '')}%)</dt>
+              <dd className="num">{inr(cart.gst / 2)}</dd>
             </div>
             <div className="totals-grand">
               <dt>Total</dt>

@@ -94,7 +94,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const api = useMemo<CartApi>(() => {
     const subtotal = state.lines.reduce((a, l) => a + l.price * l.qty, 0);
-    const gst = Math.round(subtotal * SITE.gstRate);
+    // Bills show GST split equally into CGST and SGST.
+    const half = Math.round(((subtotal * SITE.gstRate) / 2) * 100) / 100;
+    const gst = Math.round(half * 2);
     return {
       ...state,
       count: state.lines.reduce((a, l) => a + l.qty, 0),
