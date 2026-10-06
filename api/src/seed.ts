@@ -19,7 +19,7 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   booking_enabled: true,
   cafe: {
     name: "LB's Hemp Cafe & Lounge",
-    address: 'BJ-29, Salt Lake, Kolkata',
+    address: '29 BJ, BJ Block, Sector 2, Bidhannagar, Kolkata, West Bengal 700091',
     phone: '+91 98754 31882',
     email: 'lbsfrequency@gmail.com',
     gstin: '',

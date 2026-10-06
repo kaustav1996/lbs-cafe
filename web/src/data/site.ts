@@ -7,16 +7,17 @@ export const SITE = {
   short: "LB's",
   domain: 'lbscafe.com',
   address: {
-    line1: 'BJ-29, Salt Lake',
-    city: 'Kolkata',
-    full: "LB's Hemp Cafe & Lounge, BJ-29, Salt Lake, Kolkata",
+    line1: '29 BJ, BJ Block, Sector 2',
+    city: 'Salt Lake, Kolkata 700091',
+    full: '29 BJ, BJ Block, Sector 2, Bidhannagar, Kolkata, West Bengal 700091',
   },
   phone: '+91 98754 31882',
   phoneHref: 'tel:+919875431882',
   email: 'lbsfrequency@gmail.com',
   mapsUrl:
     'https://www.google.com/maps/search/?api=1&query=' +
-    encodeURIComponent("LB's Hemp Cafe & Lounge, BJ-29, Salt Lake, Kolkata"),
+    // The address exactly as Google Maps lists the cafe, so directions land on the right pin.
+    encodeURIComponent('Bidhan Nagar, 29 BJ, BJ Block, Sector 2, Kolkata, Bidhannagar, West Bengal 700091'),
   // Leave blank to hide. Fill in once confirmed.
   instagram: '',
   facebook: '',

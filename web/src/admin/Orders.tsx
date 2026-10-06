@@ -519,7 +519,7 @@ export function printBill(o: AOrder) {
     h1{font-size:16px;text-align:center;margin:0} p{margin:2px 0;text-align:center} table{width:100%;border-collapse:collapse;margin-top:6px}
     td{padding:1px 0;vertical-align:top} .r{text-align:right;white-space:nowrap} .s td{font-weight:bold;border-top:1px dashed #000;padding-top:3px} hr{border:0;border-top:1px dashed #000}
   </style></head><body>
-    <h1>LB's Hemp Cafe &amp; Lounge</h1><p>BJ-29, Salt Lake, Kolkata</p><p>+91 98754 31882</p><hr>
+    <h1>LB's Hemp Cafe &amp; Lounge</h1><p>29 BJ, BJ Block, Sector 2, Salt Lake</p><p>Kolkata 700091</p><p>+91 98754 31882</p><hr>
     <p>Bill #${o.number} &nbsp; ${new Date(o.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</p>
     <p>${esc(where(o))}</p>
     <table>${o.lines.map(l => row(`${l.qty} x ${esc(l.name)}${l.option_label ? ` (${esc(l.option_label)})` : ''}`, rs(l.line_paise ?? 0))).join('')}</table>

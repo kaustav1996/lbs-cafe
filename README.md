@@ -1,6 +1,8 @@
 # LB's Hemp Cafe & Lounge — lbscafe.com
 
-Website, QR table ordering and cafe admin for LB's (BJ-29, Salt Lake, Kolkata). Replaces the Foduu site.
+Website, QR table ordering and cafe admin for LB’s (29 BJ, BJ Block, Sector 2, Salt Lake, Kolkata 700091). Replaces the Foduu site.
+
+For status, decisions and next steps see [docs/HANDOVER.md](docs/HANDOVER.md). Notes for Claude Code are in [CLAUDE.md](CLAUDE.md).
 
 | Part | Folder | Runs on |
 |---|---|---|
