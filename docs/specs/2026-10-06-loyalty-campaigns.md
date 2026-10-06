@@ -54,6 +54,8 @@ All numbers above are settings (see Data), defaulting to these values.
   `409 { error: 'linked', message: "This bill is already on another LB's card." }` for guests; staff may replace
   (only while the invoice is not frozen, see section 2).
 - **Before any payment** (invoice not frozen): linking or unlinking runs the discount calculation (section 2).
+- A paid invoice settled more than 24 hours ago can't be linked:
+  `409 { error: 'too_old', message: "This bill was paid more than a day ago, so it can't go on a card now." }`.
 - **After payment started** (frozen, or already `paid` within the last 24 hours): linking is still allowed but is
   **stamp-only**: no discount is applied or changed. If the invoice is already paid, the stamp rule (section 2,
   "When the bill is paid") runs at once. Unlinking a frozen invoice is refused:
@@ -80,7 +82,8 @@ All numbers above are settings (see Data), defaulting to these values.
 
 `applyInvoiceDiscount(tx, invoiceId)` in `api/src/loyalty.ts`. Runs when a customer is linked or unlinked, when an
 order joins, when lines/cancellations change the invoice's orders, and when an offer is created, edited, paused or
-ended (for open, unfrozen invoices). Afterwards it publishes `invoice.updated`.
+ended (for open, unfrozen invoices; an offer change recalculates each affected invoice in **its own transaction**, so
+customer locks are never held across invoices). Afterwards it publishes `invoice.updated`.
 
 **Frozen**: an invoice is frozen once any of its non-cancelled orders has `paid_paise > 0` (whether paid through the
 invoice or one by one before it existed). A frozen invoice is never recalculated: joining orders get no automatic
@@ -93,10 +96,10 @@ discount, links are stamp-only, and manual discount changes are refused with
 
 1. Base: the invoice's non-cancelled orders' lines (`order_lines.line_paise`), before GST.
 2. Candidates:
-   - **Reward**: customer linked, `stamps = reward_stamps (4)`, and no *other* open, unfrozen invoice of theirs has
+   - **Reward**: customer linked, `stamps = reward_stamps (4)`, and no *other* open invoice of theirs (frozen or not) has
      `discount_kind = 'reward'` → `min(round(base × 50%), cap ₹1,000)`.
-   - **Welcome**: customer linked, no earlier paid invoice linked to them, `welcome_used_at` null, no other open,
-     unfrozen invoice of theirs has `discount_kind = 'welcome'`, and
+   - **Welcome**: customer linked, no earlier paid invoice linked to them, `welcome_used_at` null, no other open
+     invoice of theirs (frozen or not) has `discount_kind = 'welcome'`, and
      `welcomes used + welcomes held < 420`, where *held* counts open invoices with `discount_kind = 'welcome'` created
      in the last 24 hours (older unfinished bills stop holding a place) → `round(base × 20%)`.
    - **Offers**: every offer active today (Kolkata date within `starts_on..ends_on`, not paused), for `everyone`, or
@@ -129,9 +132,12 @@ already-paid invoice), with the customer row locked:
 - `discount_kind = 'reward'` → `stamps = 0`; ledger `reward_used`. No stamp for this visit.
 - otherwise, if `discount_kind = 'welcome'` → `welcome_used_at = now()`; ledger `welcome_used`. Then, if
   `stamps < 4` and the customer has no `stamp` ledger entry today (Kolkata), `stamps + 1`; ledger `stamp`.
-- Always: `last_visit_at = now()`, `reminders_since_visit = 0`, `visits + 1`, `spent_paise + invoice total`.
-  For orders on an invoice, `addPayment` no longer updates `visits`/`spent_paise` per order (orders with no invoice
-  keep today's per-order behaviour), so nothing is counted twice.
+- Always: `last_visit_at = now()`, `reminders_since_visit = 0`.
+- **Visits and spend** (`visits + 1`, `spent_paise + invoice total`) are added once, at settlement of any invoice:
+  to the invoice's linked customer, or, with no link, to the orders' shared `customer_id` (e.g. a takeaway phone);
+  nobody if neither. For orders on an invoice, `addPayment` no longer counts per order (orders with no invoice keep
+  today's per-order behaviour). A stamp-only link made after settlement doesn't add visits/spend again; if the
+  settled invoice had credited another customer row, that credit stays where it was.
 - A welcome already applied is honoured at payment even if the 420 limit was reached meanwhile by a stale hold
   being paid; `welcome_used_at` is set regardless.
 
@@ -210,7 +216,7 @@ as used when paid).
 ## Data (migration `006_loyalty.sql`)
 
 - `customers`: add `verified_at`, `opted_in boolean not null default false`, `opted_in_at`, `opted_out_at`,
-  `stamps int not null default 0 check (stamps between 0 and 4)`, `welcome_used_at`, `last_visit_at`,
+  `stamps int not null default 0 check (stamps >= 0)`, `welcome_used_at`, `last_visit_at`,
   `last_reminder_at`, `reminders_since_visit int not null default 0`.
 - `customer_codes (id serial pk, phone text not null, code_hash text not null, expires_at timestamptz not null,
   attempts int not null default 0, created_at timestamptz not null default now())`.
@@ -260,7 +266,8 @@ Plan and ship in two parts:
   token; opt in/out; delete my details nulls the links and removes the row.
 - Frozen: linking a card to an invoice whose orders were paid one by one gives a stamp but no discount, and never
   leaves an order with `paid_paise > total_paise`; manual discount on a frozen invoice → `frozen`.
-- Concurrency: one card on two open bills gets the reward on only one; two simultaneous welcome calculations at
+- Concurrency: one card on two open bills gets the reward (or welcome) on only one, including when the first bill is
+  part-paid (frozen); two simultaneous welcome calculations at
   419 used give exactly one welcome; a welcome hold older than 24 hours no longer counts.
 - Visits/spend counted once per paid invoice, not per order.
 - Stamps: paid linked bill → 1 stamp; second paid bill same day → no stamp; 4 stamps cap; 5th visit gets 50% capped
