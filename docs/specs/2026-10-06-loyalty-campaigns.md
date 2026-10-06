@@ -2,7 +2,7 @@
 
 Agreed with Kaustav on 6 Oct 2026 (idea from a reel; rules from the cafe). Builds on
 `2026-10-06-table-codes-menus-order-hold.md`, especially feature 4 (invoices) and feature 1 (table passes).
-Ships after those, as migration `006_loyalty.sql`. Rules from `CLAUDE.md` apply: paise, the API decides every price
+Ships after those, as migration `008_loyalty.sql` (renumbered 7 Oct 2026; see the other spec). Rules from `CLAUDE.md` apply: paise, the API decides every price
 and discount, RLS on every new table, append-only migrations, plain sentence-case copy.
 
 ## Rules (from the cafe)

@@ -91,6 +91,14 @@ const find = (name: string, label = '') => {
   throw new Error('not on menu: ' + name);
 };
 
+/** The table's current code, read straight from the database, and a pass made with it (what a guest's phone holds). */
+const codeFor = async (label: string) => (await sql<{ otp: string }[]>`select otp from dining_tables where label = ${label}`)[0].otp;
+const passFor = async (label: string) => {
+  const r = await app.inject({ method: 'POST', url: `/api/public/tables/${label}/verify`, payload: { code: await codeFor(label) } });
+  assert.equal(r.statusCode, 200, r.body);
+  return r.json().pass as string;
+};
+
 let orderToken = '';
 let orderId = 0;
 test('a table orders from the QR menu; prices come from the server', async () => {
@@ -99,7 +107,7 @@ test('a table orders from the QR menu; prices come from the server', async () =>
   const r = await app.inject({
     method: 'POST',
     url: '/api/public/orders',
-    payload: { mode: 'table', table: '5', note: 'less ice', lines: [{ ...affogato, qty: 2 }, { ...burritos, qty: 1 }] },
+    payload: { mode: 'table', table: '5', pass: await passFor('5'), note: 'less ice', lines: [{ ...affogato, qty: 2 }, { ...burritos, qty: 1 }] },
   });
   assert.equal(r.statusCode, 201, r.body);
   const { token: t, order } = r.json();
@@ -171,7 +179,7 @@ test('counter (POS) order with a discount, split cash + card', async () => {
 test('sold-out items cannot be ordered online', async () => {
   const x = find('Dirty Matcha');
   await app.inject({ method: 'PATCH', url: `/api/admin/items/${x.itemId}`, headers: auth(), payload: { available: false } });
-  const r = await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'table', table: '2', lines: [{ itemId: x.itemId, optionId: x.optionId, qty: 1 }] } });
+  const r = await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'table', table: '2', pass: await passFor('2'), lines: [{ itemId: x.itemId, optionId: x.optionId, qty: 1 }] } });
   assert.equal(r.statusCode, 409);
   assert.match(r.json().message, /sold out/);
 });
@@ -303,4 +311,72 @@ test('licences: wrong types, disguised files, empty files and staff uploads are 
     payload: { licences: [{ id: 'evil001', name: 'X', file: { key: '../../etc/passwd', name: 'x', type: 'application/pdf', size: 1 } }] },
   });
   assert.equal(badRef.statusCode, 400);
+});
+
+test('table codes: an order needs the table\'s code; wrong codes and other tables\' passes are refused', async () => {
+  const x = find('Americano');
+  const order = (body: object) => app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'table', table: '7', lines: [{ ...x, qty: 1 }], ...body } });
+
+  const none = await order({});
+  assert.equal(none.statusCode, 403);
+  assert.equal(none.json().error, 'table_code');
+  assert.match(none.json().message, /table 7's code/);
+
+  const real = await codeFor('7');
+  const wrongCode = real === '0000' ? '1111' : '0000';
+  const wrong = await app.inject({ method: 'POST', url: '/api/public/tables/7/verify', payload: { code: wrongCode } });
+  assert.equal(wrong.statusCode, 400);
+  assert.match(wrong.json().message, /doesn't match table 7/);
+
+  assert.equal((await order({ pass: await passFor('8') })).statusCode, 403); // table 8's pass at table 7
+  const pass = await passFor('7');
+  const ok = await order({ pass });
+  assert.equal(ok.statusCode, 201, ok.body);
+  // The same phone keeps ordering for the rest of the sitting.
+  assert.equal((await order({ pass })).statusCode, 201);
+
+  // A pass is never a staff login.
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/orders', headers: { authorization: `Bearer ${pass}` } })).statusCode, 401);
+});
+
+test('table codes: settling the table\'s last order changes the code; the old pass stops working', async () => {
+  const pass = await passFor('7');
+  const open = (await app.inject({ method: 'GET', url: '/api/admin/orders', headers: auth() })).json().orders.filter((o: any) => o.table_label === '7');
+  assert.equal(open.length, 2);
+  for (const [i, o] of open.entries()) {
+    await app.inject({ method: 'POST', url: `/api/admin/orders/${o.id}/payments`, headers: auth(), payload: { method: 'cash', amountPaise: o.total_paise } });
+    await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o.id}`, headers: auth(), payload: { status: 'completed' } });
+    const sitting = (await sql<{ sitting: number }[]>`select sitting from dining_tables where label = '7'`)[0].sitting;
+    // Still busy after the first order closes; free (new sitting) only after the last.
+    assert.equal(sitting, i === 0 ? 1 : 2);
+  }
+  const x = find('Americano');
+  const stale = await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'table', table: '7', pass, lines: [{ ...x, qty: 1 }] } });
+  assert.equal(stale.statusCode, 403);
+  assert.equal(events.some(e => e.type === 'table.updated'), true);
+});
+
+test('table codes: any staff member sees the codes and can reset one', async () => {
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } });
+  const st = { authorization: `Bearer ${login.json().token}` };
+  const tables = (await app.inject({ method: 'GET', url: '/api/admin/tables', headers: st })).json().tables;
+  const t3 = tables.find((t: any) => t.label === '3');
+  assert.match(t3.otp, /^\d{4}$/);
+  const pass = await passFor('3');
+  const reset = await app.inject({ method: 'POST', url: `/api/admin/tables/${t3.id}/new-code`, headers: st });
+  assert.equal(reset.statusCode, 200);
+  assert.equal(reset.json().table.sitting, t3.sitting + 1);
+  const x = find('Americano');
+  const stale = await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'table', table: '3', pass, lines: [{ ...x, qty: 1 }] } });
+  assert.equal(stale.statusCode, 403);
+  // Seats stay manager-only.
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/tables/${t3.id}`, headers: st, payload: { seats: 6 } })).statusCode, 403);
+});
+
+test('table codes: wrong guesses are limited per table, not for the whole room', async () => {
+  const guess = (label: string) =>
+    app.inject({ method: 'POST', url: `/api/public/tables/${label}/verify`, headers: { 'cf-connecting-ip': '198.51.100.7' }, payload: { code: 'zzzz' } });
+  for (let i = 0; i < 5; i++) assert.equal((await guess('9')).statusCode, 400);
+  assert.equal((await guess('9')).statusCode, 429);
+  assert.equal((await guess('10')).statusCode, 400); // same Wi-Fi, another table: not locked out
 });

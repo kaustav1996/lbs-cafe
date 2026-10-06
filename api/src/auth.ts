@@ -1,5 +1,6 @@
 import { sign, verify } from 'hono/jwt';
 import { createMiddleware } from 'hono/factory';
+import type { Context } from 'hono';
 import { runtime } from './context.js';
 import { sql } from './db.js';
 
@@ -21,7 +22,32 @@ export function signStaff(s: StaffClaims) {
 export async function verifyToken(token: string): Promise<StaffClaims | null> {
   try {
     const p = await verify(token, runtime().jwtSecret, 'HS256');
+    // Table passes (and later card tokens) are signed with the same secret; they carry `kind` and are never staff.
+    if (p.kind !== undefined || !Number.isInteger(Number(p.sub))) return null;
     return { sub: Number(p.sub), name: String(p.name), role: p.role as Role };
+  } catch {
+    return null;
+  }
+}
+
+/** A table pass: proof that this phone was given the table's code during the current sitting. */
+export interface TablePass {
+  table: string;
+  sitting: number;
+}
+const PASS_TTL_SECONDS = 12 * 3600;
+
+export function signTablePass(p: TablePass) {
+  const exp = Math.floor(Date.now() / 1000) + PASS_TTL_SECONDS;
+  return sign({ kind: 'table', table: p.table, sitting: p.sitting, exp }, runtime().jwtSecret, 'HS256');
+}
+
+export async function verifyTablePass(token: string | undefined): Promise<TablePass | null> {
+  if (!token) return null;
+  try {
+    const p = await verify(token, runtime().jwtSecret, 'HS256');
+    if (p.kind !== 'table' || typeof p.table !== 'string' || !Number.isInteger(p.sitting)) return null;
+    return { table: p.table, sitting: Number(p.sitting) };
   } catch {
     return null;
   }
@@ -47,11 +73,15 @@ export function atLeast(role: Role) {
   });
 }
 
-/** Per-IP limit on a route, like the old @fastify/rate-limit settings. */
-export function rateLimit(name: string, max: number, windowMs: number) {
+/**
+ * Per-IP limit on a route. `extra` adds to the key: guests on the cafe Wi-Fi share one IP, so table
+ * routes also key by table so one busy table can't lock out the room.
+ */
+export function rateLimit(name: string, max: number, windowMs: number, extra?: (c: Context) => Promise<string> | string) {
   return createMiddleware(async (c, next) => {
     const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? 'local';
-    if (!(await runtime().allow(`${name}:${ip}`, max, windowMs)))
+    const more = extra ? await extra(c) : '';
+    if (!(await runtime().allow(`${name}:${ip}${more ? `:${more}` : ''}`, max, windowMs)))
       return c.json({ error: 'slow_down', message: 'Too many tries. Wait a minute and try again.' }, 429);
     await next();
   });

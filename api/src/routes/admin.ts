@@ -7,7 +7,7 @@ import { atLeast, requireStaff, type AppEnv } from '../auth.js';
 import { hashPassword } from '../password.js';
 import { runtime } from '../context.js';
 import { checkUpload, FileRef } from '../files.js';
-import { addLines, addPayment, createOrder, getOrder, getSettings, HttpError, normalisePhone, publishUpdate, recalc, upsertCustomer } from '../orders.js';
+import { addLines, addPayment, createOrder, freeTableCheck, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
 import { menuTree } from './public.js';
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -105,7 +105,9 @@ export function adminRoutes() {
       .parse(await c.req.json());
     if ((b.status === 'cancelled' || b.discountPaise !== undefined) && c.get('staff').role === 'staff')
       throw new HttpError(403, 'Only a manager can cancel an order or give a discount.', 'forbidden');
-    await sql.begin(async tx => {
+    const freed = await sql.begin(async tx => {
+      const [{ table_label: label } = { table_label: null }] = await tx<{ table_label: string | null }[]>`select table_label from orders where id = ${id}`;
+      const wasBusy = await lockTable(tx, label);
       const [o] = await tx<{ id: number; status: string }[]>`select id, status from orders where id = ${id} for update`;
       if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
       if (b.status) {
@@ -118,7 +120,10 @@ export function adminRoutes() {
         await tx`update orders set discount_paise = ${b.discountPaise}, discount_note = ${b.discountNote ?? null} where id = ${id}`;
         await recalc(tx, id);
       }
+      // Closing, paying off or moving the order may free its (old) table.
+      return freeTableCheck(tx, label, wasBusy);
     });
+    publishTable(freed);
     return c.json({ order: await publishUpdate(id) });
   });
 
@@ -130,7 +135,9 @@ export function adminRoutes() {
   app.patch('/orders/:id/lines/:lineId', async c => {
     const id = Number(c.req.param('id'));
     const b = z.object({ qty: z.number().int().min(0).max(99) }).parse(await c.req.json());
-    await sql.begin(async tx => {
+    const freed = await sql.begin(async tx => {
+      const [{ table_label: label } = { table_label: null }] = await tx<{ table_label: string | null }[]>`select table_label from orders where id = ${id}`;
+      const wasBusy = await lockTable(tx, label);
       const [o] = await tx<{ status: string }[]>`select status from orders where id = ${id} for update`;
       if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
       if (o.status === 'completed' || o.status === 'cancelled') throw new HttpError(409, 'This order is closed.', 'closed');
@@ -143,7 +150,9 @@ export function adminRoutes() {
                  where id = ${Number(c.req.param('lineId'))} and order_id = ${id}`;
       }
       await recalc(tx, id);
+      return freeTableCheck(tx, label, wasBusy);
     });
+    publishTable(freed);
     return c.json({ order: await publishUpdate(id) });
   });
 
@@ -478,6 +487,16 @@ export function adminRoutes() {
                           on conflict (label) do update set active = true returning *`;
     return c.json({ table: t }, 201);
   });
+  // Any staff member can reset a table's code, e.g. when a group leaves without settling.
+  app.post('/tables/:id/new-code', async c => {
+    const [t] = await sql<{ label: string }[]>`select label from dining_tables where id = ${Number(c.req.param('id'))}`;
+    if (!t) throw new HttpError(404, 'Table not found.', 'not_found');
+    const id = await sql.begin(tx => newSitting(tx, t.label));
+    publishTable(id);
+    const [row] = await sql`select * from dining_tables where id = ${id}`;
+    return c.json({ table: row });
+  });
+
   app.patch('/tables/:id', atLeast('manager'), async c => {
     const b = z.object({ seats: z.number().int().min(1).max(30).optional(), active: z.boolean().optional() }).parse(await c.req.json());
     const [t] = await sql`update dining_tables set seats = coalesce(${b.seats ?? null}, seats), active = coalesce(${b.active ?? null}, active)

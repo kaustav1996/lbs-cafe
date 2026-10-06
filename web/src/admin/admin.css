@@ -1419,10 +1419,16 @@ textarea.a-input {
   display: grid;
   gap: 8px;
   justify-items: start;
+  min-width: 0;
+}
+.a-hours-row .a-input {
+  min-width: 0;
+  width: 100%;
 }
 .a-hours-row {
   display: grid;
-  grid-template-columns: 100px 140px auto 140px;
+  width: 100%;
+  grid-template-columns: minmax(70px, 100px) minmax(0, 140px) auto minmax(0, 140px);
   align-items: center;
   gap: 8px;
 }
@@ -1520,4 +1526,56 @@ textarea.a-input {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+/* Settings → Tables, codes and QR (a-tablelist; a-tables is the POS table picker) */
+.a-tablelist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.a-tablelist li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-raised);
+}
+.a-tablelist li.off {
+  opacity: 0.55;
+}
+.a-tablelist-label {
+  flex: 1 1 auto;
+  min-width: 70px;
+}
+.a-tablelist-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--a-lemon);
+  min-width: 4.5ch;
+}
+.a-tablelist-seats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--a-muted);
+}
+.a-tablelist-seats .a-input {
+  width: 64px;
+}
+.a-tablelist-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.a-field-narrow .a-input {
+  width: 80px;
 }

@@ -1,7 +1,10 @@
 # Table codes, multiple menus, the 1-minute order hold, and invoices
 
-Agreed with Kaustav on 6 Oct 2026. Four features, built in this order. Features 1–3 share migration `004`;
-feature 4 has its own migration `005` and can ship after them.
+Agreed with Kaustav on 6 Oct 2026. Four features, built in this order.
+
+**Migrations (updated 7 Oct 2026):** each feature ships on its own, so each gets its own migration:
+table codes `004_table_codes.sql` (shipped), menus `005`, order hold `006`, invoices `007`. Where this spec says
+"migration `004`" or "`005`" below, read the feature's own migration. The loyalty spec's `006` becomes `008`.
 
 1. **Table codes**: a 4-digit code per table that a guest gets from their server before their first QR order.
 2. **Multiple menus**: named selections from the master dish list, with optional per-menu prices; one menu is live.

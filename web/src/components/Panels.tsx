@@ -7,6 +7,7 @@ import { useUi } from '../state/ui';
 import { api, ApiError, HAS_API } from '../lib/api';
 import { clock, inr } from '../lib/format';
 import { rememberOrder, recentOrders } from '../lib/orders';
+import { getTablePass, setTablePass } from '../lib/tablePass';
 
 function Drawer({ title, children, footer, label }: { title: string; label: string; children: ReactNode; footer?: ReactNode }) {
   const { close } = useUi();
@@ -56,10 +57,13 @@ export function CartDrawer() {
   const [previewSent, setPreviewSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Set when the API wants this table's code (first order of a sitting, or the code changed).
+  const [askCode, setAskCode] = useState(false);
+  const [code, setCode] = useState('');
   const canOrderOnline = HAS_API && live && settings.orderingEnabled;
   const last = recentOrders()[0];
 
-  const send = async () => {
+  const send = async (pass?: string) => {
     setError('');
     if (cart.mode === 'table' && !cart.table) {
       setError('Add your table number. It’s on the QR stand.');
@@ -85,6 +89,7 @@ export function CartDrawer() {
         json: {
           mode: cart.mode,
           table: cart.mode === 'table' ? cart.table : undefined,
+          pass: cart.mode === 'table' ? pass ?? getTablePass(cart.table) : undefined,
           name: cart.name || undefined,
           phone: cart.phone || undefined,
           note: cart.note || undefined,
@@ -92,11 +97,36 @@ export function CartDrawer() {
         },
       });
       rememberOrder(r.token, r.order.number);
+      setAskCode(false);
+      setCode('');
       cart.dispatch({ type: 'clear' });
       close();
       nav(`/order/${r.token}`);
     } catch (e) {
+      if (e instanceof ApiError && e.code === 'table_code') {
+        setAskCode(true);
+        setTimeout(() => document.getElementById('table-code')?.focus(), 0);
+        return;
+      }
       setError(e instanceof ApiError ? e.message : 'Couldn’t send the order. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const checkCode = async (e?: FormEvent) => {
+    e?.preventDefault();
+    setError('');
+    if (!/^\d{4}$/.test(code.trim())) return setError('Enter the 4-digit code from your server.');
+    setBusy(true);
+    try {
+      const table = cart.table.trim();
+      const r = await api<{ pass: string }>(`/api/public/tables/${encodeURIComponent(table)}/verify`, { method: 'POST', json: { code: code.trim() } });
+      setTablePass(table, r.pass);
+      setBusy(false);
+      await send(r.pass);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Couldn’t check the code. Try again.');
     } finally {
       setBusy(false);
     }
@@ -184,9 +214,28 @@ export function CartDrawer() {
               {error}
             </p>
           )}
-          <button type="button" className="btn btn-ink btn-lg btn-block" onClick={send} disabled={busy}>
-            {busy ? 'Sending…' : cart.mode === 'table' ? 'Send to the kitchen' : 'Place takeaway order'}
-          </button>
+          {askCode && cart.mode === 'table' ? (
+            <form className="table-code" onSubmit={checkCode}>
+              <label htmlFor="table-code">Ask your server for table {cart.table.trim()}’s code</label>
+              <input
+                id="table-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                maxLength={4}
+                placeholder="4 digits"
+                value={code}
+                onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              />
+              <button type="submit" className="btn btn-ink btn-lg btn-block" disabled={busy}>
+                {busy ? 'Sending…' : 'Check code and send'}
+              </button>
+            </form>
+          ) : (
+            <button type="button" className="btn btn-ink btn-lg btn-block" onClick={() => send()} disabled={busy}>
+              {busy ? 'Sending…' : cart.mode === 'table' ? 'Send to the kitchen' : 'Place takeaway order'}
+            </button>
+          )}
         </>
       }
     >
@@ -228,7 +277,10 @@ export function CartDrawer() {
             inputMode="numeric"
             placeholder="It’s on the QR stand"
             value={cart.table}
-            onChange={e => cart.dispatch({ type: 'table', table: e.target.value })}
+            onChange={e => {
+              cart.dispatch({ type: 'table', table: e.target.value });
+              setAskCode(false);
+            }}
           />
         </div>
       ) : (

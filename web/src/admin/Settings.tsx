@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
-import { errText, useAuth } from './core';
+import { errText, useAuth, useOnEvent } from './core';
 import { Modal, PageHead, Toggle, toast } from './ui';
 
 interface SettingsShape {
@@ -11,7 +11,7 @@ interface SettingsShape {
   booking_enabled: boolean;
   cafe: { name: string; address: string; phone: string; email: string; gstin: string };
 }
-interface Table { id: number; label: string; seats: number; active: boolean }
+interface Table { id: number; label: string; seats: number; active: boolean; otp: string; sitting: number }
 interface Staff { id: number; name: string; email: string; role: 'owner' | 'manager' | 'staff'; active: boolean }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -268,41 +268,80 @@ function TablesCard() {
   const { call, can } = useAuth();
   const [tables, setTables] = useState<Table[]>([]);
   const [label, setLabel] = useState('');
+  const [seats, setSeats] = useState('4');
   const [printing, setPrinting] = useState(false);
+  const manager = can('manager');
   const load = useCallback(() => call<{ tables: Table[] }>('/api/admin/tables').then(r => setTables(r.tables)), [call]);
   useEffect(() => void load().catch(e => toast(errText(e), 'bad')), [load]);
+  // Codes change when a table frees up; keep every open screen current.
+  useOnEvent(['table.updated'], () => void load().catch(() => {}));
+
+  const patch = (t: Table, json: Partial<Table>, msg: string) =>
+    call(`/api/admin/tables/${t.id}`, { method: 'PATCH', json }).then(() => (load(), toast(msg))).catch(e => toast(errText(e), 'bad'));
+  const newCode = (t: Table) =>
+    call(`/api/admin/tables/${t.id}/new-code`, { method: 'POST' }).then(() => (load(), toast(`Table ${t.label} has a new code`))).catch(e => toast(errText(e), 'bad'));
+
   return (
     <section className="a-card-panel">
-      <h2>Tables and QR codes</h2>
-      <p className="a-muted">Each table's QR opens the menu with the table number filled in, so orders arrive marked with it.</p>
-      <div className="a-table-chips">
+      <h2>Tables, codes and QR</h2>
+      <p className="a-muted">
+        Each table's QR opens the menu with the table filled in. The first time a phone orders at a table, the guest asks a server for
+        that table's code. Codes change on their own once a table's orders are closed and paid. Tap New code if a group leaves without settling.
+      </p>
+      <ul className="a-tablelist">
         {tables.map(t => (
-          <button
-            key={t.id}
-            type="button"
-            className={t.active ? 'on' : ''}
-            disabled={!can('manager')}
-            title={t.active ? 'Tap to switch this table off' : 'Tap to switch this table on'}
-            onClick={() => call(`/api/admin/tables/${t.id}`, { method: 'PATCH', json: { active: !t.active } }).then(load).catch(e => toast(errText(e), 'bad'))}
-          >
-            {t.label}
-          </button>
+          <li key={t.id} className={t.active ? '' : 'off'}>
+            <b className="a-tablelist-label">Table {t.label}</b>
+            <span className="a-tablelist-code" aria-label={`Code for table ${t.label}`}>{t.active ? t.otp : 'Off'}</span>
+            <label className="a-tablelist-seats">
+              <span>Seats</span>
+              <input
+                className="a-input"
+                type="number"
+                min={1}
+                max={30}
+                defaultValue={t.seats}
+                disabled={!manager}
+                onBlur={e => {
+                  const n = Number(e.target.value);
+                  if (n !== t.seats && n >= 1 && n <= 30) void patch(t, { seats: n }, `Table ${t.label} seats ${n}`);
+                }}
+              />
+            </label>
+            <span className="a-tablelist-actions">
+              {t.active && (
+                <button type="button" className="a-btn a-btn-sm" onClick={() => void newCode(t)}>
+                  New code
+                </button>
+              )}
+              {manager && (
+                <button type="button" className="a-btn a-btn-sm" onClick={() => void patch(t, { active: !t.active }, t.active ? `Table ${t.label} switched off` : `Table ${t.label} switched on`)}>
+                  {t.active ? 'Switch off' : 'Switch on'}
+                </button>
+              )}
+            </span>
+          </li>
         ))}
-      </div>
-      {can('manager') && (
+      </ul>
+      {manager && (
         <form
           className="a-inline-form"
           onSubmit={e => {
             e.preventDefault();
+            const n = Number(seats);
             if (!label.trim()) return;
-            call('/api/admin/tables', { method: 'POST', json: { label: label.trim() } })
+            call('/api/admin/tables', { method: 'POST', json: { label: label.trim(), seats: n >= 1 && n <= 30 ? n : 4 } })
               .then(() => (setLabel(''), load(), toast(`Table ${label.trim()} added`)))
               .catch(err => toast(errText(err), 'bad'));
           }}
         >
           <label className="a-field">
             <span>Add a table</span>
-            <input className="a-input" value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. 13 or Patio-1" maxLength={10} />
+            <input className="a-input" value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. 6 or Patio-1" maxLength={10} />
+          </label>
+          <label className="a-field a-field-narrow">
+            <span>Seats</span>
+            <input className="a-input" type="number" min={1} max={30} value={seats} onChange={e => setSeats(e.target.value)} />
           </label>
           <button className="a-btn">Add</button>
         </form>

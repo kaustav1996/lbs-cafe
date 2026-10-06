@@ -9,6 +9,48 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * A table is busy while it has an order that's held, still with the kitchen or floor, or completed but
+ * unpaid in the last 2 days (the same window as the open board). When it goes from busy to free the
+ * sitting moves on and the code changes (see freeTableCheck).
+ */
+const BUSY_STATUSES = ['held', 'new', 'preparing', 'ready', 'served'];
+
+async function tableBusy(tx: Tx, label: string) {
+  const [r] = await tx<{ busy: boolean }[]>`
+    select exists (
+      select 1 from orders where table_label = ${label} and (
+        status = any(${BUSY_STATUSES})
+        or (status = 'completed' and payment_status <> 'paid' and created_at > now() - interval '2 days'))
+    ) as busy`;
+  return r.busy;
+}
+
+/** Locks the table's row for the rest of the transaction and says whether it's busy right now. */
+export async function lockTable(tx: Tx, label: string | null | undefined): Promise<boolean> {
+  if (!label) return false;
+  await tx`select 1 from dining_tables where label = ${label} for update`;
+  return tableBusy(tx, label);
+}
+
+/** New sitting and a fresh code. Returns the table id so the caller can publish table.updated after commit. */
+export async function newSitting(tx: Tx, label: string): Promise<number | null> {
+  const [t] = await tx<{ id: number }[]>`
+    update dining_tables set sitting = sitting + 1, otp = lpad(floor(random() * 10000)::int::text, 4, '0')
+    where label = ${label} returning id`;
+  return t?.id ?? null;
+}
+
+/** Call after a change that may free a table, with what lockTable() returned before the change. */
+export async function freeTableCheck(tx: Tx, label: string | null | undefined, wasBusy: boolean): Promise<number | null> {
+  if (!label || !wasBusy || (await tableBusy(tx, label))) return null;
+  return newSitting(tx, label);
+}
+
+export function publishTable(id: number | null) {
+  if (id) bus.publish({ type: 'table.updated', id });
+}
+
 export async function getSettings(db: typeof sql | Tx = sql): Promise<Record<string, any>> {
   const rows = await db<{ key: string; value: unknown }[]>`select key, value from settings`;
   return Object.fromEntries(rows.map(r => [r.key, r.value]));
@@ -165,7 +207,9 @@ export async function addLines(orderId: number, lines: LineInput[]) {
 }
 
 export async function addPayment(orderId: number, method: string, amountPaise: number, staffId: number, reference?: string | null) {
-  await sql.begin(async tx => {
+  const freed = await sql.begin(async tx => {
+    const [{ table_label: label } = { table_label: null }] = await tx<{ table_label: string | null }[]>`select table_label from orders where id = ${orderId}`;
+    const wasBusy = await lockTable(tx, label);
     const [o] = await tx<{ status: string; total_paise: number; paid_paise: number }[]>`
       select status, total_paise, paid_paise from orders where id = ${orderId} for update`;
     if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
@@ -181,7 +225,9 @@ export async function addPayment(orderId: number, method: string, amountPaise: n
         await tx`update customers set visits = visits + 1, spent_paise = spent_paise + ${row.total_paise}, last_seen_at = now()
                  where id = ${row.customer_id}`;
     }
+    return freeTableCheck(tx, label, wasBusy);
   });
+  publishTable(freed);
   return publishUpdate(orderId);
 }
 

@@ -33,6 +33,11 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
 4. Smoke test on a phone: scan a printed QR (Admin → Settings → Print QR stickers), order, watch it on
    `/admin`, take a UPI payment, check Reports.
 
+### A2. Built since go-live
+- **Table codes** (7 Oct 2026, spec feature 1): each table has a 4-digit code in Admin → Settings → Tables, codes and QR.
+  A guest's phone needs it once per sitting; it changes when the table's orders are all closed and paid, or with New code.
+  Next from the spec: multiple menus, then the 1-minute hold, then invoices, then the loyalty card.
+
 ### B. Data the cafe still owes (enter in Admin once live)
 - Veg / non-veg for: Recheado Masala, Herbed Rice, Lemongrass Rice, Mexican Rice, Mix Burnt Garlic Hakka Noodles,
   Mix Schezwan Noodles, Mixed Fried Rice, and all 9 desserts (egg or eggless). They show no mark until set.

@@ -1584,3 +1584,22 @@ textarea {
   letter-spacing: 0.04em;
   overflow-wrap: anywhere;
 }
+
+/* Table code prompt in the cart */
+.table-code {
+  display: grid;
+  gap: 10px;
+}
+.table-code label {
+  font-weight: 700;
+}
+.table-code input {
+  font-size: var(--t-xl);
+  letter-spacing: 0.4em;
+  text-align: center;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+}

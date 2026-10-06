@@ -1,9 +1,9 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { sql } from '../db.js';
 import { bus } from '../events.js';
-import { rateLimit } from '../auth.js';
+import { rateLimit, signTablePass, verifyTablePass } from '../auth.js';
 import { createOrder, getOrder, getSettings, HttpError, normalisePhone, upsertCustomer } from '../orders.js';
 
 export async function menuTree(includeHidden = false) {
@@ -36,6 +36,7 @@ export async function menuTree(includeHidden = false) {
 const OrderBody = z.object({
   mode: z.enum(['table', 'takeaway']),
   table: z.string().trim().max(10).optional(),
+  pass: z.string().max(1000).optional(),
   name: z.string().trim().max(60).optional(),
   phone: z.string().trim().max(20).optional(),
   note: z.string().trim().max(280).optional(),
@@ -93,9 +94,32 @@ export function publicRoutes() {
     });
   });
 
-  app.post('/orders', rateLimit('orders', 12, 10 * 60_000), async c => {
+  // Table orders count per IP and table, takeaway per IP.
+  const orderKey = async (c: Context) => {
+    const b = (await c.req.json().catch(() => ({}))) as { mode?: string; table?: string };
+    return b?.mode === 'table' && typeof b.table === 'string' ? `t${b.table.trim().slice(0, 10)}` : '';
+  };
+
+  app.post('/tables/:label/verify', rateLimit('table-code', 5, 10 * 60_000, c => (c.req.param('label') ?? '').slice(0, 10)), async c => {
+    const label = c.req.param('label');
+    const { code } = z.object({ code: z.string().trim().max(10) }).parse(await c.req.json());
+    const [t] = await sql<{ otp: string; sitting: number }[]>`select otp, sitting from dining_tables where label = ${label} and active`;
+    if (!t) throw new HttpError(400, `There's no table "${label}". Check the number on your table's QR stand.`, 'bad_table');
+    if (code !== t.otp) throw new HttpError(400, `That code doesn't match table ${label}. Check it with your server.`, 'bad_code');
+    return c.json({ pass: await signTablePass({ table: label, sitting: t.sitting }) });
+  });
+
+  app.post('/orders', rateLimit('orders', 12, 10 * 60_000, orderKey), async c => {
     const body = OrderBody.parse(await c.req.json());
     if (body.mode === 'table' && !body.table) throw new HttpError(400, 'Add your table number. It’s on the QR stand.', 'no_table');
+    if (body.mode === 'table') {
+      const label = body.table!.trim();
+      const [t] = await sql<{ sitting: number }[]>`select sitting from dining_tables where label = ${label} and active`;
+      if (!t) throw new HttpError(400, `There's no table "${label}". Check the number on your table's QR stand.`, 'bad_table');
+      const pass = await verifyTablePass(body.pass);
+      if (!pass || pass.table !== label || pass.sitting !== t.sitting)
+        throw new HttpError(403, `Ask your server for table ${label}'s code, then place the order again.`, 'table_code');
+    }
     if (body.mode === 'takeaway' && !normalisePhone(body.phone))
       throw new HttpError(400, 'Add a 10-digit mobile number so we can call when your order is ready.', 'no_phone');
     const o = await createOrder({ source: body.mode, table: body.table, name: body.name, phone: body.phone, note: body.note, lines: body.lines });

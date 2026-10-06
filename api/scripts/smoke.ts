@@ -48,10 +48,18 @@ ok(`licences page data: GSTIN ${settings.cafe?.gstin ? 'set' : 'not set'}, ${set
 // Prices an order whose option doesn't belong to its item: runs the real pricing query (a list
 // parameter) and is refused before anything is written.
 const item = menu[0].items[0];
-const wrong = await call('/api/public/orders', { method: 'POST', json: { mode: 'table', table: '1', lines: [{ itemId: item.id, optionId: menu[1].items[0].options[0].id, qty: 1 }] } });
+const wrong = await call('/api/public/orders', {
+  method: 'POST',
+  json: { mode: 'takeaway', name: 'Smoke test', phone: '9000000000', lines: [{ itemId: item.id, optionId: menu[1].items[0].options[0].id, qty: 1 }] },
+});
 assert.equal(wrong.status, 409, wrong.text);
 assert.equal(wrong.json().error, 'item_gone');
 ok('order pricing runs (mismatched item refused, nothing saved)');
+
+const noCode = await call('/api/public/tables/1/verify', { method: 'POST', json: { code: 'smoke' } });
+assert.equal(noCode.status, 400, noCode.text);
+assert.equal(noCode.json().error, 'bad_code');
+ok('table codes are checked (a wrong code for table 1 is refused)');
 
 if (EMAIL && PASSWORD) {
   const login = await call('/api/auth/login', { method: 'POST', json: { email: EMAIL, password: PASSWORD } });

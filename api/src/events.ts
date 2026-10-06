@@ -8,7 +8,8 @@ export type CafeEvent =
   | { type: 'service.updated'; id: number }
   | { type: 'reservation.created'; id: number; ref: string }
   | { type: 'reservation.updated'; id: number }
-  | { type: 'menu.updated' };
+  | { type: 'menu.updated' }
+  | { type: 'table.updated'; id: number };
 
 export const bus = {
   publish(e: CafeEvent) {
