@@ -242,6 +242,10 @@ current menu; anything no longer on it is dropped with a note) and navigate to `
   - **POS pay-now.** When a staff POS order with `payment` joins an open table invoice, the payment is recorded
     through that invoice in the same request (same rules: transaction ID, overpaid). Otherwise it's a per-order
     payment, as today. `web/src/admin/Pos.tsx` gains the transaction ID field (required for card/UPI).
+    POS pay-now sends no amount: the server pays the balance due (the order's server total, or the invoice balance
+    when it joined one), so a gap between the browser's estimate and the server total can't fail it.
+  - **Concurrency.** Joining an invoice and `settleInvoiceCheck` run inside the same transaction as `createOrder` and
+    `releaseDue`; invoice payments lock the invoice row (`for update`) before allocating.
   - One invoice payment is split across the invoice's orders oldest first, each order taking up to its own balance,
     as ordinary `payments` rows sharing one `txn_group` and the `invoice_id`, so order `paid_paise`/`payment_status`,
     the live board, reports and the free-table rule (feature 1) keep working unchanged. `freeTableCheck` runs after.
