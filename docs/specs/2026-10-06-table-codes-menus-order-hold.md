@@ -203,20 +203,33 @@ current menu; anything no longer on it is dropped with a note) and navigate to `
   by (item, option) with qty, unit price and amount; subtotal, discount, CGST and SGST (each with its rate), round-off
   and total, all summed from the orders' stored values; payments (time, method, amount, transaction ID); balance due;
   a "Paid" mark once settled. Guests never see staff names or phone numbers.
-- **Open vs paid.** An invoice is `open` until its balance reaches zero, then `paid` (locked, `paid_at` set).
-  - While open, an order released into that table's sitting joins it automatically (same number, totals update).
+- **Balance.** An invoice's balance is the sum of `greatest(total_paise - paid_paise, 0)` over its non-cancelled orders.
+- **Open vs paid.** One helper, `settleInvoiceCheck(tx, invoiceId)` in `orders.ts`, marks an `open` invoice `paid`
+  (`paid_at` set) when it has at least one non-cancelled order and its balance is 0. It runs after: invoice creation
+  (so a bill whose orders were all prepaid is born paid), invoice payments, an order joining, an order being cancelled,
+  and every `recalc` caller (discounts, line edits). A paid invoice never reopens.
+  - **Joining.** An order joins its table sitting's open invoice (same number, totals update) at the moment it first
+    becomes visible to staff: staff creation, public creation when `hold_seconds` is 0, or release from hold.
+    `releaseDue` publishes `invoice.updated` for each join.
   - At most one open invoice per (table, sitting). After it's paid, later orders in the same sitting have no invoice
     until one is generated again (a new number).
-  - Orders on a **paid** invoice can't be edited, discounted, cancelled, paid or have lines changed:
-    `409 { error: 'invoiced', message: "This order is on paid invoice LB/26-27/00001, so it can't be changed." }`.
+  - **Locked orders.** For an order on a **paid** invoice, these are refused with
+    `409 { error: 'invoiced', message: "This order is on paid invoice LB/26-27/00001, so it can't be changed." }`:
+    cancelling, discounting, adding/changing/removing lines, moving it to another table, and payments.
+    **Status moves forward are still allowed** (`new` → … → `served` → `completed`), so staff can close orders after
+    the guest pays and the table becomes free (feature 1).
+  - **Moving tables.** An order that is on any invoice (open or paid) can't be moved to another table:
+    `409 { error: 'invoiced', message: "This order is on invoice LB/26-27/00001. Move it before generating the bill." }`.
   - Cancelled orders on an open invoice simply drop out of its totals.
+- **Sitting stamp.** `orders.sitting` is the table's sitting when the order was placed and is kept at release, so a
+  held order from a group whose code was reset with **New code** still bills to that group's sitting.
 - **Generating.**
   - Staff: **Invoice** on an order (board card and order detail) opens the invoice for that order's table sitting
     (or the order itself for takeaway/counter), creating it if needed. Shown on screen with **Print**.
     This replaces `printBill()` in `web/src/admin/Orders.tsx`.
-  - Guest at a table: **Get the bill** (the existing "Ask for the bill" button in the waiter drawer) now generates or
-    fetches the invoice using the phone's table pass, opens it at `/bill/<token>`, and still raises the `bill` waiter
-    call (deduplicated as today). No pass: the table-code dialog from feature 1. Nothing released yet:
+  - Guest at a table: **Get the bill** (the existing "Ask for the bill" button in the waiter drawer) first raises the
+    `bill` waiter call (always, deduplicated as today, even if billing then fails), then generates or fetches the
+    invoice using the phone's table pass and opens it at `/bill/<token>`. No pass: the table-code dialog from feature 1. Nothing released yet:
     `400 { error: 'nothing_to_bill', message: "There's nothing on table 3's bill yet." }`.
   - Takeaway guest: **Get the bill** on the order status page (by order token) once the order is released.
 - **Payments.** Recorded on the invoice in the admin: amount (defaults to the balance due), method
@@ -225,6 +238,10 @@ current menu; anything no longer on it is dropped with a note) and navigate to `
     `400 { error: 'no_reference', message: 'Add the transaction ID from the card slip or UPI app.' }`.
     The same rule applies to the existing per-order payment endpoint and POS order payments.
   - More than the balance due: `400 { error: 'overpaid', message: "That's more than the ₹840 still due." }`.
+    This applies to per-order payments too (today they accept overpayment); cash change is not recorded as revenue.
+  - **POS pay-now.** When a staff POS order with `payment` joins an open table invoice, the payment is recorded
+    through that invoice in the same request (same rules: transaction ID, overpaid). Otherwise it's a per-order
+    payment, as today. `web/src/admin/Pos.tsx` gains the transaction ID field (required for card/UPI).
   - One invoice payment is split across the invoice's orders oldest first, each order taking up to its own balance,
     as ordinary `payments` rows sharing one `txn_group` and the `invoice_id`, so order `paid_paise`/`payment_status`,
     the live board, reports and the free-table rule (feature 1) keep working unchanged. `freeTableCheck` runs after.
@@ -248,7 +265,10 @@ current menu; anything no longer on it is dropped with a note) and navigate to `
 - `POST /api/public/orders/:token/bill` → `{ token }` (takeaway; `nothing_to_bill` while the order is held).
 - `GET /api/public/invoices/:token` → `{ invoice }` (guest view).
 - `GET /api/admin/reports/payments?from&to&method?&search?&format=json|csv`.
-- Events: `invoice.updated { id }` on creation, orders joining, and payments (admin screens refresh).
+- Events: `invoice.updated { id }` (added to the `CafeEvent` union in `api/src/events.ts`) on creation, orders
+  joining, payments and settlement (admin screens refresh).
+- `GET /api/admin/reports/gst` gains an **Invoice** column (blank for orders never invoiced). Invoices are the
+  consecutive series; orders paid per order without an invoice keep only their order number.
 
 ### Data (migration `005_invoices.sql`)
 
@@ -260,7 +280,8 @@ current menu; anything no longer on it is dropped with a note) and navigate to `
   `create unique index invoices_one_open on invoices (table_label, sitting) where status = 'open' and source = 'table'`.
 - `orders`: add `sitting int` (the table's sitting when the order was placed; null for takeaway/counter) and
   `invoice_id int references invoices`. Feature 1's order placement stamps `sitting` (staff table orders stamp the
-  table's current sitting too).
+  table's current sitting too). Backfill: table orders that are open, or completed and unpaid, get their table's
+  current sitting, so orders placed between the `004` and `005` deploys can still be billed.
 - `payments`: add `invoice_id int references invoices`, `txn_group uuid not null default gen_random_uuid()`, and
   `check (method in ('cash','other') or length(trim(coalesce(reference, ''))) > 0) not valid` (enforced for new rows).
 - RLS enabled on `invoices` and `invoice_counters`.
@@ -268,7 +289,8 @@ current menu; anything no longer on it is dropped with a note) and navigate to `
 ### Web
 
 - Admin: `InvoiceView` (screen + print) opened from **Invoice** buttons; payment form with the transaction ID field
-  shown and required for card/UPI; Reports → **Payments** tab; the per-order payment box gains the transaction ID field.
+  shown and required for card/UPI; Reports → **Payments** tab; the per-order payment box and the POS (`Pos.tsx`)
+  gain the transaction ID field.
 - Customer: `/bill/:token` page (same layout, print-friendly); **Get the bill** in the waiter drawer and on takeaway
   order status.
 
@@ -276,8 +298,12 @@ current menu; anything no longer on it is dropped with a note) and navigate to `
 
 - A table invoice covers all released, non-cancelled orders of the sitting; a later order joins it; a held order
   doesn't; numbers are consecutive (`LB/26-27/00001`, `…00002`) and the financial year is computed in Kolkata time.
-- Card payment without a transaction ID → `no_reference`; overpaying → `overpaid`; a payment splits across orders
-  oldest first and marks the invoice paid; the table becomes free and its code rotates (feature 1).
+- Card payment without a transaction ID → `no_reference`; overpaying → `overpaid` (invoice and per-order); a payment
+  splits across orders oldest first and marks the invoice paid; completing the orders then frees the table and
+  rotates its code (feature 1); forward status moves on a paid invoice's orders are allowed.
+- An invoice whose orders were all prepaid is created `paid`; cancelling the last unpaid order settles an open invoice.
+- A staff table order joins the open invoice; POS pay-now on it records through the invoice; moving an invoiced
+  order to another table → `invoiced`.
 - Per-order payment on an invoiced order → `use_invoice`; editing an order on a paid invoice → `invoiced`.
 - Guest bill needs a valid pass; guest view hides staff names; takeaway bill by order token.
 - Payments report: one row per transaction, totals per method equal the payments recorded, CSV has the same rows.
