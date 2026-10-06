@@ -10,26 +10,28 @@ Repo: `github.com/kaustav1996/lbs-cafe` (public). Local copy: `~/projects/lbs-ca
 | Customer site design (home, record-wall menu index, menu, cart, booking, order status) | Done, reviewed with screenshots on desktop and phone |
 | API (orders, payments, GST, menu, bookings, reports, staff auth, live stream) | Done, 12 end-to-end tests pass against Postgres 17 |
 | Admin (live orders, POS, menu editor, bookings, reports + GST CSV, customers, settings, table QR stickers, staff) | Done, clicked through in a browser against the local API |
-| Deploy config (`render.yaml`, `netlify.toml`) | Written, **not deployed yet** |
-| Supabase project | **Not created yet** |
+| Hosting | **Live on Cloudflare** at https://lbs-cafe.cowork-apps.workers.dev (one Worker: site, admin, API) since 6 Oct 2026 |
+| Supabase project | `lbs-cafe` (ref `ldutsphgelixtyptfdbg`, Mumbai, Postgres 17), migrated and seeded |
+| Owner logins | Sayan `lbsfrequency@gmail.com` and Kaustav `kaustavsmailbox21@gmail.com`; passwords in `api/.env` (move to a password manager) |
 | Domain `lbscafe.com` (bought on Hostinger) | **DNS not pointed yet** |
 | Design preview page | Live on claude.ai (Kaustav has the link). Static, no backend; uses the hash-routed `build:preview` output |
 
-Nothing is in production. The old Foduu site (`lbs-cafe.foduu.com`) is still what customers see.
+The new site isn't on the cafe's domain yet. The old Foduu site (`lbs-cafe.foduu.com`) is still what customers see.
 
 ## 2. Next steps, in order
 
-### A. Go live (needs Kaustav's accounts; Claude Code can guide and verify)
-1. **Supabase**: new project, region Mumbai (`ap-south-1`). Copy *Connect → Session pooler* URI with the DB password.
-2. **Render**: *New → Blueprint* from this repo. Fill `DATABASE_URL`, `OWNER_EMAIL`, `OWNER_PASSWORD`.
-   Plan is `starter` in `render.yaml` (free sleeps after 15 min; live orders need it awake).
-   Verify: `curl https://<service>.onrender.com/health` → `{"ok":true}`; `/api/public/menu` returns 11 sections.
-3. **Netlify**: import the repo; `netlify.toml` has build settings and `VITE_API_URL`. If Render's URL isn't
-   `https://lbs-cafe-api.onrender.com`, update it there.
-4. **DNS at Hostinger**: records Netlify shows for `lbscafe.com` + `www`; CNAME `api` → Render. Then set
-   `VITE_API_URL = "https://api.lbscafe.com"` in `netlify.toml` and redeploy. `CORS_ORIGINS` on Render already
-   lists `https://lbscafe.com,https://www.lbscafe.com` (and `*.netlify.app` is allowed in code).
-5. Smoke test on a phone: scan a printed QR (Admin → Settings → Print QR stickers), order, watch it on
+### A. Go live
+Done on 6 Oct 2026: Supabase project, Hyperdrive (`lbs-cafe-db`, caching off), Worker `lbs-cafe` deployed,
+smoke test passing (`api/scripts/smoke.ts`), both owner logins created. Render and Netlify were dropped (Render
+wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
+1. **Domain**: move `lbscafe.com` nameservers from Hostinger to Cloudflare, then add `lbscafe.com` and `www` as
+   Custom Domains on the Worker. No rebuild needed: the site calls the API on its own origin.
+2. **Push** this branch to `main` (the Worker was deployed from the local checkout; there's no auto-deploy yet).
+   Optional: connect the repo in Cloudflare Workers Builds, root `api`, deploy command `npm run deploy`
+   (needs `DATABASE_URL` as a build secret for migrations).
+3. Watch CPU on the free plan: logins hash with PBKDF2 (100k iterations). If the dashboard shows
+   "exceeded CPU" errors, move to Workers Paid ($5/month).
+4. Smoke test on a phone: scan a printed QR (Admin → Settings → Print QR stickers), order, watch it on
    `/admin`, take a UPI payment, check Reports.
 
 ### B. Data the cafe still owes (enter in Admin once live)
@@ -54,9 +56,12 @@ Nothing is in production. The old Foduu site (`lbs-cafe.foduu.com`) is still wha
 
 ## 3. Decisions and why
 
-- **Split hosting**: Netlify (static site + admin) and Render (API) because Kaustav asked for both; DB on Supabase
-  at his request. The API is a single instance: the live stream (`/api/auth/stream`, SSE) uses an in-process
-  event bus, so **do not scale Render beyond one instance** without moving events to Postgres LISTEN/NOTIFY or Supabase Realtime.
+- **Cloudflare hosting** (changed from Render + Netlify on 6 Oct 2026): one Worker serves site, admin and API on
+  one origin, so no CORS or API subdomain. The API was ported from Fastify to Hono. Each request gets its own
+  postgres.js client through Hyperdrive (Workers can't share sockets). The admin live feed is a hibernating
+  WebSocket on the single `LiveHub` Durable Object (`idFromName('cafe')`), which also holds the per-IP rate limits.
+  Hyperdrive caching is off on purpose. Migrations run from Node before deploy since Workers have no boot step.
+- **Passwords** are PBKDF2-SHA256 (WebCrypto, 100k iterations, the Workers maximum) instead of bcrypt.
 - **Supabase used as plain Postgres** from the API (owner role), not via supabase-js. RLS on, no policies.
 - **Admin lives in the same web app** at `/admin` as a lazy chunk, so one Netlify site and one domain.
 - **Money in paise, GST split CGST/SGST, rupee round-off**, matching what Indian bills show. Rates are stored on
@@ -86,7 +91,7 @@ Nothing is in production. The old Foduu site (`lbs-cafe.foduu.com`) is still wha
 - The preview build (`--mode preview`) uses `HashRouter` and relative asset paths; production uses `BrowserRouter`
   with Netlify's SPA redirect.
 
-## 6. Suggested first prompt in Claude Code
+## 6. Suggested first prompt in Claude Code (used 6 Oct 2026)
 
 > Read CLAUDE.md and docs/HANDOVER.md. Then help me deploy: walk me through Supabase, Render and Netlify one step
 > at a time, verify each step with curl, and update netlify.toml with the real API URL when we have it.

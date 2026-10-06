@@ -15,7 +15,7 @@
     {
       // Supabase through its Session pooler, with query caching off so the live board is never stale.
       "binding": "HYPERDRIVE",
-      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      "id": "9cc73154a5de41008f51921527f100a9",
       "localConnectionString": "postgres://postgres:postgres@localhost:5433/lbs"
     }
   ],

@@ -6,9 +6,9 @@ For status, decisions and next steps see [docs/HANDOVER.md](docs/HANDOVER.md). N
 
 | Part | Folder | Runs on |
 |---|---|---|
-| Customer site + admin (`/admin`) | `web/` (Vite, React, TypeScript) | Netlify |
-| API | `api/` (Fastify, TypeScript) | Render |
-| Database | migrations in `api/migrations` | Supabase Postgres |
+| Customer site + admin (`/admin`) | `web/` (Vite, React, TypeScript) | Cloudflare Worker static assets |
+| API | `api/` (Hono, TypeScript) | Same Cloudflare Worker |
+| Database | migrations in `api/migrations` | Supabase Postgres (via Hyperdrive) |
 
 ## What it does
 
@@ -30,37 +30,41 @@ For status, decisions and next steps see [docs/HANDOVER.md](docs/HANDOVER.md). N
 
 Money is stored in paise. GST (18%, confirmed) is split into CGST and SGST and bills are rounded to the rupee.
 
-## Deploy (first time)
+## Hosting
 
-1. **Supabase.** Create a project in the Mumbai region. Open *Connect* and copy the **Session pooler**
-   connection string (it works from Render; the direct one is IPv6-only). Put your database password in it.
-2. **Render.** *New → Blueprint*, pick this repo. It reads `render.yaml` and asks for:
-   - `DATABASE_URL`: the Supabase string from step 1
-   - `OWNER_EMAIL`, `OWNER_PASSWORD`: the first admin login
-   
-   On first boot the API creates the tables, loads the menu, adds tables 1–12 and the owner login.
-   Check `https://lbs-cafe-api.onrender.com/health` shows `{"ok":true}`.
-3. **Netlify.** *Add new site → Import from GitHub*, pick this repo. `netlify.toml` sets everything.
-   If Render gave the API a different URL, change `VITE_API_URL` in `netlify.toml`.
-4. **Domain (Hostinger).** In Netlify, add `lbscafe.com` under Domain management; it lists the DNS records.
-   In Render, add `api.lbscafe.com` as a custom domain; it gives a CNAME. Add both in Hostinger's DNS
-   zone editor, then set `VITE_API_URL = "https://api.lbscafe.com"` in `netlify.toml`.
-5. Sign in at `lbscafe.com/admin`, print the table QR stickers from Settings, and add staff logins.
+One Cloudflare Worker (`lbs-cafe`, config in `api/wrangler.jsonc`) serves the site, the admin and the API.
+The database is Supabase Postgres (project `lbs-cafe`, Mumbai), reached through Cloudflare Hyperdrive with
+query caching off. Live admin updates go through the `LiveHub` Durable Object over a WebSocket.
 
-Render's free plan sleeps after 15 idle minutes, so the blueprint uses the Starter plan to keep live orders instant.
+Live at https://lbs-cafe.cowork-apps.workers.dev until `lbscafe.com` is pointed at it.
+
+## Deploy
+
+```bash
+cd api && npm install
+# api/.env (gitignored) needs DATABASE_URL: the Supabase Session pooler string
+npm run deploy      # runs migrations, builds web/, then wrangler deploy
+BASE=https://lbs-cafe.cowork-apps.workers.dev EMAIL=... PASSWORD=... npx tsx scripts/smoke.ts
+```
+
+Set up once (already done): `wrangler login`, `wrangler hyperdrive create lbs-cafe-db --connection-string=... --caching-disabled`
+(its id is in `wrangler.jsonc`), `wrangler secret put JWT_SECRET`. The first `npm run migrate` on an empty database
+loads the menu, tables 1–12 and the owner login from `OWNER_EMAIL` / `OWNER_PASSWORD` / `OWNER_NAME`.
+
+**Domain:** move `lbscafe.com`'s nameservers from Hostinger to Cloudflare, then add `lbscafe.com` and
+`www.lbscafe.com` as Custom Domains on the Worker. The site calls the API on its own origin, so nothing else changes.
 
 ## Run locally
 
 ```bash
-# API (needs a Postgres; any local one works)
-cd api && cp .env.example .env && npm install
-npm run dev                       # http://localhost:8080
-DATABASE_URL=... DATABASE_SSL=disable JWT_SECRET=... npm test   # 12 end-to-end tests
-
-# Site + admin
-cd web && npm install
-VITE_API_URL=http://localhost:8080 npm run dev   # http://localhost:5173 and /admin
+cd api && npm install && npm run localdb          # Postgres on :5433 (separate terminal)
+DATABASE_URL=postgres://postgres:postgres@localhost:5433/lbs DATABASE_SSL=disable npm run migrate
+echo 'JWT_SECRET=local-dev-secret-at-least-24-chars' > .dev.vars
+npm --prefix ../web run build && npm run dev       # site, admin and API on http://localhost:8787
+DATABASE_URL=.../lbs_test DATABASE_SSL=disable npm test   # 16 end-to-end tests; wipes that database
 ```
+
+For hot reload on the site, run `VITE_API_URL=http://localhost:8787 npm run dev` in `web/` as well.
 
 `web/src/data/menu.ts` is the built-in copy of the menu, used if the API can't be reached.
 Rebuild it and the API seed from the old site's data with `node scripts/build-menu.mjs data/old-site-scrape.json`.
