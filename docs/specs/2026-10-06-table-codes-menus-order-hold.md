@@ -1,10 +1,14 @@
-# Table codes, multiple menus and the 1-minute order hold
+# Table codes, multiple menus, the 1-minute order hold, and invoices
 
-Agreed with Kaustav on 6 Oct 2026. Three features, built in this order, shipped together in one migration (`004`).
+Agreed with Kaustav on 6 Oct 2026. Four features, built in this order. Features 1–3 share migration `004`;
+feature 4 has its own migration `005` and can ship after them.
 
 1. **Table codes**: a 4-digit code per table that a guest gets from their server before their first QR order.
 2. **Multiple menus**: named selections from the master dish list, with optional per-menu prices; one menu is live.
 3. **Order hold**: customer orders wait 1 minute before reaching the kitchen, so the guest can change them.
+4. **Invoices and reconciliation**: one numbered invoice per table visit (or per takeaway/counter order), shown to
+   staff and guests; payments carry the POS/UPI transaction ID; a Payments view for reconciliation. Built so a POS
+   webhook can later match payments by invoice number.
 
 Rules from `CLAUDE.md` apply throughout: money in paise, the API prices everything, RLS on every new table,
 append-only migrations, sentence-case copy, error messages that say what happened and how to fix it.
@@ -184,6 +188,99 @@ reaches 0, so it flips to the released view. On withdraw, rebuild the cart from 
 current menu; anything no longer on it is dropped with a note) and navigate to `/menu` with the cart open.
 
 ---
+
+## 4. Invoices and reconciliation
+
+### Behaviour
+
+- **Scope.** A table invoice covers one sitting (feature 1): every order from that table and sitting that isn't
+  `held` or `cancelled`. Takeaway and counter orders get one invoice each.
+- **Number.** Assigned when the invoice is first generated: `LB/<yy>-<yy+1>/<5-digit serial>` (e.g. `LB/26-27/00001`),
+  consecutive with no gaps within an Indian financial year (1 April to 31 March, Asia/Kolkata), restarting each year.
+  Numbers come from a per-year counter row updated inside the creating transaction.
+- **Contents** (same for staff and guests): cafe name, address, phone, email and GSTIN from `settings.cafe` (GSTIN
+  line omitted while empty); invoice number; date/time; table or "Takeaway"/"Counter"; lines merged across its orders
+  by (item, option) with qty, unit price and amount; subtotal, discount, CGST and SGST (each with its rate), round-off
+  and total, all summed from the orders' stored values; payments (time, method, amount, transaction ID); balance due;
+  a "Paid" mark once settled. Guests never see staff names or phone numbers.
+- **Open vs paid.** An invoice is `open` until its balance reaches zero, then `paid` (locked, `paid_at` set).
+  - While open, an order released into that table's sitting joins it automatically (same number, totals update).
+  - At most one open invoice per (table, sitting). After it's paid, later orders in the same sitting have no invoice
+    until one is generated again (a new number).
+  - Orders on a **paid** invoice can't be edited, discounted, cancelled, paid or have lines changed:
+    `409 { error: 'invoiced', message: "This order is on paid invoice LB/26-27/00001, so it can't be changed." }`.
+  - Cancelled orders on an open invoice simply drop out of its totals.
+- **Generating.**
+  - Staff: **Invoice** on an order (board card and order detail) opens the invoice for that order's table sitting
+    (or the order itself for takeaway/counter), creating it if needed. Shown on screen with **Print**.
+    This replaces `printBill()` in `web/src/admin/Orders.tsx`.
+  - Guest at a table: **Get the bill** (the existing "Ask for the bill" button in the waiter drawer) now generates or
+    fetches the invoice using the phone's table pass, opens it at `/bill/<token>`, and still raises the `bill` waiter
+    call (deduplicated as today). No pass: the table-code dialog from feature 1. Nothing released yet:
+    `400 { error: 'nothing_to_bill', message: "There's nothing on table 3's bill yet." }`.
+  - Takeaway guest: **Get the bill** on the order status page (by order token) once the order is released.
+- **Payments.** Recorded on the invoice in the admin: amount (defaults to the balance due), method
+  (cash / UPI / card / other), transaction ID.
+  - The transaction ID is **required for card and UPI** (trimmed, 1–60 chars):
+    `400 { error: 'no_reference', message: 'Add the transaction ID from the card slip or UPI app.' }`.
+    The same rule applies to the existing per-order payment endpoint and POS order payments.
+  - More than the balance due: `400 { error: 'overpaid', message: "That's more than the ₹840 still due." }`.
+  - One invoice payment is split across the invoice's orders oldest first, each order taking up to its own balance,
+    as ordinary `payments` rows sharing one `txn_group` and the `invoice_id`, so order `paid_paise`/`payment_status`,
+    the live board, reports and the free-table rule (feature 1) keep working unchanged. `freeTableCheck` runs after.
+  - An order that is on an invoice can only be paid through the invoice:
+    `409 { error: 'use_invoice', message: 'Record this payment on invoice LB/26-27/00001.' }`.
+    Orders with no invoice can still be paid per order, as today.
+- **Reconciliation.** Reports gets a **Payments** tab: date range (Kolkata days, `dayRange()`), method filter, search
+  (transaction ID or invoice number). One row per transaction (`txn_group`, or the single payment row for
+  per-order payments): time, invoice number (if any), table or order numbers, method, amount, transaction ID,
+  recorded by. Totals per method for the range. CSV download. Visible to all staff, like the other reports.
+- **POS webhook (later, not built now).** The invoice number is the match key; waiters may type it into the card
+  machine's reference field. A future webhook can find the invoice by number and record or confirm the payment.
+  Nothing in this spec depends on it.
+
+### API
+
+- `POST /api/admin/invoices` `{ orderId }` → `{ invoice }` (find or create, as above; all staff). 404 for held orders.
+- `GET /api/admin/invoices/:id` → `{ invoice }` (full view incl. staff names on payments).
+- `POST /api/admin/invoices/:id/payments` `{ method, amountPaise, reference? }` → `{ invoice }`; `409` if already paid.
+- `POST /api/public/tables/:label/bill` `{ pass }` → `{ token }` (rate limited per IP + table, 10 per 10 minutes).
+- `POST /api/public/orders/:token/bill` → `{ token }` (takeaway; `nothing_to_bill` while the order is held).
+- `GET /api/public/invoices/:token` → `{ invoice }` (guest view).
+- `GET /api/admin/reports/payments?from&to&method?&search?&format=json|csv`.
+- Events: `invoice.updated { id }` on creation, orders joining, and payments (admin screens refresh).
+
+### Data (migration `005_invoices.sql`)
+
+- `invoice_counters (fy text primary key, last int not null default 0)`.
+- `invoices (id serial pk, number text not null unique, fy text not null, token text not null unique,
+  source text not null check (source in ('table','takeaway','counter')), table_label text, sitting int,
+  status text not null default 'open' check (status in ('open','paid')), created_by int references staff,
+  created_at timestamptz not null default now(), paid_at timestamptz)`, plus
+  `create unique index invoices_one_open on invoices (table_label, sitting) where status = 'open' and source = 'table'`.
+- `orders`: add `sitting int` (the table's sitting when the order was placed; null for takeaway/counter) and
+  `invoice_id int references invoices`. Feature 1's order placement stamps `sitting` (staff table orders stamp the
+  table's current sitting too).
+- `payments`: add `invoice_id int references invoices`, `txn_group uuid not null default gen_random_uuid()`, and
+  `check (method in ('cash','other') or length(trim(coalesce(reference, ''))) > 0) not valid` (enforced for new rows).
+- RLS enabled on `invoices` and `invoice_counters`.
+
+### Web
+
+- Admin: `InvoiceView` (screen + print) opened from **Invoice** buttons; payment form with the transaction ID field
+  shown and required for card/UPI; Reports → **Payments** tab; the per-order payment box gains the transaction ID field.
+- Customer: `/bill/:token` page (same layout, print-friendly); **Get the bill** in the waiter drawer and on takeaway
+  order status.
+
+### Tests
+
+- A table invoice covers all released, non-cancelled orders of the sitting; a later order joins it; a held order
+  doesn't; numbers are consecutive (`LB/26-27/00001`, `…00002`) and the financial year is computed in Kolkata time.
+- Card payment without a transaction ID → `no_reference`; overpaying → `overpaid`; a payment splits across orders
+  oldest first and marks the invoice paid; the table becomes free and its code rotates (feature 1).
+- Per-order payment on an invoiced order → `use_invoice`; editing an order on a paid invoice → `invoiced`.
+- Guest bill needs a valid pass; guest view hides staff names; takeaway bill by order token.
+- Payments report: one row per transaction, totals per method equal the payments recorded, CSV has the same rows.
 
 ## Migration `004_table_codes_menus_hold.sql`
 
