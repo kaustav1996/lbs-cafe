@@ -26,5 +26,11 @@
   "vars": {
     "CORS_ORIGINS": "https://lbscafe.com,https://www.lbscafe.com,http://localhost:5173"
   },
+  // Cloudflare creates the DNS records and certificates for these. lbscafe.com's nameservers are on Cloudflare.
+  "routes": [
+    { "pattern": "lbscafe.com", "custom_domain": true },
+    { "pattern": "www.lbscafe.com", "custom_domain": true }
+  ],
+  "workers_dev": true,
   "observability": { "enabled": true }
 }

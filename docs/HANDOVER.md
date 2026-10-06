@@ -10,7 +10,7 @@ Repo: `github.com/kaustav1996/lbs-cafe` (public). Local copy: `~/projects/lbs-ca
 | Customer site design (home, record-wall menu index, menu, cart, booking, order status) | Done, reviewed with screenshots on desktop and phone |
 | API (orders, payments, GST, menu, bookings, reports, staff auth, live stream) | Done, 12 end-to-end tests pass against Postgres 17 |
 | Admin (live orders, POS, menu editor, bookings, reports + GST CSV, customers, settings, table QR stickers, staff) | Done, clicked through in a browser against the local API |
-| Hosting | **Live on Cloudflare** at https://lbs-cafe.cowork-apps.workers.dev (one Worker: site, admin, API) since 6 Oct 2026 |
+| Hosting | **Live on Cloudflare** at https://lbscafe.com (also https://lbs-cafe.cowork-apps.workers.dev) (one Worker: site, admin, API) since 6 Oct 2026 |
 | Supabase project | `lbs-cafe` (ref `ldutsphgelixtyptfdbg`, Mumbai, Postgres 17), migrated and seeded |
 | Owner logins | Sayan `lbsfrequency@gmail.com` and Kaustav `kaustavsmailbox21@gmail.com`; passwords in `api/.env` (move to a password manager) |
 | Domain `lbscafe.com` (bought on Hostinger) | **DNS not pointed yet** |
@@ -24,8 +24,9 @@ The new site isn't on the cafe's domain yet. The old Foduu site (`lbs-cafe.foduu
 Done on 6 Oct 2026: Supabase project, Hyperdrive (`lbs-cafe-db`, caching off), Worker `lbs-cafe` deployed,
 smoke test passing (`api/scripts/smoke.ts`), both owner logins created. Render and Netlify were dropped (Render
 wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
-1. **Domain**: move `lbscafe.com` nameservers from Hostinger to Cloudflare, then add `lbscafe.com` and `www` as
-   Custom Domains on the Worker. No rebuild needed: the site calls the API on its own origin.
+1. ~~Domain~~ Done 6 Oct 2026: nameservers moved to Cloudflare, `lbscafe.com` and `www` are Custom Domains on the
+   Worker (`routes` in `wrangler.jsonc`), smoke test passes on both. Still to do: turn on SSL/TLS → Edge Certificates
+   → **Always Use HTTPS** (plain http:// currently serves the page instead of redirecting).
 2. **Push** this branch to `main` (the Worker was deployed from the local checkout; there's no auto-deploy yet).
    Optional: connect the repo in Cloudflare Workers Builds, root `api`, deploy command `npm run deploy`
    (needs `DATABASE_URL` as a build secret for migrations).

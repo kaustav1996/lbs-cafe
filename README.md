@@ -36,7 +36,7 @@ One Cloudflare Worker (`lbs-cafe`, config in `api/wrangler.jsonc`) serves the si
 The database is Supabase Postgres (project `lbs-cafe`, Mumbai), reached through Cloudflare Hyperdrive with
 query caching off. Live admin updates go through the `LiveHub` Durable Object over a WebSocket.
 
-Live at https://lbs-cafe.cowork-apps.workers.dev until `lbscafe.com` is pointed at it.
+Live at https://lbscafe.com (and https://lbs-cafe.cowork-apps.workers.dev).
 
 ## Deploy
 
@@ -51,8 +51,8 @@ Set up once (already done): `wrangler login`, `wrangler hyperdrive create lbs-ca
 (its id is in `wrangler.jsonc`), `wrangler secret put JWT_SECRET`. The first `npm run migrate` on an empty database
 loads the menu, tables 1–12 and the owner login from `OWNER_EMAIL` / `OWNER_PASSWORD` / `OWNER_NAME`.
 
-**Domain:** move `lbscafe.com`'s nameservers from Hostinger to Cloudflare, then add `lbscafe.com` and
-`www.lbscafe.com` as Custom Domains on the Worker. The site calls the API on its own origin, so nothing else changes.
+**Domain:** `lbscafe.com` uses Cloudflare nameservers (set at Hostinger). `lbscafe.com` and `www.lbscafe.com` are
+Custom Domains on the Worker (`routes` in `wrangler.jsonc`); Cloudflare manages their DNS records and certificates.
 
 ## Run locally
 
