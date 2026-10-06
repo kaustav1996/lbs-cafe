@@ -131,7 +131,7 @@ already-paid invoice), with the customer row locked:
 
 - `discount_kind = 'reward'` → `stamps = 0`; ledger `reward_used`. No stamp for this visit.
 - otherwise, if `discount_kind = 'welcome'` → `welcome_used_at = now()`; ledger `welcome_used`. Then, if
-  `stamps < 4` and the customer has no `stamp` ledger entry today (Kolkata), `stamps + 1`; ledger `stamp`.
+  `stamps < reward_stamps` and the customer has no `stamp` ledger entry today (Kolkata), `stamps + 1`; ledger `stamp`.
 - Always: `last_visit_at = now()`, `reminders_since_visit = 0`.
 - **Visits and spend** (`visits + 1`, `spent_paise + invoice total`) are added once, at settlement of any invoice:
   to the invoice's linked customer, or, with no link, to the orders' shared `customer_id` (e.g. a takeaway phone);
@@ -210,7 +210,7 @@ as used when paid).
   `scheduled()` creates its own Hyperdrive client and runs inside `withRuntime(...)`, like `LiveHub.alarm()`.
 - Due: opted in, `last_visit_at <= now() - reminder_days`, (`last_reminder_at` null or `<= now() - reminder_days`),
   `reminders_since_visit < reminder_cap (6)`. Customers who never had a paid visit don't get reminders.
-- Template `lbs_reward_ready` when `stamps = 4`, else `lbs_we_miss_you` with a card line ("You're 2 visits from 50%
+- Template `lbs_reward_ready` when `stamps = reward_stamps`, else `lbs_we_miss_you` with a card line ("You're 2 visits from 50%
   off"). Queued like broadcasts; `last_reminder_at = now()`, `reminders_since_visit + 1`.
 
 ## Data (migration `006_loyalty.sql`)
