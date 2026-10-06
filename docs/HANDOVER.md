@@ -39,7 +39,8 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
 - Duplicate: "Spring Roll" (Veg ₹299) vs "Veg Spring Roll" ₹279.
 - Variants the old site had but didn't list: Classic Cold Coffee, Choco Fudge Brownie, Double Choco Cookie,
   White Choco Blueberry Cookie.
-- GSTIN (Admin → Settings → Bill details). Instagram / Facebook URLs (`web/src/data/site.ts`).
+- ~~GSTIN~~ set 7 Oct 2026 (19CNLPC1427M1ZS). Instagram / Facebook URLs (`web/src/data/site.ts`).
+- FSSAI licence and other documents: add in Admin → Settings → Licences (upload PDF/image); shown on `/licences`.
 - Real dish photos. The old site's coffee photos looked like Google Images results, so they weren't used.
 - Owner said GST is 18%. Standalone restaurants usually charge 5%; worth confirming with their CA before launch.
 

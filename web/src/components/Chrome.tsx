@@ -152,6 +152,7 @@ export function Footer() {
                   Instagram
                 </a>
               )}
+              <Link to="/licences">Licences</Link>
             </p>
           </div>
         </div>

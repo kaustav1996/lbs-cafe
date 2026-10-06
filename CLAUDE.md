@@ -13,6 +13,8 @@ repo owner (Kaustav). Read `docs/HANDOVER.md` for status, decisions and the next
 - `api/` — Hono + TypeScript + `postgres` (porsager) on a Cloudflare Worker (`wrangler.jsonc`, entry `src/worker.ts`).
   Database is Supabase Postgres via Hyperdrive. The same Worker serves `web/dist`.
   - `src/context.ts` gives each request its own DB client; `sql` in `src/db.ts` resolves to it.
+  - Public documents (licence scans) live in R2 bucket `lbs-cafe-files` (binding `FILES`), served at `/files/*`;
+    `src/files.ts` checks type, magic bytes and size. Everything in that bucket is public.
   - `LiveHub` Durable Object (`src/worker.ts`): admin live feed over a hibernating WebSocket, plus rate limits.
   - `migrations/*.sql` run from Node with `npm run migrate` (part of `npm run deploy`), then `src/seed.ts` fills an empty DB.
   - `src/orders.ts` order pricing/GST/payments; `src/routes/{public,auth,admin}.ts`.

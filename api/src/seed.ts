@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   ordering_enabled: true,
   takeaway_enabled: true,
   booking_enabled: true,
+  licences: [],
   cafe: {
     name: "LB's Hemp Cafe & Lounge",
     address: '29 BJ, BJ Block, Sector 2, Bidhannagar, Kolkata, West Bengal 700091',

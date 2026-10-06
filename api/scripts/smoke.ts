@@ -24,7 +24,7 @@ const menu = (await call('/api/public/menu')).json().categories;
 assert.equal(menu.length, 11);
 ok(`menu has ${menu.length} sections, ${menu.flatMap((c: any) => c.items).length} items`);
 
-for (const page of ['/', '/menu', '/admin', '/admin/orders']) {
+for (const page of ['/', '/menu', '/licences', '/admin', '/admin/orders']) {
   const r = await call(page);
   assert.equal(r.status, 200, page);
   assert.match(r.text, /<div id="root">/, page);
@@ -39,6 +39,11 @@ const missing = await call('/api/nope');
 assert.equal(missing.status, 404);
 assert.equal(missing.json().error, 'not_found');
 ok('unknown API paths get a JSON 404');
+
+const settings = (await call('/api/public/settings')).json();
+assert.ok(Array.isArray(settings.licences), 'public settings have no licences list');
+for (const l of settings.licences) if (l.file) assert.equal((await call(`/files/${l.file.key}`)).status, 200, `missing document ${l.file.key}`);
+ok(`licences page data: GSTIN ${settings.cafe?.gstin ? 'set' : 'not set'}, ${settings.licences.length} licence(s), documents reachable`);
 
 // Prices an order whose option doesn't belong to its item: runs the real pricing query (a list
 // parameter) and is refused before anything is written.

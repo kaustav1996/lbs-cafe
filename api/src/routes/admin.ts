@@ -5,6 +5,8 @@ import { sql } from '../db.js';
 import { bus } from '../events.js';
 import { atLeast, requireStaff, type AppEnv } from '../auth.js';
 import { hashPassword } from '../password.js';
+import { runtime } from '../context.js';
+import { checkUpload, FileRef } from '../files.js';
 import { addLines, addPayment, createOrder, getOrder, getSettings, HttpError, normalisePhone, publishUpdate, recalc, upsertCustomer } from '../orders.js';
 import { menuTree } from './public.js';
 
@@ -422,8 +424,22 @@ export function adminRoutes() {
           .object({ name: z.string().max(80), address: z.string().max(160), phone: z.string().max(20), email: z.string().max(80), gstin: z.string().max(15) })
           .partial()
           .optional(),
+        licences: z
+          .array(
+            z.object({
+              id: z.string().regex(/^[a-z0-9]{6,20}$/),
+              name: z.string().trim().min(1).max(60),
+              number: z.string().trim().max(60).default(''),
+              validUntil: Day.nullable().optional(),
+              file: FileRef.nullable().optional(),
+            }),
+          )
+          .max(20)
+          .optional(),
       })
       .parse(await c.req.json());
+    // Documents no longer referenced by any licence are deleted once the new list is saved.
+    const before = b.licences ? (((await getSettings()).licences ?? []) as { file?: { key: string } | null }[]) : [];
     for (const [k, v] of Object.entries(b)) {
       if (v === undefined) continue;
       if (k === 'cafe') {
@@ -433,8 +449,25 @@ export function adminRoutes() {
                   on conflict (key) do update set value = excluded.value`;
       }
     }
+    if (b.licences) {
+      const kept = new Set(b.licences.map(l => l.file?.key).filter(Boolean));
+      for (const l of before) if (l.file?.key && !kept.has(l.file.key)) await runtime().files?.delete(l.file.key).catch(() => {});
+    }
     bus.publish({ type: 'menu.updated' });
     return c.json({ settings: await getSettings() });
+  });
+
+  // ---------- Documents (licences) ----------
+  app.post('/files', atLeast('manager'), async c => {
+    const store = runtime().files;
+    if (!store) throw new HttpError(503, 'Document uploads aren’t switched on yet.', 'no_storage');
+    const form = await c.req.formData().catch(() => null);
+    const file = form?.get('file');
+    if (!file || typeof file === 'string') throw new HttpError(400, 'Pick a file to upload.', 'no_file');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const ref = checkUpload(file.name, file.type, bytes);
+    await store.put(ref.key, bytes.buffer as ArrayBuffer, ref.type);
+    return c.json({ file: ref }, 201);
   });
 
   app.get('/tables', async c => c.json({ tables: await sql`select * from dining_tables order by sort, id` }));

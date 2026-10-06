@@ -14,6 +14,7 @@ const { computeTotals } = await import('../src/money.js');
 import type { CafeEvent } from '../src/events.js';
 
 const sql = nodeSql();
+const stored = new Map<string, { body: ArrayBuffer; type: string; size: number }>();
 const events: CafeEvent[] = [];
 const hits = new Map<string, number[]>();
 const rt = {
@@ -27,17 +28,21 @@ const rt = {
     hits.set(key, recent.length < max ? [...recent, now] : recent);
     return recent.length < max;
   },
+  files: {
+    put: async (key: string, body: ArrayBuffer, type: string) => void stored.set(key, { body, type, size: body.byteLength }),
+    get: async (key: string) => stored.get(key) ?? null,
+    delete: async (key: string) => void stored.delete(key),
+  },
 };
 
 const hono = buildApp();
 /** Same shape as Fastify's inject(), so the tests read as before. */
 const app = {
-  async inject(o: { method: string; url: string; payload?: unknown; headers?: Record<string, string> }) {
+  async inject(o: { method: string; url: string; payload?: unknown; form?: FormData; headers?: Record<string, string> }) {
     const headers = { ...o.headers } as Record<string, string>;
     if (o.payload !== undefined) headers['content-type'] = 'application/json';
-    const res = await withRuntime(rt, () =>
-      hono.request(o.url, { method: o.method, headers, body: o.payload === undefined ? undefined : JSON.stringify(o.payload) }),
-    );
+    const reqBody = o.form ?? (o.payload === undefined ? undefined : JSON.stringify(o.payload));
+    const res = await withRuntime(rt, () => hono.request(o.url, { method: o.method, headers, body: reqBody }));
     const body = await res.text();
     return { statusCode: res.status, headers: Object.fromEntries(res.headers), body, json: () => JSON.parse(body) };
   },
@@ -247,4 +252,55 @@ test('repeated wrong passwords are slowed down', async () => {
   for (let i = 0; i < 12; i++)
     last = (await app.inject({ method: 'POST', url: '/api/auth/login', headers: { 'cf-connecting-ip': '203.0.113.9' }, payload: { email: 'x@y.in', password: 'nope' } })).statusCode;
   assert.equal(last, 429);
+});
+
+const PDF = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a]); // "%PDF-1.4\n"
+const upload = (bytes: Uint8Array, name: string, type: string, headers = auth()) => {
+  const form = new FormData();
+  form.set('file', new File([bytes], name, { type }));
+  return app.inject({ method: 'POST', url: '/api/admin/files', headers, form });
+};
+
+test('licences: upload a document, list it publicly, serve it, delete it with the entry', async () => {
+  const up = await upload(PDF, 'FSSAI Licence 2026.pdf', 'application/pdf');
+  assert.equal(up.statusCode, 201, up.body);
+  const file = up.json().file;
+  assert.match(file.key, /^licences\/[a-f0-9]{8}-fssai-licence-2026\.pdf$/);
+
+  const save = await app.inject({
+    method: 'PUT', url: '/api/admin/settings', headers: auth(),
+    payload: { cafe: { gstin: '19CNLPC1427M1ZS' }, licences: [{ id: 'fssai01', name: 'FSSAI licence', number: '12826999000123', validUntil: '2027-03-31', file }] },
+  });
+  assert.equal(save.statusCode, 200, save.body);
+
+  const pub = (await app.inject({ method: 'GET', url: '/api/public/settings' })).json();
+  assert.equal(pub.cafe.gstin, '19CNLPC1427M1ZS');
+  assert.equal(pub.licences[0].name, 'FSSAI licence');
+  assert.equal(pub.licences[0].file.key, file.key);
+
+  const got = await app.inject({ method: 'GET', url: `/files/${file.key}` });
+  assert.equal(got.statusCode, 200);
+  assert.equal(got.headers['content-type'], 'application/pdf');
+  assert.equal(got.headers['x-content-type-options'], 'nosniff');
+
+  const cleared = await app.inject({ method: 'PUT', url: '/api/admin/settings', headers: auth(), payload: { licences: [] } });
+  assert.equal(cleared.statusCode, 200);
+  assert.equal((await app.inject({ method: 'GET', url: `/files/${file.key}` })).statusCode, 404);
+});
+
+test('licences: wrong types, disguised files, empty files and staff uploads are refused', async () => {
+  const html = new TextEncoder().encode('<html><script>alert(1)</script></html>');
+  const disguised = await upload(html, 'licence.pdf', 'application/pdf');
+  assert.equal(disguised.statusCode, 400);
+  assert.match(disguised.json().message, /PDF or an image/);
+  assert.equal((await upload(html, 'page.html', 'text/html')).statusCode, 400);
+  assert.equal((await upload(new Uint8Array(0), 'x.pdf', 'application/pdf')).statusCode, 400);
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } });
+  assert.equal((await upload(PDF, 'x.pdf', 'application/pdf', { authorization: `Bearer ${login.json().token}` })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'GET', url: '/files/../secret' })).statusCode, 404);
+  const badRef = await app.inject({
+    method: 'PUT', url: '/api/admin/settings', headers: auth(),
+    payload: { licences: [{ id: 'evil001', name: 'X', file: { key: '../../etc/passwd', name: 'x', type: 'application/pdf', size: 1 } }] },
+  });
+  assert.equal(badRef.statusCode, 400);
 });

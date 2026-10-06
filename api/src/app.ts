@@ -7,8 +7,10 @@ import { HttpError } from './orders.js';
 import { publicRoutes } from './routes/public.js';
 import { authRoutes } from './routes/auth.js';
 import { adminRoutes } from './routes/admin.js';
+import { MAX_FILE_BYTES } from './files.js';
 
 const BODY_LIMIT = 256 * 1024;
+const UPLOAD_PATH = '/api/admin/files';
 
 export function buildApp() {
   const app = new Hono();
@@ -28,8 +30,11 @@ export function buildApp() {
   );
 
   app.use('*', async (c, next) => {
-    if (Number(c.req.header('content-length') ?? 0) > BODY_LIMIT)
-      return c.json({ error: 'too_large', message: 'That request is too large.' }, 413);
+    const limit = c.req.path === UPLOAD_PATH ? MAX_FILE_BYTES + 64 * 1024 : BODY_LIMIT;
+    if (Number(c.req.header('content-length') ?? 0) > limit)
+      return c.req.path === UPLOAD_PATH
+        ? c.json({ error: 'too_large', message: 'That file is over 10 MB. Try a smaller scan or a PDF.' }, 413)
+        : c.json({ error: 'too_large', message: 'That request is too large.' }, 413);
     await next();
   });
 
@@ -49,6 +54,22 @@ export function buildApp() {
   app.get('/health', async c => {
     await sql`select 1`;
     return c.json({ ok: true });
+  });
+
+  // Public documents, e.g. licence scans. Keys are random and never reused, so they can be cached for good.
+  app.get('/files/*', async c => {
+    const key = decodeURIComponent(c.req.path.slice('/files/'.length));
+    const f = /^licences\/[a-z0-9-]+\.(pdf|jpg|png|webp)$/.test(key) ? await runtime().files?.get(key) : null;
+    if (!f) return c.json({ error: 'not_found', message: 'That document isn’t here any more.' }, 404);
+    return new Response(f.body, {
+      headers: {
+        'content-type': f.type,
+        'content-length': String(f.size),
+        'cache-control': 'public, max-age=31536000, immutable',
+        'content-disposition': 'inline',
+        'x-content-type-options': 'nosniff',
+      },
+    });
   });
 
   app.route('/api/public', publicRoutes());

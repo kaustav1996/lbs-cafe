@@ -24,6 +24,7 @@ export default function Settings() {
       <PageHead title="Settings" />
       <div className="a-settings">
         <OrderingSettings />
+        <LicencesCard />
         <TablesCard />
         {can('manager') && <StaffCard />}
         <PasswordCard />
@@ -136,6 +137,130 @@ function OrderingSettings() {
         </form>
       </section>
     </>
+  );
+}
+
+interface LicenceFile { key: string; name: string; type: string; size: number }
+interface Licence { id: string; name: string; number: string; validUntil?: string | null; file?: LicenceFile | null }
+const newId = () => Math.random().toString(36).slice(2, 10).padEnd(8, '0');
+const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+/** Licences shown on the public /licences page. The GSTIN there comes from Bill details. */
+function LicencesCard() {
+  const { call, can } = useAuth();
+  const [list, setList] = useState<Licence[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const readOnly = !can('manager');
+  useEffect(() => {
+    call<{ settings: { licences?: Licence[] } }>('/api/admin/settings')
+      .then(r => setList(r.settings.licences ?? []))
+      .catch(e => toast(errText(e), 'bad'));
+  }, [call]);
+  if (!list) return null;
+
+  const edit = (id: string, patch: Partial<Licence>) => setList(list.map(l => (l.id === id ? { ...l, ...patch } : l)));
+  const upload = async (id: string, file: File) => {
+    const form = new FormData();
+    form.set('file', file);
+    setUploading(id);
+    try {
+      const r = await call<{ file: LicenceFile }>('/api/admin/files', { method: 'POST', body: form });
+      edit(id, { file: r.file });
+      toast('Document uploaded. Save to publish it.');
+    } catch (e) {
+      toast(errText(e), 'bad');
+    } finally {
+      setUploading(null);
+    }
+  };
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const clean = list.map(l => ({ ...l, validUntil: l.validUntil || null }));
+      const r = await call<{ settings: { licences?: Licence[] } }>('/api/admin/settings', { method: 'PUT', json: { licences: clean } });
+      setList(r.settings.licences ?? []);
+      toast('Licences saved');
+    } catch (err) {
+      toast(errText(err), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="a-card-panel">
+      <h2>Licences</h2>
+      <p className="a-muted">
+        Shown on <a href={`${SITE_URL}/licences`} target="_blank" rel="noreferrer">{SITE_URL.replace(/^https?:\/\//, '')}/licences</a> with the GSTIN from Bill details.
+        Documents can be a PDF or a JPG, PNG or WebP image, up to 10 MB. Anyone can open them, so upload only what's meant to be public.
+      </p>
+      <form className="a-form" onSubmit={save}>
+        {list.length === 0 && <p className="a-muted">No licences yet.</p>}
+        {list.map(l => (
+          <fieldset key={l.id} className="a-licence" disabled={readOnly}>
+            <div className="a-row2">
+              <label className="a-field">
+                <span>Name</span>
+                <input className="a-input" value={l.name} maxLength={60} required placeholder="FSSAI licence" onChange={e => edit(l.id, { name: e.target.value })} />
+              </label>
+              <label className="a-field">
+                <span>Number</span>
+                <input className="a-input" value={l.number} maxLength={60} onChange={e => edit(l.id, { number: e.target.value })} />
+              </label>
+            </div>
+            <div className="a-row2">
+              <label className="a-field">
+                <span>Valid until (optional)</span>
+                <input className="a-input" type="date" value={l.validUntil ?? ''} onChange={e => edit(l.id, { validUntil: e.target.value || null })} />
+              </label>
+              <div className="a-field">
+                <span>Document</span>
+                {l.file ? (
+                  <p className="a-licence-file">
+                    <a href={`/files/${l.file.key}`} target="_blank" rel="noreferrer">{l.file.name}</a> <small className="a-muted">{kb(l.file.size)}</small>{' '}
+                    {!readOnly && (
+                      <button type="button" className="a-btn a-btn-sm" onClick={() => edit(l.id, { file: null })}>
+                        Remove
+                      </button>
+                    )}
+                  </p>
+                ) : (
+                  <input
+                    className="a-input"
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/webp"
+                    disabled={readOnly || uploading === l.id}
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) void upload(l.id, f);
+                      e.target.value = '';
+                    }}
+                  />
+                )}
+                {uploading === l.id && <small className="a-muted">Uploading…</small>}
+              </div>
+            </div>
+            {!readOnly && (
+              <button type="button" className="a-btn a-btn-danger a-btn-sm" onClick={() => setList(list.filter(x => x.id !== l.id))}>
+                Remove this licence
+              </button>
+            )}
+          </fieldset>
+        ))}
+        {!readOnly && (
+          <div className="a-actions">
+            <button type="button" className="a-btn" onClick={() => setList([...list, { id: newId(), name: '', number: '', validUntil: null, file: null }])}>
+              Add a licence
+            </button>
+            <button className="a-btn a-btn-primary" disabled={busy || uploading !== null}>
+              Save licences
+            </button>
+          </div>
+        )}
+      </form>
+    </section>
   );
 }
 

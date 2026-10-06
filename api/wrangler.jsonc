@@ -9,7 +9,7 @@
   "assets": {
     "directory": "../web/dist",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/health"]
+    "run_worker_first": ["/api/*", "/health", "/files/*"]
   },
   "hyperdrive": [
     {
@@ -19,6 +19,8 @@
       "localConnectionString": "postgres://postgres:postgres@localhost:5433/lbs"
     }
   ],
+  // Public documents (licence scans) served at /files/*.
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "lbs-cafe-files" }],
   "durable_objects": {
     "bindings": [{ "name": "LIVE", "class_name": "LiveHub" }]
   },

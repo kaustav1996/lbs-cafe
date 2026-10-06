@@ -9,6 +9,7 @@ import { Panels } from './components/Panels';
 import Home from './pages/Home';
 import Menu from './pages/Menu';
 import OrderStatus from './pages/OrderStatus';
+import Licences from './pages/Licences';
 
 // Staff screens load separately so guests never download them.
 const Admin = lazy(() => import('./admin/AdminApp'));
@@ -54,6 +55,7 @@ createRoot(document.getElementById('root')!).render(
                     <Route path="/" element={<Home />} />
                     <Route path="/menu" element={<Menu />} />
                     <Route path="/order/:token" element={<OrderStatus />} />
+                    <Route path="/licences" element={<Licences />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                   <CartBar />

@@ -89,6 +89,7 @@ export function publicRoutes() {
       takeawayEnabled: !!s.takeaway_enabled,
       bookingEnabled: !!s.booking_enabled,
       cafe: s.cafe,
+      licences: s.licences ?? [],
     });
   });
 

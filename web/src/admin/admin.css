@@ -1494,3 +1494,30 @@ textarea.a-input {
 .a-staff li.off {
   opacity: 0.55;
 }
+
+/* Settings → Licences */
+.a-licence {
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.a-licence > .a-row2 {
+  width: 100%;
+}
+.a-licence-file {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+.a-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}

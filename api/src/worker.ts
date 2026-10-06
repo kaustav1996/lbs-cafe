@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import postgres from 'postgres';
 import { buildApp } from './app.js';
-import { withRuntime, type Runtime } from './context.js';
+import { withRuntime, type FileStore, type Runtime } from './context.js';
 import { PG_OPTIONS } from './db.js';
 import type { CafeEvent } from './events.js';
 
@@ -10,6 +10,7 @@ export interface Env {
   LIVE: DurableObjectNamespace<LiveHub>;
   JWT_SECRET: string;
   CORS_ORIGINS: string;
+  FILES?: R2Bucket;
 }
 
 const app = buildApp();
@@ -32,6 +33,7 @@ export default {
       publish: e => ctx.waitUntil(hub.publish(e).catch(err => console.error('live feed publish failed', err))),
       allow: (key, max, windowMs) => hub.allow(key, max, windowMs),
       openStream: r => hub.fetch(r),
+      files: env.FILES ? r2Store(env.FILES) : undefined,
     };
     try {
       return await withRuntime(rt, () => app.fetch(req, env, ctx));
@@ -40,6 +42,17 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>;
+
+function r2Store(bucket: R2Bucket): FileStore {
+  return {
+    put: async (key, body, type) => void (await bucket.put(key, body, { httpMetadata: { contentType: type } })),
+    get: async key => {
+      const o = await bucket.get(key);
+      return o ? { body: o.body, type: o.httpMetadata?.contentType ?? 'application/octet-stream', size: o.size } : null;
+    },
+    delete: key => bucket.delete(key),
+  };
+}
 
 /**
  * The cafe's single live hub. Admin screens hold a hibernating WebSocket here, so an idle
