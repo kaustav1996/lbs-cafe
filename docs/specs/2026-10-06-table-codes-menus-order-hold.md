@@ -22,10 +22,16 @@ append-only migrations, sentence-case copy, error messages that say what happene
   sitting. Without one, the order is refused and the site asks for the code.
 - Entering the right code gives the phone a pass. It keeps working for that table until the sitting changes.
 - The sitting changes (new code, sitting + 1, old passes stop working):
-  - **automatically**, when an order at that table is completed or cancelled, or becomes fully paid, and afterwards
-    the table has no order that is still open (status `new`/`preparing`/`ready`/`served`), unpaid/part-paid and not
-    cancelled, or `held`;
+  - **automatically**, when the table becomes **free**. A table is free when it has no order matching any of:
+    1. `status = 'held'`;
+    2. `status in ('new', 'preparing', 'ready', 'served')`;
+    3. `status = 'completed' and payment_status <> 'paid' and created_at > now() - interval '2 days'`
+       (same 2-day bound as the open board, so a forgotten unpaid bill can't block rotation forever).
   - **manually**, when any staff user taps **New code**.
+- One helper, `freeTableCheck(tx, tableLabel)` in `orders.ts`, rotates the sitting if the table is free *and* the
+  table had at least one order (so an unused table isn't rotated on every call). It runs inside the same transaction
+  after every change that can free a table: status change (`PATCH /api/admin/orders/:id`), `addPayment`, `recalc`
+  callers (discounts, line edits), and moving an order to another table (checked for the old table).
 - Takeaway orders don't use codes. Orders placed by staff (`/api/admin/orders`) don't use codes.
 - Waiter calls (`/api/public/service-requests`) don't need a code, as today.
 
@@ -42,8 +48,11 @@ reference them by label).
 
 - `POST /api/public/tables/:label/verify` body `{ code }` →
   `200 { pass }` or `400 { error: 'bad_code', message: "That code doesn't match table 3. Check it with your server." }`.
-  Unknown or switched-off table: `400 bad_table` (existing message). Rate limit: 5 tries per 10 minutes per IP.
+  Unknown or switched-off table: `400 bad_table` (existing message). Rate limit: 5 tries per 10 minutes per IP *and
+  table label* (guests on the cafe Wi-Fi share one IP, so a per-IP-only limit could lock out the whole room).
 - The pass is an HS256 JWT signed with `JWT_SECRET`: `{ kind: 'table', table: '<label>', sitting: <n> }`, 12-hour expiry.
+  `requireStaff`/`verifyToken` reject any token carrying `kind`, so a pass can never act as a staff token; the pass
+  check requires `kind === 'table'`.
 - `POST /api/public/orders` with `mode: 'table'` takes `pass` in the body. The API checks the pass signature,
   `kind`, `table` equals the order's table, and `sitting` equals the table's current sitting. Otherwise:
   `403 { error: 'table_code', message: "Ask your server for table 3's code, then place the order again." }`.
@@ -101,6 +110,10 @@ reference them by label).
 - `PUT /api/admin/menus/:id/items/:itemId` `{ on: boolean, prices?: { [optionId]: paise | null } }` (manager).
   `on: false` removes the item and its overrides from that menu. Price overrides must belong to that item's options.
 - `POST /api/admin/items` accepts optional `menuId`; the new item is added to that menu (default: the live menu).
+- `GET /api/admin/menu/live` (all staff): the live menu for the staff order picker (New order, Add items): only items on
+  the live menu, at live prices, **including** sold-out items (staff may still order them, as today), each with its
+  `available` flag. `web/src/admin/picker.tsx` (`useAdminMenu`) switches to this endpoint. `GET /api/admin/menu` stays
+  the full master list for the menu editor.
 - Every change publishes `menu.updated` (existing event).
 
 ### Web (customer)
@@ -124,22 +137,26 @@ The customer site has no live connection. It re-fetches the menu when the tab be
   menu with the cart showing. Placing it again creates a new held order (a fresh minute). A table order needs its
   pass again, which the phone still holds.
 - When the hold ends the order is **released**: it gets the next order number, status `new`, `created_at` = release
-  time (so kitchen timers count from arrival), and `order.created` is published (the admin chimes as today). The guest's
-  screen switches to the normal status view.
-- If **Change order** arrives after release: `409 { error: 'too_late', message: "Too late to change this one: the
+  time (so kitchen timers count from arrival), its customer record is created/updated (`upsertCustomer` moves from
+  placement to release, so a withdrawn takeaway leaves no customer row), and `order.created` is published (the admin
+  chimes as today). The guest's screen switches to the normal status view.
+- If **Change order** arrives once `hold_until <= now()` (released or not yet released): `409 { error: 'too_late', message: "Too late to change this one: the
   kitchen has it. Ask your server and they can change it." }`. Nothing changes.
 - Withdrawn orders leave no trace, so order numbers stay consecutive.
 
 ### Release mechanism
 
-- `releaseDue()` (in `orders.ts`): in one statement, take orders with `status = 'held' and hold_until <= now()`,
-  oldest `hold_until` first, set `status = 'new'`, `number = nextval('order_number_seq')` in that order,
-  `created_at = now()`, `updated_at = now()`; publish `order.created` for each. Safe to call concurrently
-  (row locks with `for update skip locked`).
+- `releaseDue()` (in `orders.ts`), in a transaction: select due orders (`status = 'held' and hold_until <= now()`)
+  `order by hold_until for update skip locked`; for each in that order assign `number = nextval('order_number_seq')`,
+  `status = 'new'`, `created_at = now()`, `updated_at = now()`, upsert the customer and set `customer_id`; then publish
+  `order.created` for each. Concurrent releasers never touch the same row; if two run at once, numbers may be very
+  slightly out of `hold_until` order, which is accepted.
+- Withdraw locks the order `for update` and only deletes it while `status = 'held' and hold_until > now()`.
 - Called from:
-  - the `LiveHub` Durable Object **alarm**: placing a held order calls `runtime().scheduleRelease(holdUntil)`; the hub
-    sets its alarm to the earliest pending time. In `alarm()` it creates its own Hyperdrive client, runs
-    `releaseDue()` (publishing directly to its sockets), then re-arms for the next held order if any;
+  - the `LiveHub` Durable Object **alarm**: placing a held order calls `runtime().scheduleRelease(holdUntil)`, an RPC
+    to the hub, which sets its alarm if there is none or the existing one is later (`getAlarm()`). In `alarm()` the hub
+    creates its own Hyperdrive client and runs `releaseDue()` inside `withRuntime(...)` with a Runtime whose `publish`
+    writes straight to its sockets, ends the client, then re-arms for the earliest remaining held order if any;
   - lazily, at the start of `GET /api/admin/orders` and `GET /api/public/orders/:token` (backstop if an alarm is late).
 - `Runtime` gains `scheduleRelease(at: Date): void` (Node tests: no-op).
 
@@ -149,7 +166,8 @@ The customer site has no live connection. It re-fetches the menu when the tab be
   and `order.holdSecondsLeft` is set.
 - `GET /api/public/orders/:token` → same shape; `holdSecondsLeft` while held (after a lazy release check).
 - `POST /api/public/orders/:token/withdraw` → `200 { lines: [{ itemId, optionId, qty }] }` if still held, else `409 too_late`.
-  Rate limit shared with order placement.
+  Rate limit: its own, 20 per 10 minutes per IP (not shared with placement, so a change-and-replace cycle doesn't
+  burn the order limit).
 - Admin queries exclude `held`: open board (already filtered by status list), day view, `GET /orders/:id`
   (404 while held), payments/edits on a held order (`409` "This order hasn't reached the kitchen yet."),
   reports summary, GST export, customers counts.
@@ -167,8 +185,9 @@ current menu; anything no longer on it is dropped with a note) and navigate to `
 
 - `dining_tables`: add `otp text not null default lpad(floor(random() * 10000)::int::text, 4, '0')`,
   `sitting int not null default 1`.
-- `orders`: replace the status check to include `'held'`; add `hold_until timestamptz`; `number` drops `not null`
-  and its default (assigned on release; existing rows keep theirs; unique still holds).
+- `orders`: replace the status check to include `'held'`; add `hold_until timestamptz`; `number` drops `not null` but
+  **keeps its default** (so the Worker still running during a deploy, which migrates first, keeps numbering orders).
+  Held inserts pass `number = null` explicitly; release assigns `nextval`. Unique still holds.
 - `menus (id serial pk, name text not null unique, live boolean not null default false, created_at timestamptz default now())`
   plus `create unique index menus_one_live on menus (live) where live`.
 - `menu_items (menu_id int references menus on delete cascade, item_id int references items, primary key (menu_id, item_id))`.
@@ -181,16 +200,19 @@ current menu; anything no longer on it is dropped with a note) and navigate to `
 
 ## Testing
 
-End-to-end (`api/test/flow.test.ts`, `hold_seconds` set to 1 where waiting is needed):
+End-to-end (`api/test/flow.test.ts`). Existing tests that expect a public order on the board run with
+`hold_seconds: 0`; hold tests set it to 1 and wait.
 
 - Table codes: order without pass → `table_code`; wrong code → `bad_code`; right code → pass → order accepted;
-  pass for another table refused; completing and paying the table's last order changes the code and the old pass
+  pass for another table refused; a pass used as a staff bearer token is refused; completing and paying the table's last order changes the code and the old pass
   is refused; **New code** does the same; codes visible to a `staff` user.
 - Menus: new menu copied from Regular; remove an item and override a price; make it live; public menu shows only its
   items at the override price; ordering a removed item → `item_gone`; order total uses the override; can't delete the
   live menu; staff can't edit menus.
 - Hold: placed order is `held` with no number and absent from the board, reports and day view; withdraw returns
   the lines and deletes the order; after the hold, a lazy release gives it the next number and `order.created`;
-  withdraw after release → `too_late`; staff orders are never held; numbers stay consecutive across a withdrawal.
+  withdraw after release → `too_late`; staff orders are never held; numbers stay consecutive across a withdrawal;
+  a withdrawn takeaway leaves no customer row.
+- Staff picker: `GET /api/admin/menu/live` lists only live-menu items at override prices, including sold-out ones.
 
 `scripts/smoke.ts` (production-safe): verify endpoint refuses a wrong code for table 1 (no order created).
