@@ -38,9 +38,10 @@ All numbers above are settings (see Data), defaulting to these values.
   them, current offers (active, for everyone or members), **See the menu**, **Review us on Google**,
   **Follow us on Instagram** (URLs from settings, hidden if empty), **Stop WhatsApp messages** / opt back in,
   **Delete my details** (confirm dialog).
-- **Delete my details**: removes the customer row and their codes, messages and stamp history; sets `customer_id`,
-  `customer_name` and `customer_phone` to null on their orders and reservations and `customer_id` on invoices. Paid
-  bills keep their amounts. The card session ends.
+- **Delete my details**: removes the customer row and their codes, messages and stamp history; on their orders sets
+  `customer_id`, `customer_name`, `customer_phone` to null; on their reservations sets `customer_id` to null,
+  `name` to 'Deleted' and `phone` to '' (both columns are `not null`); on invoices sets `customer_id` to null. Paid
+  bills keep their amounts. The card session ends; any card token whose customer row no longer exists gets `401`.
 - **Before WhatsApp is live** (no provider configured): sign-in shows "Card sign-in is coming soon. Ask your server to
   add today's bill to your LB's card." Waiter linking (below) works regardless.
 
@@ -49,9 +50,17 @@ All numbers above are settings (see Data), defaulting to these values.
 - Guest: on `/bill/<token>` (and the takeaway order page), a signed-in guest sees **Add to my LB's card**.
 - Waiter: on an invoice in the admin, a phone field (+ optional name) links the bill to that customer (creating the
   customer row if needed, no code). Any staff role. A linked customer can be removed or replaced the same way.
-- Linking is allowed only on an `open` invoice with no payments. A bill already linked to a different customer:
-  `409 { error: 'linked', message: "This bill is already on another LB's card." }` for guests; staff may replace.
-- Linking (or unlinking) runs the discount calculation (section 2).
+- A bill already linked to a different customer:
+  `409 { error: 'linked', message: "This bill is already on another LB's card." }` for guests; staff may replace
+  (only while the invoice is not frozen, see section 2).
+- **Before any payment** (invoice not frozen): linking or unlinking runs the discount calculation (section 2).
+- **After payment started** (frozen, or already `paid` within the last 24 hours): linking is still allowed but is
+  **stamp-only**: no discount is applied or changed. If the invoice is already paid, the stamp rule (section 2,
+  "When the bill is paid") runs at once. Unlinking a frozen invoice is refused:
+  `409 { error: 'frozen', message: "Payment has started on this bill, so its LB's card can't be removed." }`.
+- Linking sets `orders.customer_id` on all of the invoice's orders to the card holder.
+- Orders paid one by one with no invoice earn no stamp; staff generate the invoice (feature 4) and link it, which then
+  counts as a paid invoice for the stamp rule.
 
 ### API
 
@@ -71,14 +80,25 @@ All numbers above are settings (see Data), defaulting to these values.
 
 `applyInvoiceDiscount(tx, invoiceId)` in `api/src/loyalty.ts`. Runs when a customer is linked or unlinked, when an
 order joins, when lines/cancellations change the invoice's orders, and when an offer is created, edited, paused or
-ended (for open invoices with no payments). **Frozen** once the invoice has any payment: later changes (including
-orders joining) don't recalculate; joining orders get no automatic discount.
+ended (for open, unfrozen invoices). Afterwards it publishes `invoice.updated`.
+
+**Frozen**: an invoice is frozen once any of its non-cancelled orders has `paid_paise > 0` (whether paid through the
+invoice or one by one before it existed). A frozen invoice is never recalculated: joining orders get no automatic
+discount, links are stamp-only, and manual discount changes are refused with
+`409 { error: 'frozen', message: "Payment has started on this bill, so its discount can't change." }`.
+
+**Locks** (in this order, inside the transaction): the customer row (`for update`, when one is linked), then
+`pg_advisory_xact_lock(hashtext('lbs.welcome'))` when the welcome candidate is evaluated. This makes the 420 count and
+"one reward per card at a time" safe under concurrency.
 
 1. Base: the invoice's non-cancelled orders' lines (`order_lines.line_paise`), before GST.
 2. Candidates:
-   - **Reward**: customer linked and `stamps = reward_stamps (4)` → `min(round(base × 50%), cap ₹1,000)`.
-   - **Welcome**: customer linked, no earlier paid invoice linked to them, `welcome_used_at` null, and
-     `welcomes used + welcomes reserved on other open invoices < 420` → `round(base × 20%)`.
+   - **Reward**: customer linked, `stamps = reward_stamps (4)`, and no *other* open, unfrozen invoice of theirs has
+     `discount_kind = 'reward'` → `min(round(base × 50%), cap ₹1,000)`.
+   - **Welcome**: customer linked, no earlier paid invoice linked to them, `welcome_used_at` null, no other open,
+     unfrozen invoice of theirs has `discount_kind = 'welcome'`, and
+     `welcomes used + welcomes held < 420`, where *held* counts open invoices with `discount_kind = 'welcome'` created
+     in the last 24 hours (older unfinished bills stop holding a place) → `round(base × 20%)`.
    - **Offers**: every offer active today (Kolkata date within `starts_on..ends_on`, not paused), for `everyone`, or
      for `members` when a customer is linked → `round(eligible × percent)` where eligible is the whole base or the lines
      whose item's category is in the offer's sections.
@@ -103,12 +123,17 @@ The invoice view shows one discount line with the note. Reports' sales summary a
 
 ### When the bill is paid
 
-In the transaction where `settleInvoiceCheck` marks a linked invoice `paid`:
+In the transaction where `settleInvoiceCheck` marks a linked invoice `paid` (or where a stamp-only link is made to an
+already-paid invoice), with the customer row locked:
 
 - `discount_kind = 'reward'` → `stamps = 0`; ledger `reward_used`. No stamp for this visit.
 - otherwise, if `discount_kind = 'welcome'` → `welcome_used_at = now()`; ledger `welcome_used`. Then, if
   `stamps < 4` and the customer has no `stamp` ledger entry today (Kolkata), `stamps + 1`; ledger `stamp`.
-- Always: `last_visit_at = now()`, `reminders_since_visit = 0`, and `visits`/`spent_paise` as today.
+- Always: `last_visit_at = now()`, `reminders_since_visit = 0`, `visits + 1`, `spent_paise + invoice total`.
+  For orders on an invoice, `addPayment` no longer updates `visits`/`spent_paise` per order (orders with no invoice
+  keep today's per-order behaviour), so nothing is counted twice.
+- A welcome already applied is honoured at payment even if the 420 limit was reached meanwhile by a stale hold
+  being paid; `welcome_used_at` is set regardless.
 
 Unlinking a customer before payment, or cancelling every order, releases any welcome reservation (it's only counted
 as used when paid).
@@ -118,7 +143,8 @@ as used when paid).
 - Customers list adds: stamps, opted in, last visit, rewards used, welcome used. CSV likewise.
 - Settings → **Loyalty** (manager): stamps for a reward, reward percent and cap, welcome percent and limit (shows
   "312 of 420 used"), Google review URL, Instagram URL, reminder days, reminder cap, reminder hour.
-- Owner-only on a customer: adjust stamps (0–4) with a note (ledger `manual_adjust`), for mistakes.
+- Owner-only on a customer: adjust stamps (0 to `reward_stamps`) with a note (ledger `manual_adjust`), for mistakes.
+- `stamps` is capped in code at `reward_stamps`; the database only requires `stamps >= 0`, so the setting can change.
 
 ## 3. Offers, broadcasts and reminders
 
@@ -141,9 +167,15 @@ as used when paid).
 - Worker secrets: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`.
 - Fixed templates (created in Meta by Kaustav): `lbs_login_code` (authentication), `lbs_we_miss_you` (marketing; name,
   card line), `lbs_reward_ready` (marketing; name). Campaign templates: any approved marketing template.
-- Webhook `GET/POST /api/whatsapp/webhook`: GET answers Meta's verification with `WHATSAPP_VERIFY_TOKEN`; POST checks
-  `X-Hub-Signature-256` with `WHATSAPP_APP_SECRET` (refuse otherwise), updates message statuses
-  (sent/delivered/read/failed), and treats an inbound text of "stop" or "unsubscribe" (any case, trimmed) as opt-out.
+- Webhook `GET/POST /api/whatsapp/webhook`:
+  - GET: if `hub.mode === 'subscribe'` and `hub.verify_token` equals `WHATSAPP_VERIFY_TOKEN`, reply `hub.challenge` as
+    plain text; else 403.
+  - POST: read the raw body (`await c.req.text()`) before parsing, compute HMAC-SHA256 with `WHATSAPP_APP_SECRET`,
+    compare to `X-Hub-Signature-256` in constant time; mismatch → 401.
+  - Status updates move forward only (queued < sent < delivered < read; `failed` from any state); late or older
+    statuses are ignored.
+  - Inbound text "stop" or "unsubscribe" (any case, trimmed) opts out the customer whose phone matches the sender's
+    `wa_id` via `normalisePhone()` (handles `91XXXXXXXXXX`).
 
 ### Sending
 
@@ -157,7 +189,8 @@ as used when paid).
 - Admin → **Campaigns → Messages**. Template picker (approved templates, synced from Meta on open:
   `GET /api/admin/wa/templates`), variables, optional linked offer (shown in the message by the owner's own wording).
 - Audience: all opted-in; visited in the last N days; not visited for N days; N or more stamps; welcome not used.
-  Always limited to opted-in, verified or waiter-linked customers with a phone.
+  Always limited to customers with `opted_in = true`. Only the customer can opt in (the card checkbox); waiter-linked
+  customers are never messaged until they opt in themselves.
 - `POST /api/admin/broadcasts/preview` `{ audience }` → `{ count, estimatedPaise }` (count × `wa_marketing_rate_paise`
   setting, default 80).
 - `POST /api/admin/broadcasts` (owner) `{ template, language, params, audience, offerId? }` → queued; the UI confirms
@@ -166,7 +199,9 @@ as used when paid).
 
 ### Reminders
 
-- Cron trigger daily at the reminder hour (default 18:00 Kolkata = `30 12 * * *` UTC) → `scheduled()` in `worker.ts`.
+- Cron trigger **hourly at :30 UTC** (`30 * * * *`, i.e. on the hour in Kolkata) → `scheduled()` in `worker.ts`, which
+  sends only when the Kolkata hour equals `reminder_hour`, so the setting takes effect without a redeploy.
+  `scheduled()` creates its own Hyperdrive client and runs inside `withRuntime(...)`, like `LiveHub.alarm()`.
 - Due: opted in, `last_visit_at <= now() - reminder_days`, (`last_reminder_at` null or `<= now() - reminder_days`),
   `reminders_since_visit < reminder_cap (6)`. Customers who never had a paid visit don't get reminders.
 - Template `lbs_reward_ready` when `stamps = 4`, else `lbs_we_miss_you` with a card line ("You're 2 visits from 50%
@@ -201,6 +236,21 @@ as used when paid).
   welcome_limit: 420, google_review_url: '', instagram_url: '', reminder_days: 14, reminder_cap: 6,
   reminder_hour: 18, wa_marketing_rate_paise: 80 }`.
 - RLS enabled on every new table.
+- `stamps` constraint is `check (stamps >= 0)` (not a fixed 4).
+
+## Worker config (`api/wrangler.jsonc`, `api/src/worker.ts`)
+
+- `triggers: { crons: ["30 * * * *"] }`; `worker.ts` exports `scheduled` alongside `fetch`.
+- Durable Object binding `OUTBOX` → class `Outbox`, migration tag `v2` with `new_sqlite_classes: ["Outbox"]`;
+  `Env` gains `OUTBOX` and the four `WHATSAPP_*` secrets (optional); rerun `wrangler types`.
+
+## Build order
+
+Plan and ship in two parts:
+
+1. **Card, stamps, discounts and offers**: sections 1 and 2, offers from section 3, waiter linking; card sign-in uses
+   `LogMessenger` in dev/tests and shows "coming soon" in production until WhatsApp is configured.
+2. **WhatsApp**: `MetaCloud`, webhook, `Outbox`, broadcasts, reminders and cron.
 
 ## Testing
 
@@ -208,6 +258,11 @@ as used when paid).
 
 - Card: code sent and verified; wrong code refused; code expiry and try limits; customer token refused as a staff
   token; opt in/out; delete my details nulls the links and removes the row.
+- Frozen: linking a card to an invoice whose orders were paid one by one gives a stamp but no discount, and never
+  leaves an order with `paid_paise > total_paise`; manual discount on a frozen invoice → `frozen`.
+- Concurrency: one card on two open bills gets the reward on only one; two simultaneous welcome calculations at
+  419 used give exactly one welcome; a welcome hold older than 24 hours no longer counts.
+- Visits/spend counted once per paid invoice, not per order.
 - Stamps: paid linked bill → 1 stamp; second paid bill same day → no stamp; 4 stamps cap; 5th visit gets 50% capped
   at ₹1,000 (a ₹3,000 bill gets ₹1,000 off), resets to 0 and earns no stamp; the next four visits earn stamps again.
 - Welcome: first paid visit gets 20% and stamp 1; second visit doesn't; the 421st customer doesn't; a reservation is
