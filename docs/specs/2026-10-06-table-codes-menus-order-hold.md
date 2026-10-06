@@ -28,8 +28,10 @@ append-only migrations, sentence-case copy, error messages that say what happene
     3. `status = 'completed' and payment_status <> 'paid' and created_at > now() - interval '2 days'`
        (same 2-day bound as the open board, so a forgotten unpaid bill can't block rotation forever).
   - **manually**, when any staff user taps **New code**.
-- One helper, `freeTableCheck(tx, tableLabel)` in `orders.ts`, rotates the sitting if the table is free *and* the
-  table had at least one order (so an unused table isn't rotated on every call). It runs inside the same transaction
+- One helper, `freeTableCheck(tx, tableLabel)` in `orders.ts`, rotates the sitting only when the change **turns the
+  table from busy to free**: callers check whether the table was busy before the change, and the helper rotates only if
+  it was busy and is now free. A late edit to an old, already-settled bill (e.g. a discount on yesterday's paid order)
+  therefore never rotates the code under a new party that has just been given it. It runs inside the same transaction
   after every change that can free a table: status change (`PATCH /api/admin/orders/:id`), `addPayment`, `recalc`
   callers (discounts, line edits), and moving an order to another table (checked for the old table).
 - Takeaway orders don't use codes. Orders placed by staff (`/api/admin/orders`) don't use codes.
@@ -53,6 +55,8 @@ reference them by label).
 - The pass is an HS256 JWT signed with `JWT_SECRET`: `{ kind: 'table', table: '<label>', sitting: <n> }`, 12-hour expiry.
   `requireStaff`/`verifyToken` reject any token carrying `kind`, so a pass can never act as a staff token; the pass
   check requires `kind === 'table'`.
+- The order placement rate limit (12 per 10 minutes) is keyed per IP *and* table label for table orders (per IP for
+  takeaway), for the same shared-Wi-Fi reason.
 - `POST /api/public/orders` with `mode: 'table'` takes `pass` in the body. The API checks the pass signature,
   `kind`, `table` equals the order's table, and `sitting` equals the table's current sitting. Otherwise:
   `403 { error: 'table_code', message: "Ask your server for table 3's code, then place the order again." }`.
