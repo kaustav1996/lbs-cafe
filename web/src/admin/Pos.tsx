@@ -11,7 +11,7 @@ interface Table { id: number; label: string; active: boolean }
 export default function Pos() {
   const { call, can } = useAuth();
   const nav = useNavigate();
-  const { menu, error } = useAdminMenu();
+  const { menu, error } = useAdminMenu('live');
   const [tables, setTables] = useState<Table[]>([]);
   const [gstRate, setGstRate] = useState(0.18);
   const [lines, setLines] = useState<PickedLine[]>([]);

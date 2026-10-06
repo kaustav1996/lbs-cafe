@@ -67,7 +67,7 @@ if (EMAIL && PASSWORD) {
   const { token, staff } = login.json();
   ok(`signed in as ${staff.name} (${staff.role})`);
 
-  for (const path of ['/api/admin/orders', '/api/admin/orders?view=day', '/api/admin/service-requests', '/api/admin/reservations', '/api/admin/menu', '/api/admin/customers', '/api/admin/settings', '/api/admin/tables', '/api/admin/staff', `/api/admin/reports/summary?from=2026-01-01&to=2026-12-31`]) {
+  for (const path of ['/api/admin/orders', '/api/admin/orders?view=day', '/api/admin/service-requests', '/api/admin/reservations', '/api/admin/menu', '/api/admin/menu/live', '/api/admin/menus', '/api/admin/customers', '/api/admin/settings', '/api/admin/tables', '/api/admin/staff', `/api/admin/reports/summary?from=2026-01-01&to=2026-12-31`]) {
     const r = await call(path, { token });
     assert.equal(r.status, 200, `${path}: ${r.text}`);
   }

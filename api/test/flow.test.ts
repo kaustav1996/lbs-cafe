@@ -380,3 +380,84 @@ test('table codes: wrong guesses are limited per table, not for the whole room',
   assert.equal((await guess('9')).statusCode, 429);
   assert.equal((await guess('10')).statusCode, 400); // same Wi-Fi, another table: not locked out
 });
+
+test('menus: a Puja menu copied from Regular, with fewer dishes and its own price, goes live', async () => {
+  const menus = (await app.inject({ method: 'GET', url: '/api/admin/menus', headers: auth() })).json().menus;
+  const regular = menus.find((m: any) => m.live);
+  assert.equal(regular.name, 'Regular');
+  assert.equal(regular.items, 126);
+
+  const made = await app.inject({ method: 'POST', url: '/api/admin/menus', headers: auth(), payload: { name: 'Durga Puja', copyFrom: regular.id } });
+  assert.equal(made.statusCode, 201, made.body);
+  const puja = made.json().menu;
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/menus', headers: auth(), payload: { name: 'Durga Puja' } })).statusCode, 409);
+
+  const latte = find('Cafe Latte');
+  const mocha = find('Mocha');
+  // Take Mocha off the Puja menu; Cafe Latte costs ₹159 there instead of ₹189.
+  assert.equal((await app.inject({ method: 'PUT', url: `/api/admin/menus/${puja.id}/items/${mocha.itemId}`, headers: auth(), payload: { on: false } })).statusCode, 200);
+  const priced = await app.inject({ method: 'PUT', url: `/api/admin/menus/${puja.id}/items/${latte.itemId}`, headers: auth(), payload: { on: true, prices: { [latte.optionId]: 15900 } } });
+  assert.equal(priced.statusCode, 200, priced.body);
+  // A price for another dish's option is refused.
+  assert.equal((await app.inject({ method: 'PUT', url: `/api/admin/menus/${puja.id}/items/${latte.itemId}`, headers: auth(), payload: { on: true, prices: { [mocha.optionId]: 100 } } })).statusCode, 400);
+
+  // Not live yet: guests still see Regular.
+  const names = (cats: any[]) => cats.flatMap(c => c.items.map((i: any) => i.name));
+  assert.ok(names((await app.inject({ method: 'GET', url: '/api/public/menu' })).json().categories).includes('Mocha'));
+
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/menus/${puja.id}`, headers: auth(), payload: { live: true } })).statusCode, 200);
+  const live = (await app.inject({ method: 'GET', url: '/api/public/menu' })).json().categories;
+  assert.ok(!names(live).includes('Mocha'));
+  const liveLatte = live.flatMap((c: any) => c.items).find((i: any) => i.name === 'Cafe Latte');
+  assert.equal(liveLatte.options[0].price_paise, 15900);
+  assert.ok(events.some(e => e.type === 'menu.updated'));
+
+  // Orders are priced from the live menu, and dishes not on it are refused.
+  const takeaway = (lines: object[]) => app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'takeaway', phone: '9876500000', lines } });
+  const gone = await takeaway([{ ...mocha, qty: 1 }]);
+  assert.equal(gone.statusCode, 409);
+  assert.equal(gone.json().error, 'item_gone');
+  const ok = await takeaway([{ ...latte, qty: 2 }]);
+  assert.equal(ok.statusCode, 201, ok.body);
+  assert.equal(ok.json().order.totals.subtotal, 2 * 15900);
+
+  // The staff picker sees the live menu at live prices, sold-out dishes included (Espresso was sold out earlier).
+  const picker = (await app.inject({ method: 'GET', url: '/api/admin/menu/live', headers: auth() })).json().categories;
+  assert.ok(!names(picker).includes('Mocha'));
+  assert.ok(names(picker).includes('Espresso'));
+  // The editor still sees the whole master list at normal prices.
+  const master = (await app.inject({ method: 'GET', url: '/api/admin/menu', headers: auth() })).json().categories;
+  assert.ok(names(master).includes('Mocha'));
+  assert.equal(master.flatMap((c: any) => c.items).find((i: any) => i.name === 'Cafe Latte').options[0].price_paise, 18900);
+
+  // Only one menu is live, and the live one can't be deleted.
+  const after = (await app.inject({ method: 'GET', url: '/api/admin/menus', headers: auth() })).json().menus;
+  assert.equal(after.filter((m: any) => m.live).length, 1);
+  const del = await app.inject({ method: 'DELETE', url: `/api/admin/menus/${puja.id}`, headers: auth() });
+  assert.equal(del.statusCode, 409);
+  assert.match(del.json().message, /another menu live/);
+
+  // A new dish added while editing the Puja menu lands on it.
+  const cat = master[0].id;
+  const added = await app.inject({ method: 'POST', url: '/api/admin/items', headers: auth(), payload: { categoryId: cat, name: 'Puja Bhog Thali', menuId: puja.id, options: [{ label: '', diet: 'veg', pricePaise: 29900 }] } });
+  assert.equal(added.statusCode, 201, added.body);
+  const pujaDetail = (await app.inject({ method: 'GET', url: `/api/admin/menus/${puja.id}`, headers: auth() })).json();
+  assert.ok(pujaDetail.itemIds.includes(added.json().id));
+  assert.ok(!(await app.inject({ method: 'GET', url: `/api/admin/menus/${regular.id}`, headers: auth() })).json().itemIds.includes(added.json().id));
+
+  // Switch back; Puja can now be deleted.
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/menus/${regular.id}`, headers: auth(), payload: { live: true } })).statusCode, 200);
+  assert.ok(names((await app.inject({ method: 'GET', url: '/api/public/menu' })).json().categories).includes('Mocha'));
+  assert.equal((await app.inject({ method: 'DELETE', url: `/api/admin/menus/${puja.id}`, headers: auth() })).statusCode, 200);
+});
+
+test('menus: staff can view menus but not change them', async () => {
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } });
+  const st = { authorization: `Bearer ${login.json().token}` };
+  const menus = await app.inject({ method: 'GET', url: '/api/admin/menus', headers: st });
+  assert.equal(menus.statusCode, 200);
+  const id = menus.json().menus[0].id;
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/menus', headers: st, payload: { name: 'Sneaky' } })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/menus/${id}`, headers: st, payload: { live: true } })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'PUT', url: `/api/admin/menus/${id}/items/${find('Mocha').itemId}`, headers: st, payload: { on: false } })).statusCode, 403);
+});

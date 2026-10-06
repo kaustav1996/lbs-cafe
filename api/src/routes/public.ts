@@ -6,16 +6,30 @@ import { bus } from '../events.js';
 import { rateLimit, signTablePass, verifyTablePass } from '../auth.js';
 import { createOrder, getOrder, getSettings, HttpError, normalisePhone, upsertCustomer } from '../orders.js';
 
-export async function menuTree(includeHidden = false) {
+/**
+ * The menu as a tree of sections, items and options.
+ * - `live`: what guests (and the staff order picker) see: only dishes on the live menu, at the live menu's
+ *   prices, sold-out ones included (marked by `available`), hidden dishes and sections left out.
+ * - `all`: the full master list for the menu editor, normal prices, hidden things included.
+ */
+export async function menuTree(mode: 'live' | 'all' = 'live') {
+  const all = mode === 'all';
   const cats = await sql`
     select id, slug, name, color, kind, sort, active from categories
-    where ${includeHidden} or active order by sort, id`;
+    where ${all} or active order by sort, id`;
   const items = await sql`
     select i.id, i.category_id, i.slug, i.name, i.description, i.sort, i.active, i.available, i.featured, i.image_url
-    from items i where ${includeHidden} or i.active order by i.sort, i.id`;
-  const opts = await sql`
-    select id, item_id, label, diet, price_paise, sort, active from item_options
-    where ${includeHidden} or active order by sort, id`;
+    from items i
+    where ${all} or (i.active and exists (
+      select 1 from menu_items mi join menus m on m.id = mi.menu_id where m.live and mi.item_id = i.id))
+    order by i.sort, i.id`;
+  const opts = all
+    ? await sql`select id, item_id, label, diet, price_paise, sort, active from item_options order by sort, id`
+    : await sql`
+        select o.id, o.item_id, o.label, o.diet, coalesce(mp.price_paise, o.price_paise) as price_paise, o.sort, o.active
+        from item_options o
+        left join menu_prices mp on mp.option_id = o.id and mp.menu_id = (select id from menus where live)
+        where o.active order by o.sort, o.id`;
   const optsByItem = new Map<number, any[]>();
   for (const o of opts) {
     if (!optsByItem.has(o.item_id)) optsByItem.set(o.item_id, []);
@@ -24,13 +38,13 @@ export async function menuTree(includeHidden = false) {
   const itemsByCat = new Map<number, any[]>();
   for (const i of items) {
     const options = optsByItem.get(i.id) ?? [];
-    if (!includeHidden && !options.length) continue;
+    if (!all && !options.length) continue;
     if (!itemsByCat.has(i.category_id)) itemsByCat.set(i.category_id, []);
     itemsByCat.get(i.category_id)!.push({ ...i, options });
   }
   return cats
     .map(c => ({ ...c, items: itemsByCat.get(c.id) ?? [] }))
-    .filter(c => includeHidden || c.items.length > 0);
+    .filter(c => all || c.items.length > 0);
 }
 
 const OrderBody = z.object({
@@ -79,7 +93,7 @@ function publicOrder(o: any) {
 export function publicRoutes() {
   const app = new Hono();
 
-  app.get('/menu', async c => c.json({ categories: await menuTree(false) }));
+  app.get('/menu', async c => c.json({ categories: await menuTree('live') }));
 
   app.get('/settings', async c => {
     const s = await getSettings();

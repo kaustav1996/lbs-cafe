@@ -51,7 +51,7 @@ const pct = (r: number) => `${(r * 50).toFixed(1).replace(/\.0$/, '')}%`;
 
 export function CartDrawer() {
   const cart = useCart();
-  const { live, settings } = useLive();
+  const { live, settings, refresh } = useLive();
   const { close } = useUi();
   const nav = useNavigate();
   const [previewSent, setPreviewSent] = useState(false);
@@ -103,6 +103,7 @@ export function CartDrawer() {
       close();
       nav(`/order/${r.token}`);
     } catch (e) {
+      if (e instanceof ApiError && e.code === 'item_gone') refresh();
       if (e instanceof ApiError && e.code === 'table_code') {
         setAskCode(true);
         setTimeout(() => document.getElementById('table-code')?.focus(), 0);

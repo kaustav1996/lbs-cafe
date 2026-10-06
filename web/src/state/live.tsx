@@ -19,6 +19,8 @@ interface LiveApi {
   settings: LiveSettings;
   live: boolean; // true once the API answered
   loading: boolean;
+  /** Re-fetch now, e.g. after an order is refused because the menu changed. */
+  refresh: () => void;
 }
 
 const FALLBACK_SETTINGS: LiveSettings = {
@@ -57,6 +59,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(HAS_API);
 
+  const [tick, setTick] = useState(0);
+  const refresh = useMemo(() => () => setTick(t => t + 1), []);
+
   useEffect(() => {
     if (!HAS_API) return;
     let stop = false;
@@ -86,15 +91,19 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       }
     };
     load();
-    // Sold-out flags change during service; refresh every few minutes while the page is open.
-    const t = setInterval(load, 3 * 60_000);
+    // Sold-out flags and the live menu change during service: refresh every 2 minutes while the page
+    // is open, and as soon as the guest comes back to the tab.
+    const t = setInterval(load, 2 * 60_000);
+    const onVisible = () => document.visibilityState === 'visible' && void load();
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       stop = true;
       clearInterval(t);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [tick]);
 
-  const value = useMemo(() => ({ menu, settings, live, loading }), [menu, settings, live, loading]);
+  const value = useMemo(() => ({ menu, settings, live, loading, refresh }), [menu, settings, live, loading, refresh]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

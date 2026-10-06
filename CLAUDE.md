@@ -18,6 +18,8 @@ repo owner (Kaustav). Read `docs/HANDOVER.md` for status, decisions and the next
   - `LiveHub` Durable Object (`src/worker.ts`): admin live feed over a hibernating WebSocket, plus rate limits.
   - `migrations/*.sql` run from Node with `npm run migrate` (part of `npm run deploy`), then `src/seed.ts` fills an empty DB.
   - `src/orders.ts` order pricing/GST/payments; `src/routes/{public,auth,admin}.ts`.
+  - Menus: one master list (categories/items/item_options); `menus` + `menu_items` + `menu_prices` select dishes and
+    override prices. Exactly one menu is live; guests, pricing and staff order screens use it (`menuTree('live')`).
   - `test/flow.test.ts` end-to-end tests against a real Postgres (Hono app on Node). `scripts/smoke.ts` checks a running Worker.
 - `scripts/build-menu.mjs` regenerates `web/src/data/menu.ts` and `api/seed/menu.json` from `data/old-site-scrape.json`.
 

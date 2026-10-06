@@ -469,7 +469,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
 
 function AddItems({ orderId, onClose, onDone }: { orderId: number; onClose: () => void; onDone: () => void }) {
   const { call } = useAuth();
-  const { menu } = useAdminMenu();
+  const { menu } = useAdminMenu('live');
   const [lines, setLines] = useState<PickedLine[]>([]);
   const [busy, setBusy] = useState(false);
   const add = (l: Omit<PickedLine, 'qty'>) =>

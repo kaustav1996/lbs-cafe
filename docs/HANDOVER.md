@@ -36,7 +36,10 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
 ### A2. Built since go-live
 - **Table codes** (7 Oct 2026, spec feature 1): each table has a 4-digit code in Admin → Settings → Tables, codes and QR.
   A guest's phone needs it once per sitting; it changes when the table's orders are all closed and paid, or with New code.
-  Next from the spec: multiple menus, then the 1-minute hold, then invoices, then the loyalty card.
+- **Multiple menus** (7 Oct 2026, spec feature 2): Admin → Menu has a menu picker. "Regular" (live) has every dish.
+  New menu copies another; each dish has a stock switch and an on-this-menu switch, and "Price on <menu>" sets a
+  per-menu price. Make live switches what guests and the staff order screens see.
+  Next from the spec: the 1-minute hold, then invoices, then the loyalty card.
 
 ### B. Data the cafe still owes (enter in Admin once live)
 - Veg / non-veg for: Recheado Masala, Herbed Rice, Lemongrass Rice, Mexican Rice, Mix Burnt Garlic Hakka Noodles,

@@ -56,6 +56,8 @@ export async function seed(sql: Sql, log: (m: string) => void = console.log) {
         }
       }
     });
+    await sql`insert into menus (name, live) select 'Regular', true where not exists (select 1 from menus)`;
+    await sql`insert into menu_items (menu_id, item_id) select m.id, i.id from menus m cross join items i where m.live on conflict do nothing`;
     log(`seeded menu: ${menu.length} sections`);
   }
 

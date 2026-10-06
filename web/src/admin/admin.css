@@ -1579,3 +1579,62 @@ textarea.a-input {
 .a-field-narrow .a-input {
   width: 80px;
 }
+
+/* Menu screen: menu picker and dishes not on the selected menu */
+.a-menubar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+}
+.a-menubar .a-field {
+  min-width: 220px;
+}
+.a-menubar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.a-menubar-state {
+  color: var(--a-muted);
+  font-size: 13px;
+  padding-bottom: 10px;
+}
+.a-menubar-state.live {
+  color: var(--a-lemon);
+  font-weight: 700;
+}
+/* With a menu selected each row has two switches: stock, then on/off the menu. */
+.a-menu-items.with-menu li {
+  grid-template-columns: 56px 56px minmax(0, 1fr) auto auto;
+}
+.a-menu-items li.a-menu-head {
+  border-top: 0;
+  padding-bottom: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--a-muted);
+}
+.a-menu-items li.a-menu-head span {
+  white-space: nowrap;
+}
+.a-menu-links {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+@media (max-width: 760px) {
+  .a-menu-items.with-menu li {
+    grid-template-columns: 56px 56px minmax(0, 1fr);
+  }
+  .a-menu-items.with-menu .a-menu-opts,
+  .a-menu-items.with-menu .a-menu-links {
+    grid-column: 3 / -1;
+    justify-content: flex-start;
+  }
+}
+.a-menu-items li.offmenu .a-menu-name,
+.a-menu-items li.offmenu .a-menu-opts {
+  opacity: 0.5;
+}

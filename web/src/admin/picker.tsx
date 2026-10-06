@@ -6,13 +6,14 @@ export interface AOption { id: number; label: string; diet: string; price_paise:
 export interface AItem { id: number; category_id: number; name: string; description: string | null; active: boolean; available: boolean; featured: boolean; image_url: string | null; sort: number; options: AOption[] }
 export interface ACategory { id: number; slug: string; name: string; color: string; kind: string; sort: number; active: boolean; items: AItem[] }
 
-export function useAdminMenu() {
+/** `live`: the live menu at live prices, for taking orders. `all`: the master list, for the menu editor. */
+export function useAdminMenu(source: 'live' | 'all') {
   const { call } = useAuth();
   const [menu, setMenu] = useState<ACategory[] | null>(null);
   const [error, setError] = useState('');
   const load = async () => {
     try {
-      const r = await call<{ categories: ACategory[] }>('/api/admin/menu');
+      const r = await call<{ categories: ACategory[] }>(source === 'live' ? '/api/admin/menu/live' : '/api/admin/menu');
       setMenu(r.categories);
     } catch (e) {
       setError(errText(e));

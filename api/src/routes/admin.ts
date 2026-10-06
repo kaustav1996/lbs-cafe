@@ -173,7 +173,111 @@ export function adminRoutes() {
   });
 
   // ---------- Menu ----------
-  app.get('/menu', async c => c.json({ categories: await menuTree(true) }));
+  app.get('/menu', async c => c.json({ categories: await menuTree('all') }));
+  // The staff order picker (New order, Add items): the live menu at live prices, sold-out dishes included.
+  app.get('/menu/live', async c => c.json({ categories: await menuTree('live') }));
+
+  // ---------- Menus (Regular, Durga Puja, …): selections of the master list with optional prices ----------
+  const MenuName = z.string().trim().min(1).max(40);
+  const dupName = (e: unknown, name: string) => {
+    if ((e as { code?: string }).code === '23505') throw new HttpError(409, `There's already a menu called "${name}". Pick another name.`, 'menu_exists');
+    throw e;
+  };
+
+  app.get('/menus', async c =>
+    c.json({
+      menus: await sql`
+        select m.id, m.name, m.live, (select count(*)::int from menu_items mi where mi.menu_id = m.id) as items
+        from menus m order by m.live desc, m.name`,
+    }),
+  );
+
+  app.get('/menus/:id', async c => {
+    const id = Number(c.req.param('id'));
+    const [m] = await sql`select id, name, live from menus where id = ${id}`;
+    if (!m) throw new HttpError(404, 'Menu not found.', 'not_found');
+    const items = await sql<{ item_id: number }[]>`select item_id from menu_items where menu_id = ${id}`;
+    const prices = await sql<{ option_id: number; price_paise: number }[]>`select option_id, price_paise from menu_prices where menu_id = ${id}`;
+    return c.json({ ...m, itemIds: items.map(r => r.item_id), prices: Object.fromEntries(prices.map(p => [p.option_id, p.price_paise])) });
+  });
+
+  app.post('/menus', atLeast('manager'), async c => {
+    const b = z.object({ name: MenuName, copyFrom: z.number().int().positive().optional() }).parse(await c.req.json());
+    const m = await sql
+      .begin(async tx => {
+        const [row] = await tx<{ id: number }[]>`insert into menus (name) values (${b.name}) returning id, name, live`;
+        if (b.copyFrom) {
+          await tx`insert into menu_items (menu_id, item_id) select ${row.id}, item_id from menu_items where menu_id = ${b.copyFrom}`;
+          await tx`insert into menu_prices (menu_id, option_id, price_paise) select ${row.id}, option_id, price_paise from menu_prices where menu_id = ${b.copyFrom}`;
+        }
+        return row;
+      })
+      .catch(e => dupName(e, b.name));
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ menu: m }, 201);
+  });
+
+  app.patch('/menus/:id', atLeast('manager'), async c => {
+    const id = Number(c.req.param('id'));
+    const b = z.object({ name: MenuName.optional(), live: z.literal(true).optional() }).parse(await c.req.json());
+    const m = await sql
+      .begin(async tx => {
+        const [row] = await tx`select id from menus where id = ${id} for update`;
+        if (!row) throw new HttpError(404, 'Menu not found.', 'not_found');
+        if (b.name) await tx`update menus set name = ${b.name} where id = ${id}`;
+        if (b.live) {
+          await tx`update menus set live = false where live and id <> ${id}`;
+          await tx`update menus set live = true where id = ${id}`;
+        }
+        const [after] = await tx`select id, name, live from menus where id = ${id}`;
+        return after;
+      })
+      .catch(e => dupName(e, b.name ?? ''));
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ menu: m });
+  });
+
+  app.delete('/menus/:id', atLeast('manager'), async c => {
+    const id = Number(c.req.param('id'));
+    const [m] = await sql<{ live: boolean }[]>`select live from menus where id = ${id}`;
+    if (!m) throw new HttpError(404, 'Menu not found.', 'not_found');
+    if (m.live) throw new HttpError(409, 'Make another menu live before deleting this one.', 'live_menu');
+    await sql`delete from menus where id = ${id}`;
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ ok: true });
+  });
+
+  /** Put a dish on a menu (or take it off), with optional per-menu prices for its options (null = normal price). */
+  app.put('/menus/:id/items/:itemId', atLeast('manager'), async c => {
+    const menuId = Number(c.req.param('id'));
+    const itemId = Number(c.req.param('itemId'));
+    const b = z
+      .object({ on: z.boolean(), prices: z.record(z.string().regex(/^\d+$/), z.number().int().min(0).max(10_000_000).nullable()).optional() })
+      .parse(await c.req.json());
+    await sql.begin(async tx => {
+      const [m] = await tx`select id from menus where id = ${menuId}`;
+      if (!m) throw new HttpError(404, 'Menu not found.', 'not_found');
+      const opts = await tx<{ id: number }[]>`select id from item_options where item_id = ${itemId}`;
+      if (!opts.length) throw new HttpError(404, 'Item not found.', 'not_found');
+      const own = new Set(opts.map(o => o.id));
+      if (!b.on) {
+        await tx`delete from menu_items where menu_id = ${menuId} and item_id = ${itemId}`;
+        await tx`delete from menu_prices where menu_id = ${menuId} and option_id = any(${[...own]})`;
+        return;
+      }
+      await tx`insert into menu_items (menu_id, item_id) values (${menuId}, ${itemId}) on conflict do nothing`;
+      for (const [k, price] of Object.entries(b.prices ?? {})) {
+        const optionId = Number(k);
+        if (!own.has(optionId)) throw new HttpError(400, 'That price belongs to a different dish. Refresh and try again.', 'bad_option');
+        if (price === null) await tx`delete from menu_prices where menu_id = ${menuId} and option_id = ${optionId}`;
+        else
+          await tx`insert into menu_prices (menu_id, option_id, price_paise) values (${menuId}, ${optionId}, ${price})
+                   on conflict (menu_id, option_id) do update set price_paise = excluded.price_paise`;
+      }
+    });
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ ok: true });
+  });
 
   const CategoryIn = z.object({
     name: z.string().trim().min(1).max(40),
@@ -224,6 +328,7 @@ export function adminRoutes() {
     imageUrl: z.string().url().max(500).nullable().optional(),
     sort: z.number().int().optional(),
     options: z.array(OptionIn).min(1).max(8),
+    menuId: z.number().int().positive().optional(),
   });
 
   async function saveOptions(tx: any, itemId: number, options: z.infer<typeof OptionIn>[]) {
@@ -250,6 +355,10 @@ export function adminRoutes() {
                 ${b.active ?? true}, ${b.available ?? true}, ${b.featured ?? false}, ${b.imageUrl ?? null}, ${b.sort ?? max + 10})
         returning id`;
       await saveOptions(tx, it.id, b.options);
+      // A new dish goes on the menu being edited (default: the live one).
+      await tx`insert into menu_items (menu_id, item_id)
+               select id, ${it.id} from menus where ${b.menuId ?? null}::int is null and live or id = ${b.menuId ?? null}
+               on conflict do nothing`;
       return it;
     });
     bus.publish({ type: 'menu.updated' });

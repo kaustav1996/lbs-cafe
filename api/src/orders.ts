@@ -80,9 +80,13 @@ async function priceLines(tx: Tx, lines: LineInput[], allowUnavailable: boolean)
   const rows = await tx<
     { option_id: number; item_id: number; name: string; label: string; diet: string; price_paise: number; ok: boolean; available: boolean }[]
   >`
-    select o.id as option_id, i.id as item_id, i.name, o.label, o.diet, o.price_paise,
-           (o.active and i.active and c.active) as ok, i.available
+    select o.id as option_id, i.id as item_id, i.name, o.label, o.diet,
+           coalesce(mp.price_paise, o.price_paise) as price_paise,
+           (o.active and i.active and c.active and mi.item_id is not null) as ok, i.available
     from item_options o join items i on i.id = o.item_id join categories c on c.id = i.category_id
+    left join menus m on m.live
+    left join menu_items mi on mi.menu_id = m.id and mi.item_id = i.id
+    left join menu_prices mp on mp.menu_id = m.id and mp.option_id = o.id
     where o.id = any(${ids})`;
   const byId = new Map(rows.map(r => [r.option_id, r]));
   const merged = new Map<number, PricedLine>();

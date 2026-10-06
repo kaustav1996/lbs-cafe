@@ -2,14 +2,32 @@ import { useState } from 'react';
 import { errText, rs, useAuth, useOnEvent } from './core';
 import { DietDot, Modal, PageHead, Toggle, toast } from './ui';
 import { useAdminMenu, type ACategory, type AItem } from './picker';
+import { MenuBar, MenuPriceEditor, useMenus } from './Menus';
 
 export default function MenuAdmin() {
   const { call, can } = useAuth();
-  const { menu, error, reload, setMenu } = useAdminMenu();
+  const { menu, error, reload, setMenu } = useAdminMenu('all');
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<{ item?: AItem; categoryId: number } | null>(null);
   const [editingCat, setEditingCat] = useState<ACategory | 'new' | null>(null);
-  useOnEvent(['menu.updated'], () => void reload());
+  const [pricing, setPricing] = useState<AItem | null>(null);
+  const { menus, selected, setSelected, detail, setDetail, refresh } = useMenus();
+  useOnEvent(['menu.updated'], () => void (reload(), refresh()));
+  const onMenu = new Set(detail?.itemIds ?? []);
+
+  const toggleOnMenu = async (item: AItem) => {
+    if (!detail) return;
+    const on = !onMenu.has(item.id);
+    setDetail({ ...detail, itemIds: on ? [...detail.itemIds, item.id] : detail.itemIds.filter(id => id !== item.id) });
+    try {
+      await call(`/api/admin/menus/${detail.id}/items/${item.id}`, { method: 'PUT', json: { on } });
+      toast(`${item.name} ${on ? 'added to' : 'taken off'} ${detail.name}`);
+      void refresh();
+    } catch (e) {
+      void refresh();
+      toast(errText(e), 'bad');
+    }
+  };
 
   const toggleAvailable = async (item: AItem) => {
     // Flip it on screen straight away; undo if the API says no.
@@ -38,8 +56,10 @@ export default function MenuAdmin() {
           </button>
         )}
       </PageHead>
+      {menus && <MenuBar menus={menus} selected={selected} onSelect={setSelected} onChanged={() => void refresh()} />}
       <p className="a-muted">
-        Switch an item off when it runs out. It shows as sold out on the website straight away. {soldOut.length > 0 && <b>{soldOut.length} sold out right now.</b>}
+        The first switch is stock: turn it off when a dish runs out and it shows as sold out everywhere straight away.
+        {detail && ` The second puts a dish on ${detail.name} or takes it off.`} {soldOut.length > 0 && <b>{soldOut.length} sold out right now.</b>}
       </p>
       {error && <p className="a-error">{error}</p>}
       {!menu && !error && <p className="a-muted">Loading menu…</p>}
@@ -52,7 +72,9 @@ export default function MenuAdmin() {
               <i style={{ background: c.color }} aria-hidden="true" />
               <h2>{c.name}</h2>
               {!c.active && <span className="a-tag">Hidden</span>}
-              <span className="a-muted">{c.items.length} items</span>
+              <span className="a-muted">
+                {detail ? `${c.items.filter(i => onMenu.has(i.id)).length} of ${c.items.length} on ${detail.name}` : `${c.items.length} items`}
+              </span>
               {can('manager') && (
                 <>
                   <button type="button" className="a-link" onClick={() => setEditingCat(c)}>
@@ -64,30 +86,61 @@ export default function MenuAdmin() {
                 </>
               )}
             </header>
-            <ul className="a-menu-items">
+            <ul className={detail ? 'a-menu-items with-menu' : 'a-menu-items'}>
+              {detail && items.length > 0 && (
+                <li className="a-menu-head" aria-hidden="true">
+                  <span>In stock</span>
+                  <span>On {detail.name}</span>
+                </li>
+              )}
               {items.map(i => (
-                <li key={i.id} className={`${i.active ? '' : 'hidden'} ${i.available ? '' : 'out'}`}>
+                <li key={i.id} className={`${i.active ? '' : 'hidden'} ${i.available ? '' : 'out'} ${detail && !onMenu.has(i.id) ? 'offmenu' : ''}`}>
                   <Toggle id={`av-${i.id}`} checked={i.available} onChange={() => toggleAvailable(i)} label={<span className="a-sr">In stock</span>} />
+                  {detail && (
+                    <Toggle
+                      id={`on-${i.id}`}
+                      checked={onMenu.has(i.id)}
+                      onChange={() => (can('manager') ? void toggleOnMenu(i) : toast('Only a manager can change what’s on a menu.', 'bad'))}
+                      label={<span className="a-sr">On {detail.name}</span>}
+                    />
+                  )}
                   <span className="a-menu-name">
                     {i.name}
                     {!i.active && <span className="a-tag">Hidden</span>}
                     {i.featured && <span className="a-tag gold">Featured</span>}
+                    {detail && !onMenu.has(i.id) && <span className="a-tag">Not on {detail.name}</span>}
                   </span>
                   <span className="a-menu-opts">
                     {i.options
                       .filter(o => o.active)
-                      .map(o => (
-                        <span key={o.id}>
-                          <DietDot diet={o.diet} />
-                          {o.label && `${o.label} `}
-                          <b className="num">{rs(o.price_paise)}</b>
-                        </span>
-                      ))}
+                      .map(o => {
+                        const own = detail && onMenu.has(i.id) ? detail.prices[o.id] : undefined;
+                        return (
+                          <span key={o.id}>
+                            <DietDot diet={o.diet} />
+                            {o.label && `${o.label} `}
+                            {own !== undefined ? (
+                              <>
+                                <b className="num">{rs(own)}</b> <s className="a-muted num">{rs(o.price_paise)}</s>
+                              </>
+                            ) : (
+                              <b className="num">{rs(o.price_paise)}</b>
+                            )}
+                          </span>
+                        );
+                      })}
                   </span>
                   {can('manager') && (
-                    <button type="button" className="a-link" onClick={() => setEditing({ item: i, categoryId: c.id })}>
-                      Edit
-                    </button>
+                    <span className="a-menu-links">
+                      {detail && onMenu.has(i.id) && (
+                        <button type="button" className="a-link" onClick={() => setPricing(i)}>
+                          Price on {detail.name}
+                        </button>
+                      )}
+                      <button type="button" className="a-link" onClick={() => setEditing({ item: i, categoryId: c.id })}>
+                        Edit
+                      </button>
+                    </span>
                   )}
                 </li>
               ))}
@@ -95,7 +148,10 @@ export default function MenuAdmin() {
           </section>
         );
       })}
-      {editing && menu && <ItemEditor menu={menu} {...editing} onClose={() => setEditing(null)} onSaved={reload} />}
+      {editing && menu && (
+        <ItemEditor menu={menu} menuId={detail?.id} {...editing} onClose={() => setEditing(null)} onSaved={() => void (reload(), refresh())} />
+      )}
+      {pricing && detail && <MenuPriceEditor menu={detail} item={pricing} onClose={() => setPricing(null)} onSaved={() => void refresh()} />}
       {editingCat && <CategoryEditor cat={editingCat === 'new' ? null : editingCat} onClose={() => setEditingCat(null)} onSaved={reload} />}
     </div>
   );
@@ -103,7 +159,7 @@ export default function MenuAdmin() {
 
 interface OptDraft { id?: number; label: string; diet: string; price: string }
 
-function ItemEditor({ menu, item, categoryId, onClose, onSaved }: { menu: ACategory[]; item?: AItem; categoryId: number; onClose: () => void; onSaved: () => void }) {
+function ItemEditor({ menu, menuId, item, categoryId, onClose, onSaved }: { menu: ACategory[]; menuId?: number; item?: AItem; categoryId: number; onClose: () => void; onSaved: () => void }) {
   const { call } = useAuth();
   const [name, setName] = useState(item?.name ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
@@ -127,7 +183,7 @@ function ItemEditor({ menu, item, categoryId, onClose, onSaved }: { menu: ACateg
     try {
       const body = { categoryId: cat, name: name.trim(), description: description.trim() || null, active, featured, imageUrl: imageUrl.trim() || null, options };
       if (item) await call(`/api/admin/items/${item.id}`, { method: 'PATCH', json: body });
-      else await call('/api/admin/items', { method: 'POST', json: body });
+      else await call('/api/admin/items', { method: 'POST', json: { ...body, menuId } });
       toast(item ? 'Item saved' : 'Item added');
       onSaved();
       onClose();
