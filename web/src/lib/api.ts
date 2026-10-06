@@ -1,6 +1,8 @@
 /** Thin fetch wrapper for the cafe API. Errors carry the API's own plain-language message. */
-export const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
-export const HAS_API = API_URL.length > 0;
+// VITE_API_URL="/" means the API is on the same origin as the site (the Cloudflare Worker serves both).
+const RAW_API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
+export const API_URL = RAW_API_URL.replace(/\/$/, '');
+export const HAS_API = RAW_API_URL.length > 0;
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code = 'error') {

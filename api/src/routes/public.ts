@@ -1,8 +1,9 @@
-import type { FastifyInstance } from 'fastify';
+import { Hono } from 'hono';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { sql } from '../db.js';
 import { bus } from '../events.js';
+import { rateLimit } from '../auth.js';
 import { createOrder, getOrder, getSettings, HttpError, normalisePhone, upsertCustomer } from '../orders.js';
 
 export async function menuTree(includeHidden = false) {
@@ -74,54 +75,54 @@ function publicOrder(o: any) {
   };
 }
 
-export async function publicRoutes(app: FastifyInstance) {
-  app.get('/menu', async () => ({ categories: await menuTree(false) }));
+export function publicRoutes() {
+  const app = new Hono();
 
-  app.get('/settings', async () => {
+  app.get('/menu', async c => c.json({ categories: await menuTree(false) }));
+
+  app.get('/settings', async c => {
     const s = await getSettings();
-    return {
+    return c.json({
       gstRate: Number(s.gst_rate),
       hours: s.hours,
       orderingEnabled: !!s.ordering_enabled,
       takeawayEnabled: !!s.takeaway_enabled,
       bookingEnabled: !!s.booking_enabled,
       cafe: s.cafe,
-    };
+    });
   });
 
-  app.post('/orders', { config: { rateLimit: { max: 12, timeWindow: '10 minutes' } } }, async (req, reply) => {
-    const body = OrderBody.parse(req.body);
+  app.post('/orders', rateLimit('orders', 12, 10 * 60_000), async c => {
+    const body = OrderBody.parse(await c.req.json());
     if (body.mode === 'table' && !body.table) throw new HttpError(400, 'Add your table number. It’s on the QR stand.', 'no_table');
     if (body.mode === 'takeaway' && !normalisePhone(body.phone))
       throw new HttpError(400, 'Add a 10-digit mobile number so we can call when your order is ready.', 'no_phone');
     const o = await createOrder({ source: body.mode, table: body.table, name: body.name, phone: body.phone, note: body.note, lines: body.lines });
-    reply.code(201);
-    return { token: o!.token, order: publicOrder(o) };
+    return c.json({ token: o!.token, order: publicOrder(o) }, 201);
   });
 
-  app.get<{ Params: { token: string } }>('/orders/:token', async req => {
-    const [row] = await sql<{ id: number }[]>`select id from orders where token = ${req.params.token}`;
+  app.get('/orders/:token', async c => {
+    const [row] = await sql<{ id: number }[]>`select id from orders where token = ${c.req.param('token')}`;
     if (!row) throw new HttpError(404, 'We couldn’t find that order. The link may be incomplete.', 'not_found');
-    return { order: publicOrder(await getOrder(row.id)) };
+    return c.json({ order: publicOrder(await getOrder(row.id)) });
   });
 
-  app.post('/service-requests', { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } }, async (req, reply) => {
-    const body = z.object({ table: z.string().trim().min(1).max(10), kind: z.enum(['water', 'bill', 'server']) }).parse(req.body);
+  app.post('/service-requests', rateLimit('service', 10, 5 * 60_000), async c => {
+    const body = z.object({ table: z.string().trim().min(1).max(10), kind: z.enum(['water', 'bill', 'server']) }).parse(await c.req.json());
     const [t] = await sql`select 1 from dining_tables where label = ${body.table} and active`;
     if (!t) throw new HttpError(400, `There's no table "${body.table}".`, 'bad_table');
     // One open request of each kind per table is enough.
     const [existing] = await sql<{ id: number }[]>`
       select id from service_requests where table_label = ${body.table} and kind = ${body.kind} and status = 'open'`;
-    if (existing) return { id: existing.id, duplicate: true };
+    if (existing) return c.json({ id: existing.id, duplicate: true });
     const [r] = await sql<{ id: number }[]>`
       insert into service_requests (table_label, kind) values (${body.table}, ${body.kind}) returning id`;
     bus.publish({ type: 'service.created', id: r.id, table: body.table, kind: body.kind });
-    reply.code(201);
-    return { id: r.id };
+    return c.json({ id: r.id }, 201);
   });
 
-  app.post('/reservations', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req, reply) => {
-    const body = ReservationBody.parse(req.body);
+  app.post('/reservations', rateLimit('reservations', 5, 10 * 60_000), async c => {
+    const body = ReservationBody.parse(await c.req.json());
     const s = await getSettings();
     if (!s.booking_enabled) throw new HttpError(403, `Online bookings are paused. Call ${s.cafe?.phone ?? 'us'} to book.`, 'booking_off');
     const phone = normalisePhone(body.phone);
@@ -142,7 +143,8 @@ export async function publicRoutes(app: FastifyInstance) {
       return row;
     });
     bus.publish({ type: 'reservation.created', id: r.id, ref: r.ref });
-    reply.code(201);
-    return { ref: r.ref, status: 'pending' };
+    return c.json({ ref: r.ref, status: 'pending' }, 201);
   });
+
+  return app;
 }

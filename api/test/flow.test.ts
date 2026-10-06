@@ -1,29 +1,56 @@
 // End-to-end flow against a real Postgres. Run with:
-// DATABASE_URL=postgres://postgres:postgres@localhost:5433/lbs_test DATABASE_SSL=disable JWT_SECRET=... npm test
+// DATABASE_URL=postgres://postgres:postgres@localhost:5433/lbs_test DATABASE_SSL=disable npm test
+// The Hono app runs on Node here with an in-memory live feed and rate limiter standing in for the Durable Object.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-process.env.NODE_ENV = 'test';
 process.env.OWNER_EMAIL ??= 'owner@lbscafe.test';
 process.env.OWNER_PASSWORD ??= 'bandit-owner-pass';
 
 const { buildApp } = await import('../src/app.js');
-const { migrate } = await import('../src/migrate.js');
-const { sql } = await import('../src/db.js');
+const { migrate, nodeSql } = await import('../src/migrate.js');
+const { withRuntime } = await import('../src/context.js');
 const { computeTotals } = await import('../src/money.js');
+import type { CafeEvent } from '../src/events.js';
 
-let app: Awaited<ReturnType<typeof buildApp>>;
+const sql = nodeSql();
+const events: CafeEvent[] = [];
+const hits = new Map<string, number[]>();
+const rt = {
+  sql,
+  jwtSecret: 'test-secret-at-least-24-characters',
+  corsOrigins: ['https://lbscafe.com'],
+  publish: (e: CafeEvent) => void events.push(e),
+  allow: async (key: string, max: number, windowMs: number) => {
+    const now = Date.now();
+    const recent = (hits.get(key) ?? []).filter(t => t > now - windowMs);
+    hits.set(key, recent.length < max ? [...recent, now] : recent);
+    return recent.length < max;
+  },
+};
+
+const hono = buildApp();
+/** Same shape as Fastify's inject(), so the tests read as before. */
+const app = {
+  async inject(o: { method: string; url: string; payload?: unknown; headers?: Record<string, string> }) {
+    const headers = { ...o.headers } as Record<string, string>;
+    if (o.payload !== undefined) headers['content-type'] = 'application/json';
+    const res = await withRuntime(rt, () =>
+      hono.request(o.url, { method: o.method, headers, body: o.payload === undefined ? undefined : JSON.stringify(o.payload) }),
+    );
+    const body = await res.text();
+    return { statusCode: res.status, headers: Object.fromEntries(res.headers), body, json: () => JSON.parse(body) };
+  },
+};
 let token = '';
 const auth = () => ({ authorization: `Bearer ${token}` });
 
 before(async () => {
   await sql`drop schema public cascade`;
   await sql`create schema public`;
-  await migrate(() => {});
-  app = await buildApp();
+  await migrate(sql, () => {});
 });
 after(async () => {
-  await app.close();
   await sql.end();
 });
 
@@ -193,4 +220,31 @@ test('staff accounts cannot give discounts or cancel', async () => {
   assert.equal(avail.statusCode, 200);
   const edit = await app.inject({ method: 'PATCH', url: `/api/admin/items/${find('Espresso').itemId}`, headers: st, payload: { name: 'Espresso!' } });
   assert.equal(edit.statusCode, 403);
+});
+
+test('changes reach the live feed', () => {
+  const types = new Set(events.map(e => e.type));
+  for (const t of ['order.created', 'order.updated', 'service.created', 'service.updated', 'reservation.created', 'reservation.updated', 'menu.updated'])
+    assert.ok(types.has(t as CafeEvent['type']), `no ${t} event`);
+});
+
+test('the live feed needs a valid token and a WebSocket', async () => {
+  const bad = await app.inject({ method: 'GET', url: '/api/auth/stream?token=nope' });
+  assert.equal(bad.statusCode, 401);
+  const plain = await app.inject({ method: 'GET', url: `/api/auth/stream?token=${token}` });
+  assert.equal(plain.statusCode, 426);
+});
+
+test('CORS allows the cafe site and refuses others', async () => {
+  const ok = await app.inject({ method: 'GET', url: '/api/public/settings', headers: { origin: 'https://lbscafe.com' } });
+  assert.equal(ok.headers['access-control-allow-origin'], 'https://lbscafe.com');
+  const no = await app.inject({ method: 'GET', url: '/api/public/settings', headers: { origin: 'https://evil.example' } });
+  assert.equal(no.headers['access-control-allow-origin'], undefined);
+});
+
+test('repeated wrong passwords are slowed down', async () => {
+  let last = 0;
+  for (let i = 0; i < 12; i++)
+    last = (await app.inject({ method: 'POST', url: '/api/auth/login', headers: { 'cf-connecting-ip': '203.0.113.9' }, payload: { email: 'x@y.in', password: 'nope' } })).statusCode;
+  assert.equal(last, 429);
 });

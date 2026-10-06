@@ -1,6 +1,6 @@
-import jwt from 'jsonwebtoken';
-import type { FastifyReply, FastifyRequest } from 'fastify';
-import { env } from './config.js';
+import { sign, verify } from 'hono/jwt';
+import { createMiddleware } from 'hono/factory';
+import { runtime } from './context.js';
 import { sql } from './db.js';
 
 export type Role = 'owner' | 'manager' | 'staff';
@@ -9,22 +9,18 @@ export interface StaffClaims {
   name: string;
   role: Role;
 }
+export type AppEnv = { Variables: { staff: StaffClaims } };
 
-declare module 'fastify' {
-  interface FastifyRequest {
-    staff?: StaffClaims;
-  }
-}
-
-const TTL = '14d';
+const TTL_SECONDS = 14 * 24 * 3600;
 
 export function signStaff(s: StaffClaims) {
-  return jwt.sign({ name: s.name, role: s.role }, env.JWT_SECRET, { subject: String(s.sub), expiresIn: TTL });
+  const exp = Math.floor(Date.now() / 1000) + TTL_SECONDS;
+  return sign({ sub: String(s.sub), name: s.name, role: s.role, exp }, runtime().jwtSecret, 'HS256');
 }
 
-export function verifyToken(token: string): StaffClaims | null {
+export async function verifyToken(token: string): Promise<StaffClaims | null> {
   try {
-    const p = jwt.verify(token, env.JWT_SECRET) as jwt.JwtPayload;
+    const p = await verify(token, runtime().jwtSecret, 'HS256');
     return { sub: Number(p.sub), name: String(p.name), role: p.role as Role };
   } catch {
     return null;
@@ -32,19 +28,31 @@ export function verifyToken(token: string): StaffClaims | null {
 }
 
 /** Bearer token check for every /api/admin route. Also re-checks the account is still active. */
-export async function requireStaff(req: FastifyRequest, reply: FastifyReply) {
-  const h = req.headers.authorization;
-  const claims = h?.startsWith('Bearer ') ? verifyToken(h.slice(7)) : null;
-  if (!claims) return reply.code(401).send({ error: 'signed_out', message: 'Your session has ended. Sign in again.' });
+export const requireStaff = createMiddleware<AppEnv>(async (c, next) => {
+  const h = c.req.header('authorization');
+  const claims = h?.startsWith('Bearer ') ? await verifyToken(h.slice(7)) : null;
+  if (!claims) return c.json({ error: 'signed_out', message: 'Your session has ended. Sign in again.' }, 401);
   const [row] = await sql<{ active: boolean; role: Role }[]>`select active, role from staff where id = ${claims.sub}`;
-  if (!row?.active) return reply.code(401).send({ error: 'signed_out', message: 'This account is switched off. Ask the owner.' });
-  req.staff = { ...claims, role: row.role };
-}
+  if (!row?.active) return c.json({ error: 'signed_out', message: 'This account is switched off. Ask the owner.' }, 401);
+  c.set('staff', { ...claims, role: row.role });
+  await next();
+});
 
 const RANK: Record<Role, number> = { staff: 1, manager: 2, owner: 3 };
 export function atLeast(role: Role) {
-  return async (req: FastifyRequest, reply: FastifyReply) => {
-    if (!req.staff || RANK[req.staff.role] < RANK[role])
-      return reply.code(403).send({ error: 'forbidden', message: `Only a ${role} can do this.` });
-  };
+  return createMiddleware<AppEnv>(async (c, next) => {
+    const s = c.get('staff');
+    if (!s || RANK[s.role] < RANK[role]) return c.json({ error: 'forbidden', message: `Only a ${role} can do this.` }, 403);
+    await next();
+  });
+}
+
+/** Per-IP limit on a route, like the old @fastify/rate-limit settings. */
+export function rateLimit(name: string, max: number, windowMs: number) {
+  return createMiddleware(async (c, next) => {
+    const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? 'local';
+    if (!(await runtime().allow(`${name}:${ip}`, max, windowMs)))
+      return c.json({ error: 'slow_down', message: 'Too many tries. Wait a minute and try again.' }, 429);
+    await next();
+  });
 }

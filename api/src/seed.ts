@@ -1,9 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import bcrypt from 'bcryptjs';
-import { sql } from './db.js';
-import { env } from './config.js';
+import type { Sql } from './db.js';
+import { hashPassword } from './password.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,8 +25,12 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   },
 };
 
-/** Fills an empty database: settings, the menu from the old site, tables 1–12, and the first owner login. */
-export async function seed(log: (m: string) => void = console.log) {
+/**
+ * Fills an empty database: settings, the menu from the old site, tables 1–12, and the first owner
+ * login from OWNER_EMAIL / OWNER_PASSWORD / OWNER_NAME.
+ */
+export async function seed(sql: Sql, log: (m: string) => void = console.log) {
+  const { OWNER_EMAIL, OWNER_PASSWORD, OWNER_NAME = 'Owner' } = process.env;
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
     await sql`insert into settings (key, value) values (${key}, ${sql.json(value as never)}) on conflict (key) do nothing`;
   }
@@ -62,10 +65,11 @@ export async function seed(log: (m: string) => void = console.log) {
   }
 
   const [{ n: staff }] = await sql<{ n: number }[]>`select count(*)::int as n from staff`;
-  if (staff === 0 && env.OWNER_EMAIL && env.OWNER_PASSWORD) {
-    const hash = await bcrypt.hash(env.OWNER_PASSWORD, 11);
+  if (staff === 0 && OWNER_EMAIL && OWNER_PASSWORD) {
+    if (OWNER_PASSWORD.length < 8) throw new Error('OWNER_PASSWORD must be at least 8 characters');
+    const hash = await hashPassword(OWNER_PASSWORD);
     await sql`insert into staff (name, email, password_hash, role)
-              values (${env.OWNER_NAME}, ${env.OWNER_EMAIL.toLowerCase()}, ${hash}, 'owner')`;
-    log(`created owner login ${env.OWNER_EMAIL}`);
+              values (${OWNER_NAME}, ${OWNER_EMAIL.toLowerCase()}, ${hash}, 'owner')`;
+    log(`created owner login ${OWNER_EMAIL}`);
   }
 }

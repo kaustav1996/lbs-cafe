@@ -1,0 +1,30 @@
+// One Worker for the whole cafe: the site and admin (web/dist) plus the API (src/worker.ts).
+// Secrets, set once with `npx wrangler secret put <NAME>`: JWT_SECRET.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lbs-cafe",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/health"]
+  },
+  "hyperdrive": [
+    {
+      // Supabase through its Session pooler, with query caching off so the live board is never stale.
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      "localConnectionString": "postgres://postgres:postgres@localhost:5433/lbs"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "LIVE", "class_name": "LiveHub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveHub"] }],
+  "vars": {
+    "CORS_ORIGINS": "https://lbscafe.com,https://www.lbscafe.com,http://localhost:5173"
+  },
+  "observability": { "enabled": true }
+}

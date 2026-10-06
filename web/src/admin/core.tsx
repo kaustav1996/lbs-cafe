@@ -147,21 +147,24 @@ export function StreamProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token || !HAS_API) return;
-    let es: EventSource | null = null;
+    let ws: WebSocket | null = null;
     let retry: ReturnType<typeof setTimeout>;
+    let ping: ReturnType<typeof setInterval>;
     let closed = false;
+    const base = (API_URL || window.location.origin).replace(/^http/, 'ws');
     const open = () => {
-      es = new EventSource(`${API_URL}/api/auth/stream?token=${encodeURIComponent(token)}`);
-      es.addEventListener('hello', () => setConnected(true));
-      const types = ['order.created', 'order.updated', 'service.created', 'service.updated', 'reservation.created', 'reservation.updated', 'menu.updated'];
-      for (const t of types)
-        es.addEventListener(t, ev => {
-          const data = JSON.parse((ev as MessageEvent).data) as CafeEvent;
-          listeners.current.forEach(fn => fn(data));
-        });
-      es.onerror = () => {
+      ws = new WebSocket(`${base}/api/auth/stream?token=${encodeURIComponent(token)}`);
+      ws.onmessage = ev => {
+        if (ev.data === 'pong') return;
+        const data = JSON.parse(ev.data as string) as CafeEvent | { type: 'hello' };
+        if (data.type === 'hello') return setConnected(true);
+        listeners.current.forEach(fn => fn(data as CafeEvent));
+      };
+      // Keeps proxies from closing a quiet socket; the server answers without waking up.
+      ping = setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send('ping'), 30_000);
+      ws.onclose = () => {
         setConnected(false);
-        es?.close();
+        clearInterval(ping);
         if (!closed) retry = setTimeout(open, 4000);
       };
     };
@@ -169,7 +172,8 @@ export function StreamProvider({ children }: { children: ReactNode }) {
     return () => {
       closed = true;
       clearTimeout(retry);
-      es?.close();
+      clearInterval(ping);
+      ws?.close();
     };
   }, [token]);
 

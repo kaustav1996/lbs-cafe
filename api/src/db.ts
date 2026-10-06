@@ -1,16 +1,21 @@
 import postgres from 'postgres';
-import { env } from './config.js';
+import { runtime } from './context.js';
 
-// Supabase's pooler (Supavisor) in transaction mode doesn't support prepared statements,
-// so they're switched off; it costs nothing at this scale.
-export const sql = postgres(env.DATABASE_URL, {
-  ssl: env.DATABASE_SSL === 'require' ? 'require' : false,
+/** Options shared by every client. Supabase's pooler doesn't support prepared statements in transaction mode. */
+export const PG_OPTIONS = {
   prepare: false,
-  max: 8,
-  idle_timeout: 30,
-  connect_timeout: 15,
   transform: { undefined: null },
-});
+} satisfies postgres.Options<{}>;
 
-export type Sql = typeof sql;
+export type Sql = postgres.Sql;
 export type Tx = postgres.TransactionSql;
+
+/** The current request's database client. Used exactly like a postgres.js `sql`. */
+export const sql = new Proxy(function () {} as unknown as Sql, {
+  apply: (_t, _this, args) => (runtime().sql as any)(...args),
+  get: (_t, p) => {
+    const s = runtime().sql as any;
+    const v = s[p];
+    return typeof v === 'function' ? v.bind(s) : v;
+  },
+});

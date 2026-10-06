@@ -1,6 +1,6 @@
-import { EventEmitter } from 'node:events';
+import { runtime } from './context.js';
 
-/** In-process event bus feeding the admin live stream. The API runs as one instance. */
+/** Events for the admin live feed. On Workers they fan out through the LiveHub Durable Object. */
 export type CafeEvent =
   | { type: 'order.created'; orderId: number; number: number; source: string; table: string | null }
   | { type: 'order.updated'; orderId: number; number: number }
@@ -10,10 +10,8 @@ export type CafeEvent =
   | { type: 'reservation.updated'; id: number }
   | { type: 'menu.updated' };
 
-class Bus extends EventEmitter {
+export const bus = {
   publish(e: CafeEvent) {
-    this.emit('event', e);
-  }
-}
-export const bus = new Bus();
-bus.setMaxListeners(100);
+    runtime().publish(e);
+  },
+};

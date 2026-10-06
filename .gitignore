@@ -9,3 +9,7 @@ _source-assets/
 .localdb/
 api/dist/
 !.env.example
+!.env.production
+.dev.vars
+.wrangler/
+**/supabase/.temp/
