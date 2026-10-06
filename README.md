@@ -40,6 +40,10 @@ Live at https://lbscafe.com (and https://lbs-cafe.cowork-apps.workers.dev).
 
 ## Deploy
 
+Pushing to `main` deploys automatically (`.github/workflows/deploy.yml`): the end-to-end tests run against a
+throwaway Postgres, then Supabase is migrated, the site is built, the Worker is deployed and `lbscafe.com` is
+smoke-tested. Repo secrets: `CLOUDFLARE_API_TOKEN`, `DATABASE_URL`. To deploy by hand from a checkout:
+
 ```bash
 cd api && npm install
 # api/.env (gitignored) needs DATABASE_URL: the Supabase Session pooler string

@@ -26,9 +26,8 @@ smoke test passing (`api/scripts/smoke.ts`), both owner logins created. Render a
 wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
 1. ~~Domain~~ Done 6 Oct 2026: nameservers moved to Cloudflare, `lbscafe.com` and `www` are Custom Domains on the
    Worker (`routes` in `wrangler.jsonc`), smoke test passes on both. Always Use HTTPS is on (http:// redirects with a 301).
-2. Code is on `main`, but deploys run from a local checkout (`npm run deploy`); there's no auto-deploy.
-   Optional: connect the repo in Cloudflare Workers Builds, root `api`, deploy command `npm run deploy`
-   (needs `DATABASE_URL` as a build secret for migrations).
+2. Auto-deploy: every push to `main` runs `.github/workflows/deploy.yml` (tests, migrate, deploy, smoke test).
+   Secrets `CLOUDFLARE_API_TOKEN` and `DATABASE_URL` are set on the GitHub repo.
 3. Watch CPU on the free plan: logins hash with PBKDF2 (100k iterations). If the dashboard shows
    "exceeded CPU" errors, move to Workers Paid ($5/month).
 4. Smoke test on a phone: scan a printed QR (Admin → Settings → Print QR stickers), order, watch it on

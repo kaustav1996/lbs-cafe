@@ -26,7 +26,8 @@ cd api && npm install
 npm run build                                   # wrangler types && tsc (typecheck only)
 DATABASE_URL=.../lbs_test DATABASE_SSL=disable npm test     # drops and recreates the public schema!
 npm run dev                                     # wrangler dev on :8787 (needs web/dist and .dev.vars with JWT_SECRET)
-npm run deploy                                  # migrate Supabase (api/.env), build web, wrangler deploy
+npm run deploy                                  # by hand: migrate Supabase (api/.env), build web, wrangler deploy
+                                                # normally a push to main deploys (.github/workflows/deploy.yml)
 BASE=https://lbs-cafe.cowork-apps.workers.dev EMAIL=... PASSWORD=... npx tsx scripts/smoke.ts
 
 cd web && npm install
