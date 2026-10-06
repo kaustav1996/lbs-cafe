@@ -17,7 +17,7 @@ async function call(path: string, init: RequestInit & { json?: unknown; token?: 
 }
 
 const health = await call('/health');
-assert.deepEqual(health.json(), { ok: true });
+assert.equal(health.json().ok, true);
 ok('/health');
 
 const menu = (await call('/api/public/menu')).json().categories;

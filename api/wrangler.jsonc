@@ -34,5 +34,7 @@
     { "pattern": "www.lbscafe.com", "custom_domain": true }
   ],
   "workers_dev": true,
+  // Lets /health report which deployed version answered (the deploy workflow waits for it).
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "observability": { "enabled": true }
 }

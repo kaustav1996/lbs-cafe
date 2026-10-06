@@ -53,7 +53,8 @@ export function buildApp() {
 
   app.get('/health', async c => {
     await sql`select 1`;
-    return c.json({ ok: true });
+    const version = runtime().version;
+    return c.json(version ? { ok: true, version } : { ok: true });
   });
 
   // Public documents, e.g. licence scans. Keys are random and never reused, so they can be cached for good.

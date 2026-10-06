@@ -73,9 +73,21 @@ jobs:
         run: npm run build --prefix web
       - name: Deploy Worker
         working-directory: api
-        run: npx wrangler deploy
+        run: |
+          npx wrangler deploy | tee deploy.log
+          echo "VERSION=$(sed -n 's/.*Current Version ID: \([0-9a-f-]*\).*/\1/p' deploy.log)" >> "$GITHUB_ENV"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Wait for the new version to go live
+        # Cloudflare takes a few seconds to roll a new version out; smoke-test only once it answers.
+        run: |
+          test -n "$VERSION" || { echo "No version ID in the deploy output"; exit 1; }
+          for _ in $(seq 1 30); do
+            live=$(curl -s https://lbscafe.com/health | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+            [ "$live" = "$VERSION" ] && { echo "Version $VERSION is live"; exit 0; }
+            sleep 5
+          done
+          echo "Version $VERSION still not live after 150 s (live: $live)"; exit 1
       - name: Smoke test lbscafe.com
         # Without a login it only reads, plus one order-pricing check that saves nothing.
         working-directory: api

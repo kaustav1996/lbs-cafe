@@ -11,6 +11,7 @@ export interface Env {
   JWT_SECRET: string;
   CORS_ORIGINS: string;
   FILES?: R2Bucket;
+  CF_VERSION_METADATA?: WorkerVersionMetadata;
 }
 
 const app = buildApp();
@@ -34,6 +35,7 @@ export default {
       allow: (key, max, windowMs) => hub.allow(key, max, windowMs),
       openStream: r => hub.fetch(r),
       files: env.FILES ? r2Store(env.FILES) : undefined,
+      version: env.CF_VERSION_METADATA?.id,
     };
     try {
       return await withRuntime(rt, () => app.fetch(req, env, ctx));
