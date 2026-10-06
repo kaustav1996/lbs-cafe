@@ -1,14 +1,14 @@
 /* LB's admin: the cafe's night palette, tuned for a counter screen in a dim room.
    Lemon marks actions and live data; everything else stays quiet. */
 .admin-body {
-  --a-bg: #170c29;
-  --a-panel: #22143c;
-  --a-raised: #2d1c4d;
-  --a-line: #3f2d63;
-  --a-ink: #f4eeff;
-  --a-muted: #b2a3d1;
-  --a-lemon: #ffe24a;
-  --a-amber: #ff8f1f;
+  --a-bg: #05191c;
+  --a-panel: #0a2629;
+  --a-raised: #10333a;
+  --a-line: #1f4d53;
+  --a-ink: #eefcfd;
+  --a-muted: #a0c8cb;
+  --a-lemon: #d0ff00;
+  --a-amber: #00bcc8;
   --a-good: #3fd17c;
   --a-bad: #ff6b6b;
   --a-veg: #18a33f;
@@ -22,8 +22,8 @@
   min-height: 100vh;
   display: grid;
   place-items: center;
-  color: #b2a3d1;
-  background: #170c29;
+  color: #a0c8cb;
+  background: #05191c;
 }
 .a-brand {
   font-family: var(--font-display);
@@ -62,7 +62,7 @@
   display: grid;
   place-items: center;
   padding: 16px;
-  background: radial-gradient(80% 60% at 50% 0%, #2d1c4d, #170c29);
+  background: radial-gradient(80% 60% at 50% 0%, #10333a, #05191c);
 }
 .a-login-card {
   width: min(380px, 100%);
@@ -282,16 +282,16 @@
 }
 .a-btn-primary {
   background: var(--a-lemon);
-  color: #120a20;
+  color: #05191c;
   border-color: var(--a-lemon);
 }
 .a-btn-primary:hover {
-  background: #fff07f;
+  background: #e6ff70;
 }
 .a-btn-danger {
   background: var(--a-bad);
   border-color: var(--a-bad);
-  color: #120a20;
+  color: #05191c;
 }
 .a-btn-ghost {
   background: transparent;
@@ -525,8 +525,8 @@ textarea.a-input {
 }
 .a-banner {
   margin: 0;
-  background: rgba(255, 226, 74, 0.12);
-  border: 1px solid rgba(255, 226, 74, 0.45);
+  background: rgba(208, 255, 0, 0.12);
+  border: 1px solid rgba(208, 255, 0, 0.45);
   border-radius: 12px;
   padding: 12px 14px;
   font-weight: 600;
@@ -547,7 +547,7 @@ textarea.a-input {
 }
 .a-toast {
   background: var(--a-ink);
-  color: #120a20;
+  color: #05191c;
   padding: 12px 16px;
   border-radius: 12px;
   font-weight: 700;
@@ -563,7 +563,7 @@ textarea.a-input {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(8, 3, 16, 0.7);
+  background: rgba(2, 14, 16, 0.7);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -621,7 +621,7 @@ textarea.a-input {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(255, 143, 31, 0.15);
+  background: rgba(0, 188, 200, 0.15);
   border: 1px solid var(--a-amber);
   border-radius: 12px;
   padding: 8px 8px 8px 14px;
@@ -1039,7 +1039,7 @@ textarea.a-input {
 }
 .a-tables button.on {
   background: var(--a-lemon);
-  color: #120a20;
+  color: #05191c;
   border-color: var(--a-lemon);
 }
 
@@ -1323,7 +1323,7 @@ textarea.a-input {
   top: -6px;
   transform: translate(-50%, -100%);
   background: var(--a-ink);
-  color: #120a20;
+  color: #05191c;
   padding: 6px 10px;
   border-radius: 8px;
   font-size: 12px;

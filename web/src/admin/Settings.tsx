@@ -204,7 +204,7 @@ function QrSheet({ tables, onClose }: { tables: Table[]; onClose: () => void }) 
       .join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>LB's table QR codes</title><style>
       @page{size:A4;margin:10mm} body{font-family:Arial,sans-serif;margin:0} .g{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm}
-      .c{border:2px solid #000;border-radius:6mm;padding:5mm;text-align:center;break-inside:avoid;background:#FFE24A}
+      .c{border:2px solid #000;border-radius:6mm;padding:5mm;text-align:center;break-inside:avoid;background:#D0FF00}
       .q{background:#fff;padding:2mm;border-radius:3mm} .q svg{width:100%;height:auto;display:block}
       b{display:block;font-size:20pt;margin-top:3mm} span{font-size:9pt}
     </style></head><body><div class="g">${cards}</div></body></html>`;

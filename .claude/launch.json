@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "worker-local",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "api", "wrangler", "dev", "--config", "api/wrangler.jsonc", "--port", "8790"],
+      "env": { "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE": "postgres://postgres:postgres@localhost:5433/lbs_test" },
+      "port": 8790
+    }
+  ]
+}

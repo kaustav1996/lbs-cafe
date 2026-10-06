@@ -209,7 +209,7 @@ function ItemEditor({ menu, item, categoryId, onClose, onSaved }: { menu: ACateg
   );
 }
 
-const SWATCHES = ['#FF8F1F', '#A58BFF', '#FF5CBE', '#63E8CF', '#FFE24A', '#FF6A4D', '#B8EE4F', '#46BFD2', '#F4EBDD', '#FF4646', '#F2B8FF'];
+const SWATCHES = ['#FF8F1F', '#A58BFF', '#FF5CBE', '#63E8CF', '#D0FF00', '#FF6A4D', '#B8EE4F', '#00BCC8', '#F4EBDD', '#FF4646', '#F2B8FF'];
 
 function CategoryEditor({ cat, onClose, onSaved }: { cat: ACategory | null; onClose: () => void; onSaved: () => void }) {
   const { call } = useAuth();

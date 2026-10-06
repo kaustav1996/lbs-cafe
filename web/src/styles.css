@@ -4,17 +4,17 @@
   One committed look (no light/dark switch): each zone sets its own ground and ink.
 */
 :root {
-  --lemon: #ffe24a;
-  --lemon-deep: #f2c400;
-  --night: #1d1033;
-  --night-raised: #2a1a49;
-  --night-line: #46336e;
-  --night-ink: #f6f0ff;
-  --night-muted: #b9a9d9;
-  --amber: #ff8f1f;
+  --lemon: #d0ff00;
+  --lemon-deep: #a9d600;
+  --night: #062a2e;
+  --night-raised: #0c3a3f;
+  --night-line: #1d5a60;
+  --night-ink: #effefe;
+  --night-muted: #9cc9cc;
+  --amber: #00bcc8;
   --ink: #000;
   --paper: #fff;
-  --paper-muted: #5a4f63;
+  --paper-muted: #45585a;
   --veg: #128a34;
   --nonveg: #9c2f1b;
   --steel: linear-gradient(90deg, #6d6a75, #d8d6de 30%, #8b8893 55%, #e9e7ee 80%, #77737f);
@@ -178,7 +178,7 @@ textarea {
   color: var(--ink);
 }
 .btn-lemon:hover {
-  background: #fff07f;
+  background: #e6ff70;
 }
 .btn-line {
   background: transparent;
@@ -513,8 +513,8 @@ textarea {
   padding: clamp(14px, 2.4vw, 26px) clamp(12px, 2vw, 22px) clamp(16px, 2.2vw, 22px);
   text-decoration: none;
   color: var(--ink);
-  background: radial-gradient(120% 95% at 50% 100%, #ffc06a 0%, #ff9a2a 32%, #ef6d0f 68%, #b2400a 100%);
-  box-shadow: inset 0 -5px 0 #ffd98c, inset 0 -22px 30px -6px rgba(255, 224, 150, 0.75), inset 0 10px 24px rgba(80, 20, 0, 0.35);
+  background: radial-gradient(120% 95% at 50% 100%, #7ff3f8 0%, #1ad3df 32%, #00bcc8 68%, #007f88 100%);
+  box-shadow: inset 0 -5px 0 #a8f7fb, inset 0 -22px 30px -6px rgba(170, 245, 250, 0.75), inset 0 10px 24px rgba(0, 40, 45, 0.35);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -892,7 +892,7 @@ textarea {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
   z-index: 15;
-  background: rgba(29, 16, 51, 0.94);
+  background: rgba(6, 42, 46, 0.94);
   backdrop-filter: blur(8px);
   border-block: 1.5px solid var(--night-line);
 }
@@ -1179,7 +1179,7 @@ textarea {
   font-size: var(--t-sm);
 }
 .cartbar-sum span {
-  color: #cfc6dd;
+  color: #c4e3e5;
 }
 
 /* ---------- Drawers ---------- */
@@ -1187,7 +1187,7 @@ textarea {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(10, 4, 20, 0.6);
+  background: rgba(2, 18, 20, 0.6);
   display: flex;
   justify-content: flex-end;
   animation: fade 0.18s ease;
