@@ -22,7 +22,8 @@ export default {
   async fetch(req, env, ctx) {
     if (!env.JWT_SECRET || env.JWT_SECRET.length < 24) return new Response('JWT_SECRET is missing or too short. Set it with `wrangler secret put JWT_SECRET`.', { status: 500 });
     // A client per request: Workers can't share sockets between requests. Hyperdrive pools the real connections.
-    const sql = postgres(env.HYPERDRIVE.connectionString, { ...PG_OPTIONS, max: 5, fetch_types: false });
+    // Keep fetch_types on (the default): without it postgres.js sends JS arrays as plain text and `= any(${list})` fails.
+    const sql = postgres(env.HYPERDRIVE.connectionString, { ...PG_OPTIONS, max: 5 });
     const hub = env.LIVE.get(env.LIVE.idFromName('cafe'));
     const rt: Runtime = {
       sql,

@@ -40,11 +40,25 @@ assert.equal(missing.status, 404);
 assert.equal(missing.json().error, 'not_found');
 ok('unknown API paths get a JSON 404');
 
+// Prices an order whose option doesn't belong to its item: runs the real pricing query (a list
+// parameter) and is refused before anything is written.
+const item = menu[0].items[0];
+const wrong = await call('/api/public/orders', { method: 'POST', json: { mode: 'table', table: '1', lines: [{ itemId: item.id, optionId: menu[1].items[0].options[0].id, qty: 1 }] } });
+assert.equal(wrong.status, 409, wrong.text);
+assert.equal(wrong.json().error, 'item_gone');
+ok('order pricing runs (mismatched item refused, nothing saved)');
+
 if (EMAIL && PASSWORD) {
   const login = await call('/api/auth/login', { method: 'POST', json: { email: EMAIL, password: PASSWORD } });
   assert.equal(login.status, 200, login.text);
   const { token, staff } = login.json();
   ok(`signed in as ${staff.name} (${staff.role})`);
+
+  for (const path of ['/api/admin/orders', '/api/admin/orders?view=day', '/api/admin/service-requests', '/api/admin/reservations', '/api/admin/menu', '/api/admin/customers', '/api/admin/settings', '/api/admin/tables', '/api/admin/staff', `/api/admin/reports/summary?from=2026-01-01&to=2026-12-31`]) {
+    const r = await call(path, { token });
+    assert.equal(r.status, 200, `${path}: ${r.text}`);
+  }
+  ok('every admin screen loads its data');
 
   // Open the live feed, then make something happen and wait for it to arrive.
   const ws = new WebSocket(`${BASE.replace(/^http/, 'ws')}/api/auth/stream?token=${encodeURIComponent(token)}`);
