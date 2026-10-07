@@ -363,6 +363,7 @@ function TablesCard() {
   const [label, setLabel] = useState('');
   const [seats, setSeats] = useState('4');
   const [printing, setPrinting] = useState(false);
+  const [qrFor, setQrFor] = useState<Table | null>(null);
   const manager = can('manager');
   const load = useCallback(() => call<{ tables: Table[] }>('/api/admin/tables').then(r => setTables(r.tables)), [call]);
   useEffect(() => void load().catch(e => toast(errText(e), 'bad')), [load]);
@@ -403,6 +404,11 @@ function TablesCard() {
             </label>
             <span className="a-tablelist-actions">
               {t.active && (
+                <button type="button" className="a-btn a-btn-sm" onClick={() => setQrFor(t)}>
+                  QR
+                </button>
+              )}
+              {t.active && (
                 <button type="button" className="a-btn a-btn-sm" onClick={() => void newCode(t)}>
                   New code
                 </button>
@@ -440,10 +446,84 @@ function TablesCard() {
         </form>
       )}
       <button type="button" className="a-btn a-btn-primary" onClick={() => setPrinting(true)}>
-        Print QR stickers
+        Print QR stickers for all tables
       </button>
       {printing && <QrSheet tables={tables.filter(t => t.active)} onClose={() => setPrinting(false)} />}
+      {qrFor && <TableQr table={qrFor} onClose={() => setQrFor(null)} />}
     </section>
+  );
+}
+
+const tableLink = (label: string) => `${SITE_URL}/menu?table=${encodeURIComponent(label)}`;
+const tableSvg = (label: string) => QRCode.toString(tableLink(label), { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });
+
+/** Prints table stickers (lime card, QR, table number) on A4, three across, in a hidden frame. */
+function printStickers(tables: Table[], svgs: Record<string, string>) {
+  const cards = tables
+    .map(t => `<div class="c"><div class="q">${svgs[t.label] ?? ''}</div><b>Table ${t.label}</b><span>Scan to see the menu and order</span></div>`)
+    .join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>LB's table QR codes</title><style>
+    @page{size:A4;margin:10mm} body{font-family:Arial,sans-serif;margin:0} .g{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm}
+    .c{border:2px solid #000;border-radius:6mm;padding:5mm;text-align:center;break-inside:avoid;background:#D0FF00}
+    .q{background:#fff;padding:2mm;border-radius:3mm} .q svg{width:100%;height:auto;display:block}
+    b{display:block;font-size:20pt;margin-top:3mm} span{font-size:9pt}
+  </style></head><body><div class="g">${cards}</div></body></html>`;
+  const f = document.createElement('iframe');
+  f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
+  document.body.appendChild(f);
+  f.contentDocument!.open();
+  f.contentDocument!.write(html);
+  f.contentDocument!.close();
+  setTimeout(() => {
+    f.contentWindow!.print();
+    setTimeout(() => f.remove(), 1000);
+  }, 300);
+}
+
+/** One table's QR: show it, download it as a PNG, copy its link, or print its sticker. */
+function TableQr({ table, onClose }: { table: Table; onClose: () => void }) {
+  const [svg, setSvg] = useState('');
+  useEffect(() => void tableSvg(table.label).then(setSvg), [table.label]);
+  const link = tableLink(table.label);
+  const download = async () => {
+    const url = await QRCode.toDataURL(link, { width: 1024, margin: 2, errorCorrectionLevel: 'M' });
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lbs-table-${table.label}-qr.png`;
+    a.click();
+  };
+  const copy = () =>
+    navigator.clipboard.writeText(link).then(
+      () => toast('Link copied'),
+      () => toast('Couldn’t copy. Select the link and copy it instead.', 'bad'),
+    );
+  return (
+    <Modal
+      title={`Table ${table.label} QR`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="a-btn" onClick={copy}>
+            Copy link
+          </button>
+          <span className="a-spacer" />
+          <button type="button" className="a-btn" onClick={download}>
+            Download PNG
+          </button>
+          <button type="button" className="a-btn a-btn-primary" onClick={() => printStickers([table], { [table.label]: svg })} disabled={!svg}>
+            Print sticker
+          </button>
+        </>
+      }
+    >
+      <div className="a-qr-one">
+        <div className="a-qr-big" dangerouslySetInnerHTML={{ __html: svg }} />
+        <p className="a-muted">
+          Scanning it opens <span className="a-qr-link">{link}</span> with table {table.label} filled in. Guests still need the table’s code
+          the first time they order.
+        </p>
+      </div>
+    </Modal>
   );
 }
 
@@ -451,31 +531,11 @@ function QrSheet({ tables, onClose }: { tables: Table[]; onClose: () => void }) 
   const [svgs, setSvgs] = useState<Record<string, string>>({});
   useEffect(() => {
     Promise.all(
-      tables.map(async t => [t.label, await QRCode.toString(`${SITE_URL}/menu?table=${encodeURIComponent(t.label)}`, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })] as const),
+      tables.map(async t => [t.label, await tableSvg(t.label)] as const),
     ).then(pairs => setSvgs(Object.fromEntries(pairs)));
   }, [tables]);
 
-  const print = () => {
-    const cards = tables
-      .map(t => `<div class="c"><div class="q">${svgs[t.label] ?? ''}</div><b>Table ${t.label}</b><span>Scan to see the menu and order</span></div>`)
-      .join('');
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>LB's table QR codes</title><style>
-      @page{size:A4;margin:10mm} body{font-family:Arial,sans-serif;margin:0} .g{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm}
-      .c{border:2px solid #000;border-radius:6mm;padding:5mm;text-align:center;break-inside:avoid;background:#D0FF00}
-      .q{background:#fff;padding:2mm;border-radius:3mm} .q svg{width:100%;height:auto;display:block}
-      b{display:block;font-size:20pt;margin-top:3mm} span{font-size:9pt}
-    </style></head><body><div class="g">${cards}</div></body></html>`;
-    const f = document.createElement('iframe');
-    f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
-    document.body.appendChild(f);
-    f.contentDocument!.open();
-    f.contentDocument!.write(html);
-    f.contentDocument!.close();
-    setTimeout(() => {
-      f.contentWindow!.print();
-      setTimeout(() => f.remove(), 1000);
-    }, 300);
-  };
+  const print = () => printStickers(tables, svgs);
 
   return (
     <Modal

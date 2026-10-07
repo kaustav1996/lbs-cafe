@@ -1669,3 +1669,24 @@ textarea.a-input {
 .a-offer-status.scheduled {
   color: var(--a-amber);
 }
+.a-qr-one {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+}
+.a-qr-big {
+  width: min(320px, 100%);
+  padding: 12px;
+  background: #fff;
+  border-radius: 12px;
+}
+.a-qr-big svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.a-qr-link {
+  color: var(--a-ink);
+  overflow-wrap: anywhere;
+}
