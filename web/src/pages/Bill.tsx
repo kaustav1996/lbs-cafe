@@ -4,6 +4,7 @@ import { Footer, Nav } from '../components/Chrome';
 import { api, ApiError, paiseToRupees } from '../lib/api';
 import { inr } from '../lib/format';
 import { getCardToken } from '../lib/card';
+import { Cassette, Spinner } from '../components/Gear';
 
 interface GuestInvoice {
   number: string;
@@ -64,9 +65,10 @@ export default function Bill() {
     <div className="page">
       <Nav />
       <main className="wrap narrow status-page bill-page">
-        {!inv && !error && <p className="status-meta">Loading your bill…</p>}
+        {!inv && !error && <Spinner>Loading your bill…</Spinner>}
         {error && !inv && (
           <div className="empty">
+            <Cassette />
             <p>{error}</p>
             <Link to="/menu" className="btn btn-ink">
               Back to the menu
@@ -75,7 +77,8 @@ export default function Bill() {
         )}
         {inv && (
           <>
-            <header>
+            <header className="head-mark">
+              <Cassette />
               <h1 className="display">Your bill</h1>
               <p className="status-meta">
                 {inv.cafe.name}, {inv.cafe.address}

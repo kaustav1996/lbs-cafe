@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { SITE } from '../data/site';
 import { Footer, Nav } from '../components/Chrome';
 import { Vinyl } from '../components/Vinyl';
+import { Deck } from '../components/Gear';
 import { asset, useUi } from '../state/ui';
 import { useLive } from '../state/live';
 import { hourRows, inr, openState } from '../lib/format';
@@ -68,6 +69,9 @@ export default function Home() {
             <p className="hero-status">
               <span className={`stamp ${status.open ? 'stamp-open' : ''}`}>{status.label}</span>
             </p>
+          </div>
+          <div className="hero-deck">
+            <Deck />
           </div>
         </section>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Footer, Nav } from '../components/Chrome';
 import { api, ApiError, HAS_API } from '../lib/api';
+import { Spinner } from '../components/Gear';
 
 interface Licence {
   id: string;
@@ -36,7 +37,7 @@ export default function Licences() {
           <h1 className="display">Licences and registrations</h1>
           <p className="status-meta">LB's Hemp Cafe & Lounge, Salt Lake, Kolkata.</p>
         </header>
-        {!data && !error && <p className="status-meta">Loading…</p>}
+        {!data && !error && <Spinner>Loading…</Spinner>}
         {error && <p>{error}</p>}
         {empty && <p>Licence details are coming soon.</p>}
         {data && !empty && (

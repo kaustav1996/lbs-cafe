@@ -8,6 +8,7 @@ import { api, ApiError, HAS_API } from '../lib/api';
 import { clock, inr } from '../lib/format';
 import { rememberOrder, recentOrders } from '../lib/orders';
 import { getTablePass, setTablePass } from '../lib/tablePass';
+import { Boombox, Cassette } from './Gear';
 
 function Drawer({ title, children, footer, label }: { title: string; label: string; children: ReactNode; footer?: ReactNode }) {
   const { close } = useUi();
@@ -172,6 +173,7 @@ export function CartDrawer() {
     return (
       <Drawer title="Your order" label="Your order">
         <div className="empty">
+          <Cassette />
           <p>Nothing here yet. Add drinks and plates from the menu and they’ll show up here.</p>
           <Link to="/menu" className="btn btn-ink" onClick={close}>
             Open the menu
@@ -431,6 +433,7 @@ export function BookingDrawer() {
 
   return (
     <Drawer title="Book a table" label="Book a table">
+      <Boombox className="drawer-gear" />
       <form className="form" onSubmit={submit} noValidate>
         <div className="field-row">
           <div className="field">

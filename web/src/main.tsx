@@ -16,6 +16,7 @@ import Card from './pages/Card';
 // Staff screens load separately so guests never download them.
 const Admin = lazy(() => import('./admin/AdminApp'));
 import './styles.css';
+import { Turntable } from './components/Gear';
 
 // The shareable preview is served from a single page, so it routes with the hash.
 const Router = import.meta.env.MODE === 'preview' ? HashRouter : BrowserRouter;
@@ -26,6 +27,7 @@ function NotFound() {
     <div className="page">
       <Nav />
       <main className="wrap narrow notfound">
+        <Turntable className="notfound-gear" />
         <h1 className="display">Wrong record.</h1>
         <p>There’s nothing at {loc.pathname}. The menu and bookings are a tap away.</p>
         <Link to="/" className="btn btn-ink">

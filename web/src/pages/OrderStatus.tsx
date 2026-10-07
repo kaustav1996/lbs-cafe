@@ -7,6 +7,7 @@ import { useCart } from '../state/cart';
 import { useUi } from '../state/ui';
 import { useLive } from '../state/live';
 import { forgetOrder, rememberOrder } from '../lib/orders';
+import { Cassette, Spinner } from '../components/Gear';
 
 interface PublicOrder {
   number: number | null;
@@ -192,9 +193,10 @@ export default function OrderStatus() {
     <div className="page">
       <Nav />
       <main className="wrap narrow status-page">
-        {!order && !error && <p className="status-meta">Loading your order…</p>}
+        {!order && !error && <Spinner>Loading your order…</Spinner>}
         {error && !order && (
           <div className="empty">
+            <Cassette />
             <p>{error}</p>
             <Link to="/menu" className="btn btn-ink">
               Back to the menu
@@ -203,7 +205,8 @@ export default function OrderStatus() {
         )}
         {order && (
           <>
-            <header>
+            <header className="head-mark">
+              <Cassette />
               <h1 className="display">{order.number ? `Order #${order.number}` : 'Your order'}</h1>
               <p className="status-meta">
                 {order.source === 'table' ? `Table ${order.table}` : order.source === 'takeaway' ? 'Takeaway' : 'Counter'}, placed{' '}

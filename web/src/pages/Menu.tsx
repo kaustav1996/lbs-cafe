@@ -9,6 +9,7 @@ import { useCart } from '../state/cart';
 import { useUi } from '../state/ui';
 import { useLive } from '../state/live';
 import { inr } from '../lib/format';
+import { Turntable } from '../components/Gear';
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
 
@@ -89,10 +90,13 @@ export default function Menu() {
     <div className="page menu-page">
       <Nav />
       <header className="wrap narrow menu-head">
-        <h1 className="display">The menu</h1>
-        <p className="menu-sub">
-          Prices in rupees. {Math.round(settings.gstRate * 100)}% GST is added to the bill. Tell us about allergies before you order.
-        </p>
+        <div className="head-mark">
+          <Turntable />
+          <h1 className="display">The menu</h1>
+          <p className="menu-sub">
+            Prices in rupees. {Math.round(settings.gstRate * 100)}% GST is added to the bill. Tell us about allergies before you order.
+          </p>
+        </div>
         <Link to="/card" className="card-banner">
           <b>Collect stamps</b> with LB’s card. Your 5th visit is half price.
         </Link>
@@ -167,6 +171,7 @@ export default function Menu() {
 
         {cats.length === 0 && (
           <div className="empty empty-menu">
+            <Turntable />
             <p>
               Nothing on the menu matches “{q}”{vegOnly ? ' in veg' : ''}. Try a shorter word, or clear the search.
             </p>

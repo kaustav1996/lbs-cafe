@@ -4,6 +4,7 @@ import { Footer, Nav } from '../components/Chrome';
 import { api, ApiError, HAS_API } from '../lib/api';
 import { getCardToken, setCardToken } from '../lib/card';
 import { inr } from '../lib/format';
+import { Spinner, Walkman } from '../components/Gear';
 
 interface CardView {
   name: string | null;
@@ -63,13 +64,14 @@ export default function Card() {
     <div className="page">
       <Nav />
       <main className="wrap narrow status-page card-page">
-        <header>
+        <header className="head-mark">
+          <Walkman />
           <h1 className="display">LB’s card</h1>
           <p className="status-meta">A stamp for every visit. Your 5th visit is half price.</p>
         </header>
         {error && <p className="error">{error}</p>}
         {!token && <SignIn onSignedIn={signedIn} />}
-        {token && !card && !error && <p className="status-meta">Loading your card…</p>}
+        {token && !card && !error && <Spinner>Loading your card…</Spinner>}
         {card && <CardFace card={card} token={token!} onChange={load} onGone={() => (setCardToken(null), setToken(null), setCard(null))} />}
       </main>
       <Footer />
