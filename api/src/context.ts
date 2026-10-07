@@ -34,6 +34,8 @@ export interface Runtime {
   scheduleRelease?(at: Date): void;
   /** The deployed Worker version, reported by /health. Missing outside Cloudflare. */
   version?: string;
+  /** WhatsApp webhook secrets: our verify token (for Meta's handshake) and the Meta app secret (signs POSTs). */
+  whatsapp?: { verifyToken?: string; appSecret?: string };
   /** WhatsApp sender for card sign-in codes. Missing until WhatsApp is set up: card sign-in is then off. */
   messenger?: Messenger;
   /** Document storage. Missing where no bucket is bound. */

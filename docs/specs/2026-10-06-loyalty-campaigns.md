@@ -173,7 +173,8 @@ as used when paid).
 - Worker secrets: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`.
 - Fixed templates (created in Meta by Kaustav): `lbs_login_code` (authentication), `lbs_we_miss_you` (marketing; name,
   card line), `lbs_reward_ready` (marketing; name). Campaign templates: any approved marketing template.
-- Webhook `GET/POST /api/whatsapp/webhook`:
+- Webhook `GET/POST /api/whatsapp/webhook` (built 7 Oct 2026 ahead of the rest of part 2: handshake, signature check,
+  STOP opt-out; status updates still to do):
   - GET: if `hub.mode === 'subscribe'` and `hub.verify_token` equals `WHATSAPP_VERIFY_TOKEN`, reply `hub.challenge` as
     plain text; else 403.
   - POST: read the raw body (`await c.req.text()`) before parsing, compute HMAC-SHA256 with `WHATSAPP_APP_SECRET`,

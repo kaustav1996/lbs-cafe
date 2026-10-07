@@ -15,6 +15,7 @@ const { financialYear } = await import('../src/invoices.js');
 const { LogMessenger } = await import('../src/messaging.js');
 const messenger = new LogMessenger();
 import type { CafeEvent } from '../src/events.js';
+import { createHmac } from 'node:crypto';
 
 const sql = nodeSql();
 const stored = new Map<string, { body: ArrayBuffer; type: string; size: number }>();
@@ -32,6 +33,7 @@ const rt = {
     return recent.length < max;
   },
   messenger,
+  whatsapp: { verifyToken: 'test-verify-token', appSecret: 'test-app-secret' } as { verifyToken?: string; appSecret?: string } | undefined,
   files: {
     put: async (key: string, body: ArrayBuffer, type: string) => void stored.set(key, { body, type, size: body.byteLength }),
     get: async (key: string) => stored.get(key) ?? null,
@@ -955,4 +957,46 @@ test('card: owner can correct stamps; the customers list shows the card', async 
   const summary = (await app.inject({ method: 'GET', url: `/api/admin/reports/summary?from=${day}&to=${day}`, headers: auth() })).json();
   assert.ok(summary.discounts.some((d: any) => d.kind === 'reward'));
   assert.ok(summary.discounts.some((d: any) => d.kind === 'welcome'));
+});
+
+// ---------- WhatsApp webhook ----------
+test('whatsapp webhook: Meta\'s verification handshake', async () => {
+  const q = (mode: string, token: string) => `/api/whatsapp/webhook?hub.mode=${mode}&hub.verify_token=${token}&hub.challenge=1158201444`;
+  const ok = await app.inject({ method: 'GET', url: q('subscribe', 'test-verify-token') });
+  assert.equal(ok.statusCode, 200);
+  assert.equal(ok.body, '1158201444');
+  assert.equal((await app.inject({ method: 'GET', url: q('subscribe', 'wrong') })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'GET', url: q('unsubscribe', 'test-verify-token') })).statusCode, 403);
+  const saved = rt.whatsapp;
+  rt.whatsapp = undefined; // not set up yet: nothing verifies
+  assert.equal((await app.inject({ method: 'GET', url: q('subscribe', 'test-verify-token') })).statusCode, 403);
+  rt.whatsapp = saved;
+});
+
+test('whatsapp webhook: signed notifications only; a STOP reply opts the number out', async () => {
+  await sql`insert into customers (phone, opted_in, opted_in_at) values ('+919800000099', true, now()) on conflict (phone) do update set opted_in = true`;
+  const body = JSON.stringify({
+    object: 'whatsapp_business_account',
+    entry: [{ changes: [{ field: 'messages', value: { messages: [{ from: '919800000099', type: 'text', text: { body: ' Stop ' } }] } }] }],
+  });
+  const sign = (b: string, secret = 'test-app-secret') => `sha256=${createHmac('sha256', secret).update(b).digest('hex')}`;
+  const post = (b: string, sig?: string) =>
+    withRuntime(rt, () => hono.request('/api/whatsapp/webhook', { method: 'POST', headers: { 'content-type': 'application/json', ...(sig ? { 'x-hub-signature-256': sig } : {}) }, body: b }));
+
+  assert.equal((await post(body)).status, 401);
+  assert.equal((await post(body, sign(body, 'someone-else'))).status, 401);
+  assert.equal((await post(body.replace('Stop', 'Hi!!'), sign(body))).status, 401); // body changed after signing
+  assert.equal((await sql<{ opted_in: boolean }[]>`select opted_in from customers where phone = '+919800000099'`)[0].opted_in, true);
+
+  const ok = await post(body, sign(body));
+  assert.equal(ok.status, 200);
+  assert.equal((await sql<{ opted_in: boolean }[]>`select opted_in from customers where phone = '+919800000099'`)[0].opted_in, false);
+
+  // Other messages are accepted and change nothing.
+  const hello = body.replace(' Stop ', 'Is the cafe open?');
+  assert.equal((await post(hello, sign(hello))).status, 200);
+  const saved = rt.whatsapp;
+  rt.whatsapp = { verifyToken: 'x' }; // no app secret yet: refuse everything
+  assert.equal((await post(body, sign(body))).status, 503);
+  rt.whatsapp = saved;
 });

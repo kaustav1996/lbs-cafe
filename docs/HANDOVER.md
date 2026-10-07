@@ -52,7 +52,11 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   (max ₹1,000), the 20% welcome offer for the first 420, campaign offers (Admin → Offers), one discount per bill (the
   biggest; a manager's manual discount overrides). Staff add a bill to a card by phone on the invoice. Guests see
   their card at /card; sign-in needs WhatsApp (part 2) and says "coming soon" until then. Rules in Settings → LB's card.
-  Next: part 2, WhatsApp (Meta Cloud API, webhook, reminders, broadcasts). Needs Kaustav's Meta setup first.
+  Next: part 2, WhatsApp (Meta Cloud API sending, reminders, broadcasts). Needs Kaustav's Meta setup first.
+- **WhatsApp webhook** (7 Oct 2026, built ahead of part 2): `https://lbscafe.com/api/whatsapp/webhook`. GET answers Meta's
+  verification with Worker secret `WHATSAPP_VERIFY_TOKEN` (value in `api/.env`, pasted into Meta's webhook form). POST
+  needs `WHATSAPP_APP_SECRET` (Meta app secret, set by Kaustav) and a valid `X-Hub-Signature-256`; a STOP reply opts the
+  number out. Delivery statuses come with part 2.
 
 ### B. Data the cafe still owes (enter in Admin once live)
 - Veg / non-veg for: Recheado Masala, Herbed Rice, Lemongrass Rice, Mexican Rice, Mix Burnt Garlic Hakka Noodles,

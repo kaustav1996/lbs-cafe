@@ -61,6 +61,10 @@ assert.equal(noCode.status, 400, noCode.text);
 assert.equal(noCode.json().error, 'bad_code');
 ok('table codes are checked (a wrong code for table 1 is refused)');
 
+const hook = await call('/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=smoke-wrong&hub.challenge=1');
+assert.equal(hook.status, 403, hook.text);
+ok('WhatsApp webhook is up and refuses a wrong verify token');
+
 // Until WhatsApp is set up, card sign-in says it's coming soon (and sends nothing).
 const cardCode = await call('/api/public/card/code', { method: 'POST', json: { phone: '9000000000' } });
 assert.ok([204, 503].includes(cardCode.status), cardCode.text);

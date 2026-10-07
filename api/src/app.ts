@@ -8,6 +8,7 @@ import { publicRoutes } from './routes/public.js';
 import { authRoutes } from './routes/auth.js';
 import { adminRoutes } from './routes/admin.js';
 import { cardRoutes } from './routes/card.js';
+import { whatsappRoutes } from './routes/whatsapp.js';
 import { MAX_FILE_BYTES } from './files.js';
 
 const BODY_LIMIT = 256 * 1024;
@@ -74,6 +75,7 @@ export function buildApp() {
     });
   });
 
+  app.route('/api/whatsapp', whatsappRoutes());
   app.route('/api/public/card', cardRoutes());
   app.route('/api/public', publicRoutes());
   app.route('/api/auth', authRoutes());

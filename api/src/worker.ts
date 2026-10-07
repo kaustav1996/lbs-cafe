@@ -14,6 +14,10 @@ export interface Env {
   CORS_ORIGINS: string;
   FILES?: R2Bucket;
   CF_VERSION_METADATA?: WorkerVersionMetadata;
+  /** Our token for Meta's webhook verification (we choose it; also pasted into Meta's webhook form). */
+  WHATSAPP_VERIFY_TOKEN?: string;
+  /** Meta app secret (App settings, Basic), used to check webhook signatures. Set by Kaustav. */
+  WHATSAPP_APP_SECRET?: string;
   /** Local development only: print card sign-in codes in the log instead of sending them. */
   CARD_CODES_IN_LOG?: string;
 }
@@ -42,6 +46,7 @@ export default {
       files: env.FILES ? r2Store(env.FILES) : undefined,
       version: env.CF_VERSION_METADATA?.id,
       messenger: env.CARD_CODES_IN_LOG === 'yes' ? new ConsoleMessenger() : undefined,
+      whatsapp: { verifyToken: env.WHATSAPP_VERIFY_TOKEN, appSecret: env.WHATSAPP_APP_SECRET },
     };
     try {
       return await withRuntime(rt, () => app.fetch(req, env, ctx));
