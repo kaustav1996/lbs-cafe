@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { asset } from '../state/ui';
 
 /**
  * LB's music gear, drawn in the ticket style: black ink lines (2px at their drawn size), lime and cyan accents.
@@ -153,11 +154,10 @@ export function Deck() {
         <div className="deck-platter" aria-hidden="true">
           <div className="deck-record">
             <div className="deck-label">
-              <span>LB’s</span>
+              <img src={asset('img/bandit-256.webp')} alt="" width="256" height="197" />
             </div>
           </div>
           <div className="deck-sheen" />
-          <div className="deck-spindle" />
         </div>
         <div className="deck-arm" aria-hidden="true">
           <span className="deck-weight" />

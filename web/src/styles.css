@@ -787,11 +787,9 @@ mark {
   place-items: center;
   box-shadow: inset 0 0 0 1.5px rgb(0 0 0 / 0.15);
 }
-.deck-label span {
-  font-weight: 800;
-  font-size: max(0.875rem, 4.6cqi);
-  transform: translateY(-62%);
-  color: var(--ink);
+.deck-label img {
+  width: 82%;
+  height: auto;
 }
 .deck-sheen {
   position: absolute;
