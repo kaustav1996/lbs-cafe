@@ -3,10 +3,14 @@ import { Link } from 'react-router-dom';
 import { ago, errText, rs, timeIST, todayIST, useAuth, useOnEvent, useTick } from './core';
 import { DietDot, Empty, Modal, PageHead, toast } from './ui';
 import { ItemPicker, useAdminMenu, type PickedLine } from './picker';
+import { InvoiceModal, METHODS, needsReference } from './Invoice';
 
 export interface AOrder {
   id: number;
   number: number;
+  invoice_id?: number | null;
+  invoice_number?: string | null;
+  invoice_status?: 'open' | 'paid' | null;
   source: 'table' | 'takeaway' | 'counter';
   table_label: string | null;
   customer_name: string | null;
@@ -59,6 +63,7 @@ export default function Orders() {
   const [view, setView] = useState<'open' | 'day'>('open');
   const [day, setDay] = useState(todayIST());
   const [openId, setOpenId] = useState<number | null>(null);
+  const [billFor, setBillFor] = useState<number | null>(null);
   const [error, setError] = useState('');
   useTick(30000);
 
@@ -149,7 +154,7 @@ export default function Orders() {
                 </h2>
                 {list.length === 0 && <p className="a-col-empty">Nothing here.</p>}
                 {list.map(o => (
-                  <OrderCard key={o.id} o={o} onOpen={() => setOpenId(o.id)} onMove={to => move(o, to)} />
+                  <OrderCard key={o.id} o={o} onOpen={() => setOpenId(o.id)} onMove={to => move(o, to)} onInvoice={() => setBillFor(o.id)} />
                 ))}
               </section>
             );
@@ -167,11 +172,12 @@ export default function Orders() {
       )}
 
       {openId && <OrderDetail id={openId} onClose={() => setOpenId(null)} onChanged={load} />}
+      {billFor && <InvoiceModal orderId={billFor} onClose={() => setBillFor(null)} onChanged={load} />}
     </div>
   );
 }
 
-function OrderCard({ o, onOpen, onMove }: { o: AOrder; onOpen: () => void; onMove: (to: AOrder['status']) => void }) {
+function OrderCard({ o, onOpen, onMove, onInvoice }: { o: AOrder; onOpen: () => void; onMove: (to: AOrder['status']) => void; onInvoice: () => void }) {
   const next = NEXT[o.status];
   const due = o.total_paise - o.paid_paise;
   const late = o.status === 'new' && Date.now() - new Date(o.created_at).getTime() > 5 * 60000;
@@ -205,10 +211,13 @@ function OrderCard({ o, onOpen, onMove }: { o: AOrder; onOpen: () => void; onMov
           </button>
         )}
         {(o.status === 'served' || o.status === 'completed') && o.payment_status !== 'paid' && (
-          <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={onOpen}>
+          <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={o.invoice_id ? onInvoice : onOpen}>
             Take payment
           </button>
         )}
+        <button type="button" className="a-btn a-btn-sm" onClick={onInvoice}>
+          Invoice
+        </button>
         {o.status === 'served' && o.payment_status === 'paid' && (
           <button type="button" className="a-btn a-btn-sm" onClick={() => onMove('completed')}>
             Close order
@@ -262,19 +271,14 @@ function DayList({ orders, onOpen }: { orders: AOrder[]; onOpen: (id: number) =>
   );
 }
 
-const METHODS = [
-  { key: 'upi', label: 'UPI' },
-  { key: 'cash', label: 'Cash' },
-  { key: 'card', label: 'Card' },
-  { key: 'other', label: 'Other' },
-];
-
 export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
   const { call, can } = useAuth();
   const [o, setO] = useState<AOrder | null>(null);
   const [adding, setAdding] = useState(false);
   const [method, setMethod] = useState('upi');
   const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [discount, setDiscount] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -315,6 +319,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
   const closed = o.status === 'completed' || o.status === 'cancelled';
   const pct = `${(Number(o.gst_rate) * 50).toFixed(1).replace(/\.0$/, '')}%`;
 
+  if (invoiceOpen) return <InvoiceModal orderId={o.id} onClose={() => (setInvoiceOpen(false), void load())} onChanged={onChanged} />;
   if (adding) return <AddItems orderId={o.id} onClose={() => setAdding(false)} onDone={() => act(async () => setAdding(false), 'Items added')} />;
 
   return (
@@ -342,8 +347,8 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
             )
           )}
           <span className="a-spacer" />
-          <button type="button" className="a-btn" onClick={() => printBill(o)}>
-            Print bill
+          <button type="button" className="a-btn" onClick={() => setInvoiceOpen(true)}>
+            {o.invoice_number ? `Invoice ${o.invoice_number}` : 'Invoice'}
           </button>
           {o.status === 'served' && o.payment_status === 'paid' && (
             <button type="button" className="a-btn a-btn-primary" disabled={busy} onClick={() => act(() => call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: 'completed' } }), 'Order closed')}>
@@ -414,7 +419,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
             </ul>
           )}
 
-          {can('manager') && !closed && (
+          {can('manager') && !closed && o.invoice_status !== 'paid' && (
             <form
               className="a-inline-form"
               onSubmit={e => {
@@ -433,14 +438,26 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
             </form>
           )}
 
-          {due > 0 && o.status !== 'cancelled' && (
+          {due > 0 && o.status !== 'cancelled' && o.invoice_id && (
+            <div className="a-pay-form">
+              <p className="a-hint">This order is on invoice {o.invoice_number}. Take payment on the invoice so the whole bill is settled together.</p>
+              <button type="button" className="a-btn a-btn-primary a-btn-lg" onClick={() => setInvoiceOpen(true)}>
+                Open invoice {o.invoice_number}
+              </button>
+            </div>
+          )}
+          {due > 0 && o.status !== 'cancelled' && !o.invoice_id && (
             <form
               className="a-pay-form"
               onSubmit={e => {
                 e.preventDefault();
                 const paise = Math.round(Number(amount) * 100);
                 if (!paise || paise <= 0) return toast('Enter the amount received.', 'bad');
-                void act(() => call(`/api/admin/orders/${o.id}/payments`, { method: 'POST', json: { method, amountPaise: paise } }), `${rs(paise)} received`);
+                if (needsReference(method) && !reference.trim()) return toast('Add the transaction ID from the card slip or UPI app.', 'bad');
+                void act(
+                  () => call(`/api/admin/orders/${o.id}/payments`, { method: 'POST', json: { method, amountPaise: paise, reference: reference.trim() || undefined } }).then(() => setReference('')),
+                  `${rs(paise)} received`,
+                );
               }}
             >
               <span className="a-label">Take payment</span>
@@ -455,6 +472,12 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
                 <span>Amount (₹)</span>
                 <input className="a-input a-input-lg num" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value.replace(/[^\d.]/g, ''))} />
               </label>
+              {needsReference(method) && (
+                <label className="a-field">
+                  <span>Transaction ID (from the {method === 'card' ? 'card slip' : 'UPI app'})</span>
+                  <input className="a-input" value={reference} maxLength={60} onChange={e => setReference(e.target.value)} autoComplete="off" />
+                </label>
+              )}
               <button className="a-btn a-btn-primary a-btn-lg" disabled={busy}>
                 Record {METHODS.find(m => m.key === method)?.label} payment
               </button>
@@ -507,34 +530,4 @@ function AddItems({ orderId, onClose, onDone }: { orderId: number; onClose: () =
       {menu ? <ItemPicker menu={menu} onPick={add} /> : <p className="a-muted">Loading menu…</p>}
     </Modal>
   );
-}
-
-/** Prints an 80 mm receipt in a hidden frame, so the admin screen stays as it is. */
-export function printBill(o: AOrder) {
-  const pct = `${(Number(o.gst_rate) * 50).toFixed(1).replace(/\.0$/, '')}%`;
-  const row = (a: string, b: string, strong = false) => `<tr${strong ? ' class="s"' : ''}><td>${a}</td><td class="r">${b}</td></tr>`;
-  const esc = (s: string) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bill #${o.number}</title><style>
-    @page{size:80mm auto;margin:4mm} body{font:12px/1.35 'Courier New',monospace;color:#000;margin:0;width:72mm}
-    h1{font-size:16px;text-align:center;margin:0} p{margin:2px 0;text-align:center} table{width:100%;border-collapse:collapse;margin-top:6px}
-    td{padding:1px 0;vertical-align:top} .r{text-align:right;white-space:nowrap} .s td{font-weight:bold;border-top:1px dashed #000;padding-top:3px} hr{border:0;border-top:1px dashed #000}
-  </style></head><body>
-    <h1>LB's Hemp Cafe &amp; Lounge</h1><p>29 BJ, BJ Block, Sector 2, Salt Lake</p><p>Kolkata 700091</p><p>+91 98754 31882</p><hr>
-    <p>Bill #${o.number} &nbsp; ${new Date(o.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</p>
-    <p>${esc(where(o))}</p>
-    <table>${o.lines.map(l => row(`${l.qty} x ${esc(l.name)}${l.option_label ? ` (${esc(l.option_label)})` : ''}`, rs(l.line_paise ?? 0))).join('')}</table>
-    <table>${row('Subtotal', rs(o.subtotal_paise), true)}${o.discount_paise ? row('Discount', '-' + rs(o.discount_paise)) : ''}${row(`CGST ${pct}`, rs(o.cgst_paise))}${row(`SGST ${pct}`, rs(o.sgst_paise))}${o.round_off_paise ? row('Round off', rs(o.round_off_paise)) : ''}${row('TOTAL', rs(o.total_paise), true)}${o.paid_paise ? row('Paid', rs(o.paid_paise)) : ''}</table>
-    <hr><p>Eat loud. Stay late. Be a Bandit.</p><p>lbscafe.com</p>
-  </body></html>`;
-  const f = document.createElement('iframe');
-  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
-  document.body.appendChild(f);
-  f.contentDocument!.open();
-  f.contentDocument!.write(html);
-  f.contentDocument!.close();
-  setTimeout(() => {
-    f.contentWindow!.focus();
-    f.contentWindow!.print();
-    setTimeout(() => f.remove(), 1000);
-  }, 200);
 }

@@ -10,7 +10,7 @@ interface Summary {
   hourly: { hour: number; orders: number }[];
   topItems: { name: string; qty: number; amount: string }[];
 }
-interface GstRow { number: number; at: string; customer: string; subtotal_paise: number; discount_paise: number; taxable_paise: number; cgst_paise: number; sgst_paise: number; round_off_paise: number; total_paise: number; payment_status: string }
+interface GstRow { number: number; invoice: string | null; at: string; customer: string; subtotal_paise: number; discount_paise: number; taxable_paise: number; cgst_paise: number; sgst_paise: number; round_off_paise: number; total_paise: number; payment_status: string }
 
 function monthStart(offset = 0) {
   const [y, m] = todayIST().split('-').map(Number);
@@ -38,7 +38,7 @@ export default function Reports() {
   const [to, setTo] = useState(todayIST());
   const [s, setS] = useState<Summary | null>(null);
   const [gst, setGst] = useState<GstRow[] | null>(null);
-  const [tab, setTab] = useState<'sales' | 'gst'>('sales');
+  const [tab, setTab] = useState<'sales' | 'gst' | 'payments'>('sales');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -101,6 +101,9 @@ export default function Reports() {
             <button type="button" className={tab === 'gst' ? 'on' : ''} onClick={() => setTab('gst')}>
               GST report
             </button>
+            <button type="button" className={tab === 'payments' ? 'on' : ''} onClick={() => setTab('payments')}>
+              Payments
+            </button>
           </div>
 
           {tab === 'sales' && (
@@ -149,6 +152,8 @@ export default function Reports() {
             </div>
           )}
 
+          {tab === 'payments' && <PaymentsTab from={from} to={to} />}
+
           {tab === 'gst' && gst && (
             <section className="a-gst">
               <div className="a-gst-head">
@@ -170,7 +175,8 @@ export default function Reports() {
                   <table className="a-table">
                     <thead>
                       <tr>
-                        <th>Bill</th>
+                        <th>Order</th>
+                        <th>Invoice</th>
                         <th>Date</th>
                         <th>Customer</th>
                         <th className="r">Subtotal</th>
@@ -185,6 +191,7 @@ export default function Reports() {
                       {gst.map(r => (
                         <tr key={r.number}>
                           <td>#{r.number}</td>
+                          <td>{r.invoice ?? ''}</td>
                           <td>{r.at}</td>
                           <td>{r.customer}</td>
                           <td className="r num">{rs(r.subtotal_paise)}</td>
@@ -204,6 +211,89 @@ export default function Reports() {
         </>
       )}
     </div>
+  );
+}
+
+interface PaymentRow { time: string; method: string; amount: number; reference: string | null; invoice: string | null; orders: string; tables: string | null; staff: string | null }
+const METHOD_LABEL: Record<string, string> = { upi: 'UPI', cash: 'Cash', card: 'Card', other: 'Other' };
+
+/** Reconciliation: one row per transaction, to match against the card machine's settlement and the UPI statement. */
+function PaymentsTab({ from, to }: { from: string; to: string }) {
+  const { call, token } = useAuth();
+  const [method, setMethod] = useState('');
+  const [search, setSearch] = useState('');
+  const [data, setData] = useState<{ rows: PaymentRow[]; byMethod: Record<string, number> } | null>(null);
+  const query = `from=${from}&to=${to}${method ? `&method=${method}` : ''}${search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''}`;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      call<{ rows: PaymentRow[]; byMethod: Record<string, number> }>(`/api/admin/reports/payments?${query}`)
+        .then(setData)
+        .catch(e => toast(errText(e), 'bad'));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [call, query]);
+
+  return (
+    <section className="a-gst">
+      <div className="a-gst-head">
+        <div className="a-seg">
+          {['', 'upi', 'card', 'cash', 'other'].map(m => (
+            <button key={m || 'all'} type="button" className={method === m ? 'on' : ''} onClick={() => setMethod(m)}>
+              {m ? METHOD_LABEL[m] : 'All'}
+            </button>
+          ))}
+        </div>
+        <input className="a-input" type="search" placeholder="Transaction ID or invoice" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search payments" />
+        <button
+          type="button"
+          className="a-btn a-btn-primary"
+          onClick={() => downloadCsv(call, token, `/api/admin/reports/payments?${query}&format=csv`, `lbs-payments-${from}-to-${to}.csv`).catch(e => toast(errText(e), 'bad'))}
+        >
+          Download CSV
+        </button>
+      </div>
+      {data && (
+        <p className="a-muted">
+          {Object.keys(data.byMethod).length === 0
+            ? 'No payments in this range.'
+            : Object.entries(data.byMethod)
+                .map(([m, v]) => `${METHOD_LABEL[m] ?? m} ${rs(v)}`)
+                .join(', ') + `. ${data.rows.length} ${data.rows.length === 1 ? 'transaction' : 'transactions'}.`}
+        </p>
+      )}
+      {data && data.rows.length > 0 && (
+        <div className="a-table-wrap">
+          <table className="a-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Method</th>
+                <th className="r">Amount</th>
+                <th>Transaction ID</th>
+                <th>Invoice</th>
+                <th>Orders</th>
+                <th>Table</th>
+                <th>Recorded by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.map((r, i) => (
+                <tr key={i}>
+                  <td>{r.time}</td>
+                  <td>{METHOD_LABEL[r.method] ?? r.method}</td>
+                  <td className="r num">{rs(r.amount)}</td>
+                  <td>{r.reference ?? (r.method === 'card' || r.method === 'upi' ? <span className="a-muted">Missing</span> : '')}</td>
+                  <td>{r.invoice ?? ''}</td>
+                  <td>#{r.orders.split(', ').join(', #')}</td>
+                  <td>{r.tables ?? ''}</td>
+                  <td>{r.staff ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

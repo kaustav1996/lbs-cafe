@@ -7,6 +7,7 @@ import { atLeast, requireStaff, type AppEnv } from '../auth.js';
 import { hashPassword } from '../password.js';
 import { runtime } from '../context.js';
 import { checkUpload, FileRef } from '../files.js';
+import { getInvoice, invoiceForOrder, payInvoice, publishInvoice, refuseInvoiced, settleInvoiceCheck } from '../invoices.js';
 import { addLines, addPayment, createOrder, freeTableCheck, refuseHeld, releaseDue, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
 import { menuTree } from './public.js';
 
@@ -84,12 +85,18 @@ export function adminRoutes() {
         lines: z.array(LineIn).min(1).max(80),
         discountPaise: z.number().int().min(0).optional(),
         discountNote: z.string().trim().max(80).optional(),
-        payment: z.object({ method: Method, amountPaise: z.number().int().positive(), reference: z.string().max(60).optional() }).optional(),
+        // No amount: the server takes the balance due (its own total, or the bill's if the order joined one).
+        payment: z.object({ method: Method, amountPaise: z.number().int().positive().optional(), reference: z.string().max(60).optional() }).optional(),
       })
       .parse(await c.req.json());
     if (b.source === 'table' && !b.table) throw new HttpError(400, 'Pick a table for a dine-in order.', 'no_table');
     let o = await createOrder({ ...b, staffId: c.get('staff').sub });
-    if (b.payment && o) o = await addPayment(o.id, b.payment.method, b.payment.amountPaise, c.get('staff').sub, b.payment.reference);
+    if (b.payment && o) {
+      if (o.invoice_id) {
+        await payInvoice(o.invoice_id, b.payment.method, b.payment.amountPaise, c.get('staff').sub, b.payment.reference);
+        o = await getOrder(o.id);
+      } else o = await addPayment(o.id, b.payment.method, b.payment.amountPaise, c.get('staff').sub, b.payment.reference);
+    }
     return c.json({ order: o }, 201);
   });
 
@@ -109,9 +116,13 @@ export function adminRoutes() {
     const freed = await sql.begin(async tx => {
       const [{ table_label: label } = { table_label: null }] = await tx<{ table_label: string | null }[]>`select table_label from orders where id = ${id}`;
       const wasBusy = await lockTable(tx, label);
-      const [o] = await tx<{ id: number; status: string }[]>`select id, status from orders where id = ${id} for update`;
+      const [o] = await tx<{ id: number; status: string; table_label: string | null; invoice_id: number | null }[]>`
+        select id, status, table_label, invoice_id from orders where id = ${id} for update`;
       if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
       refuseHeld(o.status);
+      // On a paid bill only forward status moves are allowed; an order on any bill can't change table.
+      if (b.status === 'cancelled' || b.discountPaise !== undefined) await refuseInvoiced(tx, id, 'edit');
+      if (b.table !== undefined && b.table !== o.table_label) await refuseInvoiced(tx, id, 'move');
       if (b.status) {
         const closing = b.status === 'completed' || b.status === 'cancelled';
         await tx`update orders set status = ${b.status}, closed_at = ${closing ? new Date() : null}, updated_at = now() where id = ${id}`;
@@ -122,10 +133,13 @@ export function adminRoutes() {
         await tx`update orders set discount_paise = ${b.discountPaise}, discount_note = ${b.discountNote ?? null} where id = ${id}`;
         await recalc(tx, id);
       }
+      // A cancellation or discount can leave the bill with nothing left to pay.
+      await settleInvoiceCheck(tx, o.invoice_id);
       // Closing, paying off or moving the order may free its (old) table.
-      return freeTableCheck(tx, label, wasBusy);
+      return { freed: await freeTableCheck(tx, label, wasBusy), invoice: o.invoice_id };
     });
-    publishTable(freed);
+    publishTable(freed.freed);
+    publishInvoice(freed.invoice);
     return c.json({ order: await publishUpdate(id) });
   });
 
@@ -140,9 +154,10 @@ export function adminRoutes() {
     const freed = await sql.begin(async tx => {
       const [{ table_label: label } = { table_label: null }] = await tx<{ table_label: string | null }[]>`select table_label from orders where id = ${id}`;
       const wasBusy = await lockTable(tx, label);
-      const [o] = await tx<{ status: string }[]>`select status from orders where id = ${id} for update`;
+      const [o] = await tx<{ status: string; invoice_id: number | null }[]>`select status, invoice_id from orders where id = ${id} for update`;
       if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
       refuseHeld(o.status);
+      await refuseInvoiced(tx, id, 'edit');
       if (o.status === 'completed' || o.status === 'cancelled') throw new HttpError(409, 'This order is closed.', 'closed');
       if (b.qty === 0) {
         const [{ n }] = await tx<{ n: number }[]>`select count(*)::int as n from order_lines where order_id = ${id}`;
@@ -153,15 +168,37 @@ export function adminRoutes() {
                  where id = ${Number(c.req.param('lineId'))} and order_id = ${id}`;
       }
       await recalc(tx, id);
-      return freeTableCheck(tx, label, wasBusy);
+      await settleInvoiceCheck(tx, o.invoice_id);
+      return { freed: await freeTableCheck(tx, label, wasBusy), invoice: o.invoice_id };
     });
-    publishTable(freed);
+    publishTable(freed.freed);
+    publishInvoice(freed.invoice);
     return c.json({ order: await publishUpdate(id) });
   });
 
   app.post('/orders/:id/payments', async c => {
-    const b = z.object({ method: Method, amountPaise: z.number().int().positive(), reference: z.string().max(60).optional() }).parse(await c.req.json());
+    const b = z.object({ method: Method, amountPaise: z.number().int().positive().optional(), reference: z.string().max(60).optional() }).parse(await c.req.json());
     return c.json({ order: await addPayment(Number(c.req.param('id')), b.method, b.amountPaise, c.get('staff').sub, b.reference) });
+  });
+
+  // ---------- Invoices ----------
+  app.post('/invoices', async c => {
+    const { orderId } = z.object({ orderId: z.number().int().positive() }).parse(await c.req.json());
+    const inv = await invoiceForOrder(orderId, c.get('staff').sub, () => {
+      throw new HttpError(404, 'Order not found.', 'not_found');
+    });
+    return c.json({ invoice: await getInvoice({ id: inv.id }, 'staff') });
+  });
+
+  app.get('/invoices/:id', async c => {
+    const inv = await getInvoice({ id: Number(c.req.param('id')) }, 'staff');
+    if (!inv) throw new HttpError(404, 'Invoice not found.', 'not_found');
+    return c.json({ invoice: inv });
+  });
+
+  app.post('/invoices/:id/payments', async c => {
+    const b = z.object({ method: Method, amountPaise: z.number().int().positive().optional(), reference: z.string().max(60).optional() }).parse(await c.req.json());
+    return c.json({ invoice: await payInvoice(Number(c.req.param('id')), b.method, b.amountPaise, c.get('staff').sub, b.reference) });
   });
 
   // ---------- Service requests (call a server) ----------
@@ -495,20 +532,55 @@ export function adminRoutes() {
     const q = z.object({ from: Day, to: Day, format: z.enum(['json', 'csv']).default('json') }).parse(c.req.query());
     const { start, end } = dayRange(q.from, q.to);
     const rows = await sql`
-      select number, created_at, to_char(created_at at time zone 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI') as at,
-             coalesce(customer_name, case source when 'table' then 'Table ' || table_label else initcap(source) end) as customer,
-             subtotal_paise, discount_paise, taxable_paise, cgst_paise, sgst_paise, round_off_paise, total_paise, payment_status
-      from orders where status not in ('cancelled', 'held') and created_at >= ${start} and created_at < ${end} order by created_at`;
+      select o.number, i.number as invoice, o.created_at, to_char(o.created_at at time zone 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI') as at,
+             coalesce(o.customer_name, case o.source when 'table' then 'Table ' || o.table_label else initcap(o.source) end) as customer,
+             o.subtotal_paise, o.discount_paise, o.taxable_paise, o.cgst_paise, o.sgst_paise, o.round_off_paise, o.total_paise, o.payment_status
+      from orders o left join invoices i on i.id = o.invoice_id
+      where o.status not in ('cancelled', 'held') and o.created_at >= ${start} and o.created_at < ${end} order by o.created_at`;
     if (q.format === 'csv') {
       const s = await getSettings();
-      const head = [['Order', 'Date', 'Customer', 'Subtotal', 'Discount', 'Taxable value', `CGST ${Number(s.gst_rate) * 50}%`, `SGST ${Number(s.gst_rate) * 50}%`, 'Round off', 'Total', 'Payment']];
-      const body = rows.map(r => [r.number, r.at, r.customer, r2(r.subtotal_paise), r2(r.discount_paise), r2(r.taxable_paise), r2(r.cgst_paise), r2(r.sgst_paise), r2(r.round_off_paise), r2(r.total_paise), r.payment_status]);
+      const head = [['Order', 'Invoice', 'Date', 'Customer', 'Subtotal', 'Discount', 'Taxable value', `CGST ${Number(s.gst_rate) * 50}%`, `SGST ${Number(s.gst_rate) * 50}%`, 'Round off', 'Total', 'Payment']];
+      const body = rows.map(r => [r.number, r.invoice, r.at, r.customer, r2(r.subtotal_paise), r2(r.discount_paise), r2(r.taxable_paise), r2(r.cgst_paise), r2(r.sgst_paise), r2(r.round_off_paise), r2(r.total_paise), r.payment_status]);
       return c.body(csv([...head, ...body]), 200, {
         'content-type': 'text/csv; charset=utf-8',
         'content-disposition': `attachment; filename="lbs-gst-${q.from}-to-${q.to}.csv"`,
       });
     }
     return c.json({ rows });
+  });
+
+  /** Reconciliation: one row per transaction (a card swipe or UPI transfer can pay several orders on one bill). */
+  app.get('/reports/payments', async c => {
+    const q = z
+      .object({ from: Day, to: Day, method: Method.optional(), search: z.string().trim().max(60).optional(), format: z.enum(['json', 'csv']).default('json') })
+      .parse(c.req.query());
+    const { start, end } = dayRange(q.from, q.to);
+    const like = q.search ? `%${q.search}%` : null;
+    const rows = await sql<{ at: Date; time: string; method: string; amount: number; reference: string | null; invoice: string | null; orders: string; tables: string | null; staff: string | null }[]>`
+      select min(p.created_at) as at, to_char(min(p.created_at) at time zone 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI') as time,
+             p.method, sum(p.amount_paise)::int as amount, max(p.reference) as reference, max(i.number) as invoice,
+             string_agg(distinct o.number::text, ', ') as orders, string_agg(distinct o.table_label, ', ') as tables, max(s.name) as staff
+      from payments p
+      join orders o on o.id = p.order_id
+      left join invoices i on i.id = p.invoice_id
+      left join staff s on s.id = p.staff_id
+      where p.created_at >= ${start} and p.created_at < ${end}
+        and (${q.method ?? null}::text is null or p.method = ${q.method ?? ''})
+        and (${like}::text is null or p.reference ilike ${like} or i.number ilike ${like})
+      group by p.txn_group, p.method
+      order by min(p.created_at)`;
+    const byMethod: Record<string, number> = {};
+    for (const r of rows) byMethod[r.method] = (byMethod[r.method] ?? 0) + r.amount;
+    if (q.format === 'csv')
+      return c.body(
+        csv([
+          ['Time', 'Method', 'Amount', 'Transaction ID', 'Invoice', 'Orders', 'Table', 'Recorded by'],
+          ...rows.map(r => [r.time, r.method.toUpperCase(), r2(r.amount), r.reference, r.invoice, r.orders, r.tables, r.staff]),
+        ]),
+        200,
+        { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="lbs-payments-${q.from}-to-${q.to}.csv"` },
+      );
+    return c.json({ rows, byMethod });
   });
 
   // ---------- Customers ----------

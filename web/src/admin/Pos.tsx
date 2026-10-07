@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { errText, rs, useAuth } from './core';
 import { DietDot, PageHead, toast } from './ui';
 import { ItemPicker, useAdminMenu, type PickedLine } from './picker';
-import { printBill, type AOrder } from './Orders';
+import type { AOrder } from './Orders';
+import { needsReference, printInvoice, type Invoice } from './Invoice';
 
 interface Table { id: number; label: string; active: boolean }
 
@@ -22,6 +23,7 @@ export default function Pos() {
   const [note, setNote] = useState('');
   const [discount, setDiscount] = useState('');
   const [payNow, setPayNow] = useState<'' | 'upi' | 'cash' | 'card'>('');
+  const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -46,6 +48,10 @@ export default function Pos() {
   const submit = async () => {
     if (!lines.length) return toast('Add at least one item.', 'bad');
     if (source === 'table' && !table) return toast('Pick a table.', 'bad');
+    if (payNow && needsReference(payNow) && !reference.trim()) {
+      document.getElementById('pos-ref')?.focus();
+      return toast('Add the transaction ID from the card slip or UPI app.', 'bad');
+    }
     setBusy(true);
     try {
       const r = await call<{ order: AOrder }>('/api/admin/orders', {
@@ -59,15 +65,21 @@ export default function Pos() {
           lines: lines.map(l => ({ itemId: l.itemId, optionId: l.optionId, qty: l.qty })),
           discountPaise: t.disc || undefined,
           discountNote: t.disc ? 'Owner discount' : undefined,
-          payment: payNow ? { method: payNow, amountPaise: t.total } : undefined,
+          // No amount: the server charges what's due by its own prices (or the table's whole bill, if one is open).
+          payment: payNow ? { method: payNow, reference: reference.trim() || undefined } : undefined,
         },
       });
       toast(`Order #${r.order.number} sent to the kitchen`);
-      if (payNow) printBill(r.order);
+      if (payNow) {
+        // The receipt is the invoice.
+        const inv = await call<{ invoice: Invoice }>('/api/admin/invoices', { method: 'POST', json: { orderId: r.order.id } });
+        printInvoice(inv.invoice);
+      }
       setLines([]);
       setNote('');
       setDiscount('');
       setPayNow('');
+      setReference('');
       setName('');
       setPhone('');
       nav('/admin');
@@ -157,6 +169,12 @@ export default function Pos() {
               ))}
             </div>
           </div>
+          {payNow && needsReference(payNow) && (
+            <label className="a-field">
+              <span>Transaction ID (from the {payNow === 'card' ? 'card slip' : 'UPI app'})</span>
+              <input id="pos-ref" className="a-input" value={reference} maxLength={60} onChange={e => setReference(e.target.value)} autoComplete="off" />
+            </label>
+          )}
           <button type="button" className="a-btn a-btn-primary a-btn-lg a-btn-block" onClick={submit} disabled={busy || !lines.length}>
             {busy ? 'Sending…' : payNow ? `Paid ${rs(t.total)}: send to kitchen` : 'Send to kitchen'}
           </button>

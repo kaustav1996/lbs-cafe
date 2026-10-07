@@ -1625,3 +1625,26 @@ textarea {
   color: var(--lemon);
   font-variant-numeric: tabular-nums;
 }
+
+/* The guest's bill prints cleanly: just the bill, dark text on white. */
+@media print {
+  .bill-page ~ footer,
+  .zone-night > nav,
+  .zone-night > header,
+  .no-print,
+  .checker {
+    display: none !important;
+  }
+  .zone-night,
+  .bill-page,
+  .bill-page .bill {
+    background: #fff !important;
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+  .bill-page h1,
+  .bill-page .status-meta,
+  .bill-page .status-now {
+    color: #000 !important;
+  }
+}

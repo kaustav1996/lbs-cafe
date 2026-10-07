@@ -482,15 +482,22 @@ export function BookingDrawer() {
 export function WaiterSheet() {
   const { close, say } = useUi();
   const cart = useCart();
+  const nav = useNavigate();
   const [busy, setBusy] = useState(false);
-  const ask = async (kind: 'water' | 'bill' | 'server', what: string) => {
+  // Set when the bill needs this table's code (first time on this phone, or the code changed).
+  const [askCode, setAskCode] = useState(false);
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const table = cart.table.trim();
+
+  const ask = async (kind: 'water' | 'server', what: string) => {
     if (!HAS_API) {
       close();
-      return say(`Preview: table ${cart.table} would ask for ${what}`);
+      return say(`Preview: table ${table} would ask for ${what}`);
     }
     setBusy(true);
     try {
-      await api('/api/public/service-requests', { method: 'POST', json: { table: cart.table, kind } });
+      await api('/api/public/service-requests', { method: 'POST', json: { table, kind } });
       close();
       say(`Done. Someone’s bringing ${what}.`);
     } catch (e) {
@@ -499,20 +506,90 @@ export function WaiterSheet() {
       setBusy(false);
     }
   };
+
+  /** Staff are told straight away; the bill itself opens on this phone once it has the table's code. */
+  const getBill = async (pass?: string) => {
+    if (!HAS_API) {
+      close();
+      return say(`Preview: table ${table} would ask for the bill`);
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api<{ token: string }>(`/api/public/tables/${encodeURIComponent(table)}/bill`, {
+        method: 'POST',
+        json: { pass: pass ?? getTablePass(table) },
+      });
+      close();
+      nav(`/bill/${r.token}`);
+      say('Here’s your bill. A server is on the way to take payment.');
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'table_code') {
+        setAskCode(true);
+        setTimeout(() => document.getElementById('bill-code')?.focus(), 0);
+      } else if (e instanceof ApiError && e.code === 'nothing_to_bill') {
+        close();
+        say(`${e.message} A server is on the way.`);
+      } else setError(e instanceof ApiError ? e.message : 'Couldn’t get the bill. A server is on the way anyway.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const checkCode = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{4}$/.test(code.trim())) return setError('Enter the 4-digit code from your server.');
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api<{ pass: string }>(`/api/public/tables/${encodeURIComponent(table)}/verify`, { method: 'POST', json: { code: code.trim() } });
+      setTablePass(table, r.pass);
+      setBusy(false);
+      await getBill(r.pass);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Couldn’t check the code. Try again.');
+      setBusy(false);
+    }
+  };
+
   return (
-    <Drawer title={`Table ${cart.table}`} label="Call a server">
+    <Drawer title={`Table ${table}`} label="Call a server">
       <p className="lede-sm">What do you need? Staff get a ping on the counter screen.</p>
       <div className="waiter-grid">
         <button type="button" className="btn btn-ink" onClick={() => ask('water', 'water')} disabled={busy} data-autofocus>
           Water
         </button>
-        <button type="button" className="btn btn-ink" onClick={() => ask('bill', 'the bill')} disabled={busy}>
+        <button type="button" className="btn btn-ink" onClick={() => getBill()} disabled={busy}>
           The bill
         </button>
         <button type="button" className="btn btn-ink" onClick={() => ask('server', 'a server')} disabled={busy}>
           Someone to come over
         </button>
       </div>
+      {askCode && (
+        <form className="table-code" onSubmit={checkCode}>
+          <p className="hint">A server is on the way with the bill. To see it on your phone too, enter table {table}’s code.</p>
+          <label htmlFor="bill-code">Table {table}’s code</label>
+          <input
+            id="bill-code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]*"
+            maxLength={4}
+            placeholder="4 digits"
+            value={code}
+            onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          />
+          <button type="submit" className="btn btn-ink btn-block" disabled={busy}>
+            Show the bill
+          </button>
+        </form>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
     </Drawer>
   );
 }

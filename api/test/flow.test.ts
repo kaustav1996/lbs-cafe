@@ -11,6 +11,7 @@ const { buildApp } = await import('../src/app.js');
 const { migrate, nodeSql } = await import('../src/migrate.js');
 const { withRuntime } = await import('../src/context.js');
 const { computeTotals } = await import('../src/money.js');
+const { financialYear } = await import('../src/invoices.js');
 import type { CafeEvent } from '../src/events.js';
 
 const sql = nodeSql();
@@ -150,7 +151,7 @@ test('the order shows on the live board, moves through the kitchen, and is paid 
     assert.equal(r.json().order.status, status);
   }
   const o = (await app.inject({ method: 'GET', url: `/api/admin/orders/${orderId}`, headers: auth() })).json().order;
-  const pay = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/payments`, headers: auth(), payload: { method: 'upi', amountPaise: o.total_paise } });
+  const pay = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/payments`, headers: auth(), payload: { method: 'upi', amountPaise: o.total_paise, reference: 'UPI-628301' } });
   assert.equal(pay.json().order.payment_status, 'paid');
   const done = await app.inject({ method: 'PATCH', url: `/api/admin/orders/${orderId}`, headers: auth(), payload: { status: 'completed' } });
   assert.equal(done.json().order.status, 'completed');
@@ -171,7 +172,7 @@ test('counter (POS) order with a discount, split cash + card', async () => {
   assert.equal(o.subtotal_paise, 69800);
   assert.equal(o.taxable_paise, 64900);
   await app.inject({ method: 'POST', url: `/api/admin/orders/${o.id}/payments`, headers: auth(), payload: { method: 'cash', amountPaise: 50000 } });
-  const p2 = await app.inject({ method: 'POST', url: `/api/admin/orders/${o.id}/payments`, headers: auth(), payload: { method: 'card', amountPaise: o.total_paise - 50000 } });
+  const p2 = await app.inject({ method: 'POST', url: `/api/admin/orders/${o.id}/payments`, headers: auth(), payload: { method: 'card', amountPaise: o.total_paise - 50000, reference: 'AUTH 004512' } });
   assert.equal(p2.json().order.payment_status, 'paid');
   const cust = (await app.inject({ method: 'GET', url: '/api/admin/customers', headers: auth() })).json().customers;
   assert.equal(cust[0].phone, '+919874563210');
@@ -534,4 +535,182 @@ test('hold: the admin board releases overdue orders itself, and staff orders are
   assert.ok(!gst.some((r: any) => r.number === null));
   assert.equal((await app.inject({ method: 'POST', url: `/api/public/orders/${held.token}/withdraw` })).statusCode, 200);
   await sql`update settings set value = '0'::jsonb where key = 'hold_seconds'`;
+});
+
+// ---------- Invoices ----------
+const placeAt = async (table: string, lines: object[]) => {
+  const r = await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'table', table, pass: await passFor(table), lines } });
+  assert.equal(r.statusCode, 201, r.body);
+  return (await sql<{ id: number }[]>`select id from orders where token = ${r.json().token}`)[0].id;
+};
+const invoiceFor = async (orderId: number) => {
+  const r = await app.inject({ method: 'POST', url: '/api/admin/invoices', headers: auth(), payload: { orderId } });
+  assert.equal(r.statusCode, 200, r.body);
+  return r.json().invoice;
+};
+const payInv = (id: number, payload: object) => app.inject({ method: 'POST', url: `/api/admin/invoices/${id}/payments`, headers: auth(), payload });
+
+test('invoices: financial year and numbering', () => {
+  // 31 March 23:30 in Kolkata is still 2025-26; 1 April 01:30 is 2026-27.
+  assert.equal(financialYear(new Date('2026-03-31T18:00:00Z')), '25-26');
+  assert.equal(financialYear(new Date('2026-03-31T20:00:00Z')), '26-27');
+});
+
+let tableInvoice: any;
+test('invoices: one bill per table visit; later orders join it, held ones don\'t', async () => {
+  const latte = find('Cafe Latte');
+  const americano = find('Americano');
+  const first = await placeAt('11', [{ ...latte, qty: 1 }]);
+  await placeAt('11', [{ ...latte, qty: 2 }, { ...americano, qty: 1 }]);
+  tableInvoice = await invoiceFor(first);
+  assert.match(tableInvoice.number, new RegExp(`^LB/${financialYear()}/00001$`));
+  assert.equal(tableInvoice.orders.length, 2);
+  assert.equal(tableInvoice.table, '11');
+  assert.equal(tableInvoice.status, 'open');
+  const latteLine = tableInvoice.lines.find((l: any) => l.name === 'Cafe Latte');
+  assert.equal(latteLine.qty, 3); // merged across the two orders
+  assert.equal(tableInvoice.cafe.name, "LB's Hemp Cafe & Lounge");
+  assert.equal(tableInvoice.totals.due, tableInvoice.totals.total);
+
+  // Asking again gives the same bill.
+  assert.equal((await invoiceFor(first)).number, tableInvoice.number);
+  // A later order at the same table and visit joins it.
+  await placeAt('11', [{ ...americano, qty: 1 }]);
+  // A held one doesn't (until it reaches the kitchen).
+  await sql`update settings set value = '1'::jsonb where key = 'hold_seconds'`;
+  const held = await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'table', table: '11', pass: await passFor('11'), lines: [{ ...latte, qty: 1 }] } });
+  await sql`update settings set value = '0'::jsonb where key = 'hold_seconds'`;
+  const now = (await app.inject({ method: 'GET', url: `/api/admin/invoices/${tableInvoice.id}`, headers: auth() })).json().invoice;
+  assert.equal(now.orders.length, 3);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/public/orders/${held.json().token}/withdraw` })).statusCode, 200);
+  tableInvoice = now;
+  assert.ok(events.some(e => e.type === 'invoice.updated' && e.id === tableInvoice.id));
+});
+
+test('invoices: payments need a transaction ID for card/UPI, can\'t overpay, and split oldest first', async () => {
+  const id = tableInvoice.id;
+  const noRef = await payInv(id, { method: 'card', amountPaise: 10000 });
+  assert.equal(noRef.statusCode, 400);
+  assert.equal(noRef.json().error, 'no_reference');
+  const over = await payInv(id, { method: 'cash', amountPaise: tableInvoice.totals.due + 100 });
+  assert.equal(over.statusCode, 400);
+  assert.match(over.json().message, /more than the ₹[\d,.]+ still due/);
+
+  // An order on a bill is paid through the bill.
+  const [first] = await sql<{ id: number; total_paise: number }[]>`select id, total_paise from orders where invoice_id = ${id} order by created_at, id limit 1`;
+  const perOrder = await app.inject({ method: 'POST', url: `/api/admin/orders/${first.id}/payments`, headers: auth(), payload: { method: 'cash', amountPaise: 100 } });
+  assert.equal(perOrder.statusCode, 409);
+  assert.equal(perOrder.json().error, 'use_invoice');
+
+  // ₹ first order's total + ₹10 in cash: covers the first order and ₹10 of the second.
+  const part = await payInv(id, { method: 'cash', amountPaise: first.total_paise + 1000 });
+  assert.equal(part.statusCode, 200, part.body);
+  const rows = await sql<{ order_id: number; amount_paise: number; txn_group: string }[]>`select order_id, amount_paise, txn_group from payments where invoice_id = ${id} order by id`;
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].order_id, first.id);
+  assert.equal(rows[0].amount_paise, first.total_paise);
+  assert.equal(rows[1].amount_paise, 1000);
+  assert.equal(rows[0].txn_group, rows[1].txn_group);
+  assert.equal(part.json().invoice.status, 'open');
+  assert.equal(part.json().invoice.payments.length, 1); // one transaction on the bill
+
+  const rest = await payInv(id, { method: 'upi', reference: 'UPI-77120', });
+  assert.equal(rest.statusCode, 200, rest.body);
+  const paid = rest.json().invoice;
+  assert.equal(paid.status, 'paid');
+  assert.equal(paid.totals.due, 0);
+  assert.equal(paid.payments[1].reference, 'UPI-77120');
+  assert.equal(paid.payments[1].staff, 'Owner');
+  assert.equal((await payInv(id, { method: 'cash', amountPaise: 100 })).statusCode, 409);
+});
+
+test('invoices: a paid bill locks its orders, except moving them forward; then the table frees up', async () => {
+  const orders = await sql<{ id: number }[]>`select id from orders where invoice_id = ${tableInvoice.id} order by id`;
+  const disc = await app.inject({ method: 'PATCH', url: `/api/admin/orders/${orders[0].id}`, headers: auth(), payload: { discountPaise: 500 } });
+  assert.equal(disc.statusCode, 409);
+  assert.match(disc.json().message, /paid invoice LB\/.*can't be changed/);
+  const move = await app.inject({ method: 'PATCH', url: `/api/admin/orders/${orders[0].id}`, headers: auth(), payload: { table: '12' } });
+  assert.equal(move.statusCode, 409);
+  const sitting = async () => (await sql<{ sitting: number }[]>`select sitting from dining_tables where label = '11'`)[0].sitting;
+  const before = await sitting();
+  for (const o of orders) {
+    const r = await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o.id}`, headers: auth(), payload: { status: 'completed' } });
+    assert.equal(r.statusCode, 200, r.body);
+  }
+  assert.equal(await sitting(), before + 1);
+});
+
+test('invoices: takeaway bills, consecutive numbers, prepaid bills, and cancelling the last unpaid order', async () => {
+  const latte = find('Cafe Latte');
+  // Paid at the counter before anyone asked for the bill: the bill is born paid.
+  const t = await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'takeaway', phone: '9123400010', lines: [{ ...latte, qty: 1 }] } });
+  const [{ id: tid, total_paise }] = await sql<{ id: number; total_paise: number }[]>`select id, total_paise from orders where token = ${t.json().token}`;
+  assert.equal((await app.inject({ method: 'POST', url: `/api/admin/orders/${tid}/payments`, headers: auth(), payload: { method: 'cash', amountPaise: total_paise } })).statusCode, 200);
+  const guest = await app.inject({ method: 'POST', url: `/api/public/orders/${t.json().token}/bill` });
+  assert.equal(guest.statusCode, 200, guest.body);
+  const tinv = (await app.inject({ method: 'GET', url: `/api/public/invoices/${guest.json().token}` })).json().invoice;
+  assert.match(tinv.number, /\/00002$/);
+  assert.equal(tinv.status, 'paid');
+  assert.equal(tinv.table, null);
+  assert.equal(tinv.payments[0].staff, undefined); // guests don't see who took it
+
+  // Table 12: two orders on one bill; pay the first; cancelling the second settles the bill.
+  const a = await placeAt('12', [{ ...latte, qty: 1 }]);
+  const b = await placeAt('12', [{ ...latte, qty: 3 }]);
+  const inv = await invoiceFor(a);
+  assert.match(inv.number, /\/00003$/);
+  const [{ total_paise: aTotal }] = await sql<{ total_paise: number }[]>`select total_paise from orders where id = ${a}`;
+  assert.equal((await payInv(inv.id, { method: 'cash', amountPaise: aTotal })).json().invoice.status, 'open');
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/orders/${b}`, headers: auth(), payload: { status: 'cancelled' } })).statusCode, 200);
+  const after = (await app.inject({ method: 'GET', url: `/api/admin/invoices/${inv.id}`, headers: auth() })).json().invoice;
+  assert.equal(after.status, 'paid');
+  assert.equal(after.orders.length, 1);
+});
+
+test('invoices: a staff order at a table with an open bill joins it, and pay-now pays the bill', async () => {
+  const latte = find('Cafe Latte');
+  const guestOrder = await placeAt('10', [{ ...latte, qty: 1 }]);
+  const inv = await invoiceFor(guestOrder);
+  const staff = await app.inject({ method: 'POST', url: '/api/admin/orders', headers: auth(), payload: { source: 'table', table: '10', lines: [{ ...latte, qty: 2 }], payment: { method: 'card', reference: 'AUTH 99120' } } });
+  assert.equal(staff.statusCode, 201, staff.body);
+  assert.equal(staff.json().order.invoice_id, inv.id);
+  const now = (await app.inject({ method: 'GET', url: `/api/admin/invoices/${inv.id}`, headers: auth() })).json().invoice;
+  assert.equal(now.orders.length, 2);
+  assert.equal(now.status, 'paid'); // pay-now took the whole bill's balance
+  const noRef = await app.inject({ method: 'POST', url: '/api/admin/orders', headers: auth(), payload: { source: 'counter', lines: [{ ...latte, qty: 1 }], payment: { method: 'upi' } } });
+  assert.equal(noRef.statusCode, 400);
+});
+
+test('invoices: the guest gets the bill with the table code; the waiter is called either way', async () => {
+  const before = (await sql<{ n: number }[]>`select count(*)::int as n from service_requests where table_label = '9' and kind = 'bill'`)[0].n;
+  const noPass = await app.inject({ method: 'POST', url: '/api/public/tables/9/bill', payload: {} });
+  assert.equal(noPass.statusCode, 403);
+  assert.equal(noPass.json().error, 'table_code');
+  assert.equal((await sql<{ n: number }[]>`select count(*)::int as n from service_requests where table_label = '9' and kind = 'bill'`)[0].n, before + 1);
+  const empty = await app.inject({ method: 'POST', url: '/api/public/tables/9/bill', payload: { pass: await passFor('9') } });
+  assert.equal(empty.statusCode, 400);
+  assert.equal(empty.json().error, 'nothing_to_bill');
+  await placeAt('9', [{ ...find('Americano'), qty: 1 }]);
+  const ok = await app.inject({ method: 'POST', url: '/api/public/tables/9/bill', payload: { pass: await passFor('9') } });
+  assert.equal(ok.statusCode, 200, ok.body);
+  const inv = (await app.inject({ method: 'GET', url: `/api/public/invoices/${ok.json().token}` })).json().invoice;
+  assert.equal(inv.table, '9');
+  assert.equal(inv.lines[0].name, 'Americano');
+  assert.equal((await app.inject({ method: 'GET', url: '/api/public/invoices/not-a-token' })).statusCode, 404);
+});
+
+test('invoices: the payments report has one row per transaction and its totals add up', async () => {
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const r = (await app.inject({ method: 'GET', url: `/api/admin/reports/payments?from=${day}&to=${day}`, headers: auth() })).json();
+  const [{ n, total }] = await sql<{ n: number; total: number }[]>`select count(distinct txn_group)::int as n, sum(amount_paise)::int as total from payments`;
+  assert.equal(r.rows.length, n);
+  assert.equal(Object.values(r.byMethod as Record<string, number>).reduce((a, b) => a + b, 0), total);
+  const split = r.rows.find((x: any) => x.invoice === tableInvoice.number && x.method === 'cash');
+  assert.ok(split.orders.includes(','), 'one cash payment covered two orders');
+  const found = (await app.inject({ method: 'GET', url: `/api/admin/reports/payments?from=${day}&to=${day}&search=77120`, headers: auth() })).json().rows;
+  assert.equal(found.length, 1);
+  const csv = await app.inject({ method: 'GET', url: `/api/admin/reports/payments?from=${day}&to=${day}&format=csv`, headers: auth() });
+  assert.equal(csv.body.trim().split('\n').length, n + 1);
+  const gst = (await app.inject({ method: 'GET', url: `/api/admin/reports/gst?from=${day}&to=${day}`, headers: auth() })).json().rows;
+  assert.ok(gst.some((g: any) => g.invoice === tableInvoice.number));
 });

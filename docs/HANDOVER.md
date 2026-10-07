@@ -43,7 +43,12 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   change with `PUT /api/admin/settings`) as `held`, with a countdown and Change order on the guest's page. Staff never
   see held orders. LiveHub's alarm releases them (next number, customer record, chime); the board and the guest page
   also release overdue ones as a backstop.
-  Next from the spec: invoices, then the loyalty card.
+- **Invoices and reconciliation** (7 Oct 2026, spec feature 4, migration 007): Invoice on any order opens the bill
+  for its table visit (or the order alone for takeaway/counter), numbered LB/26-27/00001 per financial year. Later
+  orders join an open bill. Payments on a bill need a transaction ID for card/UPI and are spread over its orders;
+  overpaying is refused everywhere. Guests get their copy at /bill/<token> (waiter drawer "The bill", or Get the bill
+  on the order page). Reports → Payments lists one row per transaction with totals per method and a CSV.
+  Next: the loyalty card (docs/specs/2026-10-06-loyalty-campaigns.md, migration 008).
 
 ### B. Data the cafe still owes (enter in Admin once live)
 - Veg / non-veg for: Recheado Masala, Herbed Rice, Lemongrass Rice, Mexican Rice, Mix Burnt Garlic Hakka Noodles,
@@ -58,8 +63,7 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
 
 ### C. Features still missing vs the old Foduu admin (pick with the owner)
 1. **Inventory and recipes** (ingredients, stock, low-stock alerts, recipe → item links). Biggest gap.
-2. **Bill uses settings**: `printBill()` in `web/src/admin/Orders.tsx` hard-codes name/address/phone; it should
-   read `settings.cafe` (and print GSTIN once set).
+2. ~~Bill uses settings~~ done: invoices print the cafe details and GSTIN from Settings.
 3. **Item photos**: upload to Supabase Storage from the menu editor (today it takes a URL).
 4. **Reviews** after an order, **CMS** for home-page text/FAQ, **visitor analytics** (Netlify/Plausible is enough).
 5. **Customer login / OTP** (old site had email OTP). Only if the owner wants loyalty; ordering works without it.

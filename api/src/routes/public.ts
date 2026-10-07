@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { sql } from '../db.js';
 import { bus } from '../events.js';
 import { rateLimit, signTablePass, verifyTablePass } from '../auth.js';
+import { getInvoice, invoiceForOrder } from '../invoices.js';
 import { createOrder, getOrder, getSettings, HttpError, normalisePhone, releaseDue, upsertCustomer, withdrawOrder } from '../orders.js';
 
 /**
@@ -157,16 +158,43 @@ export function publicRoutes() {
 
   app.post('/service-requests', rateLimit('service', 10, 5 * 60_000), async c => {
     const body = z.object({ table: z.string().trim().min(1).max(10), kind: z.enum(['water', 'bill', 'server']) }).parse(await c.req.json());
-    const [t] = await sql`select 1 from dining_tables where label = ${body.table} and active`;
-    if (!t) throw new HttpError(400, `There's no table "${body.table}".`, 'bad_table');
-    // One open request of each kind per table is enough.
-    const [existing] = await sql<{ id: number }[]>`
-      select id from service_requests where table_label = ${body.table} and kind = ${body.kind} and status = 'open'`;
-    if (existing) return c.json({ id: existing.id, duplicate: true });
-    const [r] = await sql<{ id: number }[]>`
-      insert into service_requests (table_label, kind) values (${body.table}, ${body.kind}) returning id`;
-    bus.publish({ type: 'service.created', id: r.id, table: body.table, kind: body.kind });
-    return c.json({ id: r.id }, 201);
+    const r = await callServer(body.table, body.kind);
+    return r.duplicate ? c.json(r) : c.json({ id: r.id }, 201);
+  });
+
+  // Get the bill at a table: tell the staff first (always), then open the visit's bill for this phone.
+  app.post('/tables/:label/bill', rateLimit('bill', 10, 10 * 60_000, c => (c.req.param('label') ?? '').slice(0, 10)), async c => {
+    const label = c.req.param('label') ?? '';
+    const { pass } = z.object({ pass: z.string().max(1000).optional() }).parse(await c.req.json().catch(() => ({})));
+    await callServer(label, 'bill');
+    const [t] = await sql<{ sitting: number }[]>`select sitting from dining_tables where label = ${label} and active`;
+    const p = await verifyTablePass(pass);
+    if (!p || p.table !== label || p.sitting !== t.sitting)
+      throw new HttpError(403, `Ask your server for table ${label}'s code, then get the bill again.`, 'table_code');
+    const [o] = await sql<{ id: number }[]>`
+      select id from orders where table_label = ${label} and sitting = ${t.sitting} and status not in ('held', 'cancelled')
+      order by id limit 1`;
+    if (!o) throw new HttpError(400, `There's nothing on table ${label}'s bill yet.`, 'nothing_to_bill');
+    const inv = await invoiceForOrder(o.id, null, () => {
+      throw new HttpError(400, `There's nothing on table ${label}'s bill yet.`, 'nothing_to_bill');
+    });
+    return c.json({ token: inv.token });
+  });
+
+  // Get the bill from an order's status page (takeaway, or a table order from this phone).
+  app.post('/orders/:token/bill', rateLimit('bill', 10, 10 * 60_000), async c => {
+    const [o] = await sql<{ id: number }[]>`select id from orders where token = ${c.req.param('token') ?? ''}`;
+    if (!o) throw new HttpError(404, 'We couldn’t find that order. The link may be incomplete.', 'not_found');
+    const inv = await invoiceForOrder(o.id, null, () => {
+      throw new HttpError(400, 'Your order is still on its way to the kitchen. Get the bill in a minute.', 'nothing_to_bill');
+    });
+    return c.json({ token: inv.token });
+  });
+
+  app.get('/invoices/:token', async c => {
+    const inv = await getInvoice({ token: c.req.param('token') ?? '' }, 'guest');
+    if (!inv) throw new HttpError(404, 'We couldn’t find that bill. The link may be incomplete.', 'not_found');
+    return c.json({ invoice: inv });
   });
 
   app.post('/reservations', rateLimit('reservations', 5, 10 * 60_000), async c => {
@@ -195,4 +223,16 @@ export function publicRoutes() {
   });
 
   return app;
+}
+
+/** A waiter call from a table. One open request of each kind per table is enough. */
+async function callServer(table: string, kind: 'water' | 'bill' | 'server') {
+  const [t] = await sql`select 1 from dining_tables where label = ${table} and active`;
+  if (!t) throw new HttpError(400, `There's no table "${table}".`, 'bad_table');
+  const [existing] = await sql<{ id: number }[]>`
+    select id from service_requests where table_label = ${table} and kind = ${kind} and status = 'open'`;
+  if (existing) return { id: existing.id, duplicate: true };
+  const [r] = await sql<{ id: number }[]>`insert into service_requests (table_label, kind) values (${table}, ${kind}) returning id`;
+  bus.publish({ type: 'service.created', id: r.id, table, kind });
+  return { id: r.id, duplicate: false };
 }

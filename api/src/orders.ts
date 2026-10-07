@@ -3,6 +3,7 @@ import { sql, type Tx } from './db.js';
 import { computeTotals } from './money.js';
 import { bus } from './events.js';
 import { runtime } from './context.js';
+import { checkReference, joinOpenInvoice, publishInvoice, refuseInvoiced, rupees, settleInvoiceCheck } from './invoices.js';
 
 export class HttpError extends Error {
   constructor(public status: number, message: string, public code = 'bad_request') {
@@ -159,10 +160,13 @@ export async function createOrder(input: CreateOrderInput) {
       if (input.source === 'takeaway' && !settings.takeaway_enabled)
         throw new HttpError(403, 'Takeaway orders are paused right now. Call us to order.', 'takeaway_off');
     }
+    // Table orders belong to the table's current visit (sitting), which is what a bill covers.
+    let sitting: number | null = null;
     if (input.source === 'table') {
       const label = (input.table ?? '').trim();
-      const [t] = await tx`select 1 from dining_tables where label = ${label} and active`;
+      const [t] = await tx<{ sitting: number }[]>`select sitting from dining_tables where label = ${label} and active`;
       if (!t) throw new HttpError(400, `There's no table "${label}". Check the number on your table's QR stand.`, 'bad_table');
+      sitting = t.sitting;
     }
     const lines = await priceLines(tx, input.lines, fromStaff);
     const subtotal = lines.reduce((a, l) => a + l.line_paise, 0);
@@ -175,11 +179,11 @@ export async function createOrder(input: CreateOrderInput) {
     const customerId = held ? null : await upsertCustomer(tx, input.phone, input.name);
     const token = randomBytes(12).toString('base64url');
     const [o] = await tx<{ id: number; number: number | null; token: string; hold_until: Date | null }[]>`
-      insert into orders (token, number, status, hold_until, source, table_label, customer_id, customer_name, customer_phone, note, gst_rate,
+      insert into orders (token, number, status, hold_until, sitting, source, table_label, customer_id, customer_name, customer_phone, note, gst_rate,
                           subtotal_paise, discount_paise, discount_note, taxable_paise, cgst_paise, sgst_paise,
                           round_off_paise, total_paise, created_by)
       values (${token}, ${held ? null : sql`nextval('order_number_seq')`}, ${held ? 'held' : 'new'},
-              ${held ? sql`now() + make_interval(secs => ${holdSeconds})` : null},
+              ${held ? sql`now() + make_interval(secs => ${holdSeconds})` : null}, ${sitting},
               ${input.source}, ${input.source === 'table' ? input.table!.trim() : null}, ${customerId},
               ${input.name?.trim() || null}, ${normalisePhone(input.phone)}, ${input.note?.trim() || null}, ${rate},
               ${t.subtotal}, ${t.discount}, ${input.discountNote ?? null}, ${t.taxable}, ${t.cgst}, ${t.sgst},
@@ -189,10 +193,13 @@ export async function createOrder(input: CreateOrderInput) {
       await tx`insert into order_lines (order_id, item_id, option_id, name, option_label, diet, unit_paise, qty, line_paise)
                values (${o.id}, ${l.item_id}, ${l.option_id}, ${l.name}, ${l.option_label}, ${l.diet}, ${l.unit_paise}, ${l.qty}, ${l.line_paise})`;
     }
-    return o;
+    // Visible to staff now (not held): join the visit's open bill, if one has been generated.
+    const joined = held ? null : await joinOpenInvoice(tx, o.id);
+    return { ...o, joined };
   });
   if (order.hold_until) runtime().scheduleRelease?.(order.hold_until);
   else bus.publish({ type: 'order.created', orderId: order.id, number: order.number!, source: input.source, table: input.table ?? null });
+  publishInvoice(order.joined);
   return getOrder(order.id);
 }
 
@@ -215,6 +222,7 @@ export async function addLines(orderId: number, lines: LineInput[]) {
     if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
     refuseHeld(o.status);
     if (o.status === 'completed' || o.status === 'cancelled') throw new HttpError(409, 'This order is closed. Start a new order instead.', 'closed');
+    await refuseInvoiced(tx, orderId, 'edit');
     const priced = await priceLines(tx, lines, true);
     for (const l of priced) {
       await tx`insert into order_lines (order_id, item_id, option_id, name, option_label, diet, unit_paise, qty, line_paise)
@@ -225,18 +233,25 @@ export async function addLines(orderId: number, lines: LineInput[]) {
   return publishUpdate(orderId);
 }
 
-export async function addPayment(orderId: number, method: string, amountPaise: number, staffId: number, reference?: string | null) {
+export async function addPayment(orderId: number, method: string, amountPaise: number | undefined, staffId: number, reference?: string | null) {
+  const ref = checkReference(method, reference);
   const freed = await sql.begin(async tx => {
     const [{ table_label: label } = { table_label: null }] = await tx<{ table_label: string | null }[]>`select table_label from orders where id = ${orderId}`;
     const wasBusy = await lockTable(tx, label);
-    const [o] = await tx<{ status: string; total_paise: number; paid_paise: number }[]>`
-      select status, total_paise, paid_paise from orders where id = ${orderId} for update`;
+    const [o] = await tx<{ status: string; total_paise: number; paid_paise: number; invoice: string | null }[]>`
+      select o.status, o.total_paise, o.paid_paise, i.number as invoice
+      from orders o left join invoices i on i.id = o.invoice_id where o.id = ${orderId} for update of o`;
     if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
     refuseHeld(o.status);
     if (o.status === 'cancelled') throw new HttpError(409, 'This order was cancelled.', 'cancelled');
+    if (o.invoice) throw new HttpError(409, `Record this payment on invoice ${o.invoice}.`, 'use_invoice');
+    const due = Math.max(o.total_paise - o.paid_paise, 0);
+    const amount = amountPaise ?? due;
+    if (amount <= 0) throw new HttpError(409, 'Nothing is left to pay on this order.', 'paid');
+    if (amount > due) throw new HttpError(400, `That's more than the ${rupees(due)} still due.`, 'overpaid');
     await tx`insert into payments (order_id, method, amount_paise, reference, staff_id)
-             values (${orderId}, ${method}, ${amountPaise}, ${reference ?? null}, ${staffId})`;
-    const paid = o.paid_paise + amountPaise;
+             values (${orderId}, ${method}, ${amount}, ${ref}, ${staffId})`;
+    const paid = o.paid_paise + amount;
     const status = paid >= o.total_paise ? 'paid' : 'partial';
     await tx`update orders set paid_paise = ${paid}, payment_status = ${status}, updated_at = now() where id = ${orderId}`;
     if (status === 'paid') {
@@ -258,7 +273,9 @@ export async function publishUpdate(orderId: number) {
 }
 
 export async function getOrder(id: number) {
-  const [o] = await sql<({ id: number; number: number | null; token: string; status: string } & Record<string, any>)[]>`select * from orders where id = ${id}`;
+  const [o] = await sql<({ id: number; number: number | null; token: string; status: string; invoice_id: number | null; invoice_number: string | null; invoice_status: string | null } & Record<string, any>)[]>`
+    select o.*, i.number as invoice_number, i.status as invoice_status
+    from orders o left join invoices i on i.id = o.invoice_id where o.id = ${id}`;
   if (!o) return null;
   const lines = await sql`select id, item_id, option_id, name, option_label, diet, unit_paise, qty, line_paise
                           from order_lines where order_id = ${id} order by id`;
@@ -277,18 +294,21 @@ export async function releaseDue(): Promise<number> {
       where status = 'held' and hold_until <= now()
       order by hold_until, id
       for update skip locked`;
-    const out: { id: number; number: number; source: string; table_label: string | null }[] = [];
+    const out: { id: number; number: number; source: string; table_label: string | null; joined: number | null }[] = [];
     for (const o of due) {
       const customerId = await upsertCustomer(tx, o.customer_phone, o.customer_name);
       const [r] = await tx<{ id: number; number: number; source: string; table_label: string | null }[]>`
         update orders set status = 'new', number = nextval('order_number_seq'), customer_id = ${customerId},
                           created_at = now(), updated_at = now()
         where id = ${o.id} returning id, number, source, table_label`;
-      out.push(r);
+      out.push({ ...r, joined: await joinOpenInvoice(tx, o.id) });
     }
     return out;
   });
-  for (const r of released) bus.publish({ type: 'order.created', orderId: r.id, number: r.number, source: r.source, table: r.table_label });
+  for (const r of released) {
+    bus.publish({ type: 'order.created', orderId: r.id, number: r.number, source: r.source, table: r.table_label });
+    publishInvoice(r.joined);
+  }
   return released.length;
 }
 
