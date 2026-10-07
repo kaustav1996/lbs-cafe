@@ -4,6 +4,7 @@ import { buildApp } from './app.js';
 import { withRuntime, type FileStore, type Runtime } from './context.js';
 import { PG_OPTIONS } from './db.js';
 import type { CafeEvent } from './events.js';
+import { nextReleaseAt, releaseDue } from './orders.js';
 
 export interface Env {
   HYPERDRIVE: Hyperdrive;
@@ -34,6 +35,7 @@ export default {
       publish: e => ctx.waitUntil(hub.publish(e).catch(err => console.error('live feed publish failed', err))),
       allow: (key, max, windowMs) => hub.allow(key, max, windowMs),
       openStream: r => hub.fetch(r),
+      scheduleRelease: at => ctx.waitUntil(hub.scheduleRelease(at.getTime()).catch(err => console.error('could not schedule a release', err))),
       files: env.FILES ? r2Store(env.FILES) : undefined,
       version: env.CF_VERSION_METADATA?.id,
     };
@@ -85,6 +87,34 @@ export class LiveHub extends DurableObject<Env> {
       } catch {
         // Already closing; the admin reconnects on its own.
       }
+    }
+  }
+
+  /** Wakes the hub when a held order's minute is up (keeps the earliest pending time). */
+  async scheduleRelease(at: number) {
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || current > at) await this.ctx.storage.setAlarm(at);
+  }
+
+  /** Releases held orders that are due, publishes them to open admin screens, and re-arms for the next one. */
+  async alarm() {
+    const sql = postgres(this.env.HYPERDRIVE.connectionString, { ...PG_OPTIONS, max: 2 });
+    const rt: Runtime = {
+      sql,
+      jwtSecret: this.env.JWT_SECRET,
+      corsOrigins: [],
+      publish: e => this.publish(e),
+      allow: async () => true,
+    };
+    try {
+      await withRuntime(rt, async () => {
+        await releaseDue();
+        const next = await nextReleaseAt();
+        // Clocks differ slightly between here and Postgres; never re-arm for the past.
+        if (next) await this.ctx.storage.setAlarm(Math.max(next.getTime(), Date.now() + 1000));
+      });
+    } finally {
+      await sql.end();
     }
   }
 

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { sql } from '../db.js';
 import { bus } from '../events.js';
 import { rateLimit, signTablePass, verifyTablePass } from '../auth.js';
-import { createOrder, getOrder, getSettings, HttpError, normalisePhone, upsertCustomer } from '../orders.js';
+import { createOrder, getOrder, getSettings, HttpError, normalisePhone, releaseDue, upsertCustomer, withdrawOrder } from '../orders.js';
 
 /**
  * The menu as a tree of sections, items and options.
@@ -74,6 +74,8 @@ function publicOrder(o: any) {
   return {
     number: o.number,
     status: o.status,
+    // While held: seconds until the kitchen gets it, from the server's clock (the phone's may be off).
+    holdSecondsLeft: o.status === 'held' && o.hold_until ? Math.max(0, Math.ceil((new Date(o.hold_until).getTime() - Date.now()) / 1000)) : null,
     source: o.source,
     table: o.table_label,
     createdAt: o.created_at,
@@ -141,10 +143,17 @@ export function publicRoutes() {
   });
 
   app.get('/orders/:token', async c => {
-    const [row] = await sql<{ id: number }[]>`select id from orders where token = ${c.req.param('token')}`;
+    const [row] = await sql<{ id: number; due: boolean }[]>`
+      select id, (status = 'held' and hold_until <= now()) as due from orders where token = ${c.req.param('token')}`;
     if (!row) throw new HttpError(404, 'We couldn’t find that order. The link may be incomplete.', 'not_found');
+    if (row.due) await releaseDue(); // backstop if the release alarm is running late
     return c.json({ order: publicOrder(await getOrder(row.id)) });
   });
+
+  // Change order: only while the order is still held.
+  app.post('/orders/:token/withdraw', rateLimit('withdraw', 20, 10 * 60_000), async c =>
+    c.json({ lines: await withdrawOrder(c.req.param('token') ?? '') }),
+  );
 
   app.post('/service-requests', rateLimit('service', 10, 5 * 60_000), async c => {
     const body = z.object({ table: z.string().trim().min(1).max(10), kind: z.enum(['water', 'bill', 'server']) }).parse(await c.req.json());

@@ -54,6 +54,8 @@ before(async () => {
   await sql`drop schema public cascade`;
   await sql`create schema public`;
   await migrate(sql, () => {});
+  // Most tests want guest orders on the board straight away; the hold tests switch it on.
+  await sql`update settings set value = '0'::jsonb where key = 'hold_seconds'`;
 });
 after(async () => {
   await sql.end();
@@ -460,4 +462,76 @@ test('menus: staff can view menus but not change them', async () => {
   assert.equal((await app.inject({ method: 'POST', url: '/api/admin/menus', headers: st, payload: { name: 'Sneaky' } })).statusCode, 403);
   assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/menus/${id}`, headers: st, payload: { live: true } })).statusCode, 403);
   assert.equal((await app.inject({ method: 'PUT', url: `/api/admin/menus/${id}/items/${find('Mocha').itemId}`, headers: st, payload: { on: false } })).statusCode, 403);
+});
+
+test('hold: a guest order waits, out of sight of staff, and can be changed', async () => {
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/settings', headers: auth(), payload: { hold_seconds: 1 } })).statusCode, 200);
+  const latte = find('Cafe Latte');
+  const placed = await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'takeaway', name: 'Riya', phone: '9123400001', lines: [{ ...latte, qty: 2 }] } });
+  assert.equal(placed.statusCode, 201, placed.body);
+  const { token, order } = placed.json();
+  assert.equal(order.status, 'held');
+  assert.equal(order.number, null);
+  assert.ok(order.holdSecondsLeft >= 1 && order.holdSecondsLeft <= 2);
+
+  const [{ id }] = await sql<{ id: number }[]>`select id from orders where token = ${token}`;
+  const board = (await app.inject({ method: 'GET', url: '/api/admin/orders', headers: auth() })).json().orders;
+  assert.ok(!board.some((o: any) => o.id === id), 'held order is on the board');
+  assert.equal((await app.inject({ method: 'GET', url: `/api/admin/orders/${id}`, headers: auth() })).statusCode, 404);
+  const pay = await app.inject({ method: 'POST', url: `/api/admin/orders/${id}/payments`, headers: auth(), payload: { method: 'cash', amountPaise: 100 } });
+  assert.equal(pay.statusCode, 409);
+  assert.match(pay.json().message, /hasn't reached the kitchen/);
+
+  // Change order: the order goes, its lines come back, and nothing is left behind.
+  const w = await app.inject({ method: 'POST', url: `/api/public/orders/${token}/withdraw` });
+  assert.equal(w.statusCode, 200, w.body);
+  assert.deepEqual(w.json().lines, [{ itemId: latte.itemId, optionId: latte.optionId, qty: 2 }]);
+  assert.equal((await app.inject({ method: 'GET', url: `/api/public/orders/${token}` })).statusCode, 404);
+  assert.equal((await sql`select 1 from customers where phone = '+919123400001'`).length, 0);
+});
+
+test('hold: after the minute the order reaches the kitchen with the next number; then it can\'t be withdrawn', async () => {
+  const [{ max }] = await sql<{ max: number }[]>`select max(number)::int as max from orders`;
+  const latte = find('Cafe Latte');
+  // A withdrawn order in between must not use up a number.
+  const gone = (await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'takeaway', phone: '9123400002', lines: [{ ...latte, qty: 1 }] } })).json();
+  assert.equal((await app.inject({ method: 'POST', url: `/api/public/orders/${gone.token}/withdraw` })).statusCode, 200);
+
+  const kept = (await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'takeaway', name: 'Arko', phone: '9123400003', lines: [{ ...latte, qty: 1 }] } })).json();
+  const before = events.length;
+  await new Promise(r => setTimeout(r, 1300));
+  const now = (await app.inject({ method: 'GET', url: `/api/public/orders/${kept.token}` })).json().order;
+  assert.equal(now.status, 'new');
+  assert.equal(now.number, max + 1);
+  assert.equal(now.holdSecondsLeft, null);
+  assert.ok(events.slice(before).some(e => e.type === 'order.created' && e.number === max + 1));
+  assert.equal((await sql`select 1 from customers where phone = '+919123400003'`).length, 1);
+  const board = (await app.inject({ method: 'GET', url: '/api/admin/orders', headers: auth() })).json().orders;
+  assert.ok(board.some((o: any) => o.number === max + 1));
+
+  const late = await app.inject({ method: 'POST', url: `/api/public/orders/${kept.token}/withdraw` });
+  assert.equal(late.statusCode, 409);
+  assert.equal(late.json().error, 'too_late');
+});
+
+test('hold: the admin board releases overdue orders itself, and staff orders are never held', async () => {
+  const latte = find('Cafe Latte');
+  const placed = (await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'takeaway', phone: '9123400004', lines: [{ ...latte, qty: 1 }] } })).json();
+  await new Promise(r => setTimeout(r, 1300));
+  // Nobody opened the guest page; the board's own check releases it (backstop for a late alarm).
+  const board = (await app.inject({ method: 'GET', url: '/api/admin/orders', headers: auth() })).json().orders;
+  assert.ok(board.some((o: any) => o.token === placed.token && o.status === 'new'));
+
+  const counter = await app.inject({ method: 'POST', url: '/api/admin/orders', headers: auth(), payload: { source: 'counter', lines: [{ ...latte, qty: 1 }] } });
+  assert.equal(counter.statusCode, 201, counter.body);
+  assert.equal(counter.json().order.status, 'new');
+  assert.ok(counter.json().order.number > 0);
+
+  // Reports never count a held order.
+  const held = (await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'takeaway', phone: '9123400005', lines: [{ ...latte, qty: 50 }] } })).json();
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const gst = (await app.inject({ method: 'GET', url: `/api/admin/reports/gst?from=${day}&to=${day}`, headers: auth() })).json().rows;
+  assert.ok(!gst.some((r: any) => r.number === null));
+  assert.equal((await app.inject({ method: 'POST', url: `/api/public/orders/${held.token}/withdraw` })).statusCode, 200);
+  await sql`update settings set value = '0'::jsonb where key = 'hold_seconds'`;
 });

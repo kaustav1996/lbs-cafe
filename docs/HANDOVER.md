@@ -39,7 +39,11 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
 - **Multiple menus** (7 Oct 2026, spec feature 2): Admin → Menu has a menu picker. "Regular" (live) has every dish.
   New menu copies another; each dish has a stock switch and an on-this-menu switch, and "Price on <menu>" sets a
   per-menu price. Make live switches what guests and the staff order screens see.
-  Next from the spec: the 1-minute hold, then invoices, then the loyalty card.
+- **1-minute hold** (7 Oct 2026, spec feature 3): guest orders wait `hold_seconds` (setting, 60; 0 turns it off;
+  change with `PUT /api/admin/settings`) as `held`, with a countdown and Change order on the guest's page. Staff never
+  see held orders. LiveHub's alarm releases them (next number, customer record, chime); the board and the guest page
+  also release overdue ones as a backstop.
+  Next from the spec: invoices, then the loyalty card.
 
 ### B. Data the cafe still owes (enter in Admin once live)
 - Veg / non-veg for: Recheado Masala, Herbed Rice, Lemongrass Rice, Mexican Rice, Mix Burnt Garlic Hakka Noodles,

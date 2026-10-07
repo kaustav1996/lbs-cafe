@@ -84,7 +84,7 @@ export function CartDrawer() {
     if (missing) return setError(`${missing.name} isn’t on today’s menu any more. Remove it and try again.`);
     setBusy(true);
     try {
-      const r = await api<{ token: string; order: { number: number } }>('/api/public/orders', {
+      const r = await api<{ token: string; order: { number: number | null } }>('/api/public/orders', {
         method: 'POST',
         json: {
           mode: cart.mode,
@@ -178,7 +178,7 @@ export function CartDrawer() {
           </Link>
           {last && (
             <Link to={`/order/${last.token}`} className="btn btn-line" onClick={close}>
-              Check order #{last.number}
+              {last.number ? `Check order #${last.number}` : 'Check your order'}
             </Link>
           )}
         </div>

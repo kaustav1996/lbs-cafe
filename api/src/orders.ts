@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { sql, type Tx } from './db.js';
 import { computeTotals } from './money.js';
 import { bus } from './events.js';
+import { runtime } from './context.js';
 
 export class HttpError extends Error {
   constructor(public status: number, message: string, public code = 'bad_request') {
@@ -143,6 +144,12 @@ export interface CreateOrderInput {
   staffId?: number | null;
 }
 
+const NOT_YET = "This order hasn't reached the kitchen yet. Try again in a minute.";
+/** Staff can't see, pay or change an order during its hold. */
+export function refuseHeld(status: string) {
+  if (status === 'held') throw new HttpError(409, NOT_YET, 'held');
+}
+
 export async function createOrder(input: CreateOrderInput) {
   const order = await sql.begin(async tx => {
     const settings = await getSettings(tx);
@@ -161,24 +168,31 @@ export async function createOrder(input: CreateOrderInput) {
     const subtotal = lines.reduce((a, l) => a + l.line_paise, 0);
     const rate = Number(settings.gst_rate ?? 0.18);
     const t = computeTotals(subtotal, input.discountPaise ?? 0, rate);
-    const customerId = await upsertCustomer(tx, input.phone, input.name);
+    // Guest orders wait `hold_seconds` so the guest can change them; staff orders go straight to the kitchen.
+    const holdSeconds = fromStaff ? 0 : Math.max(0, Math.min(300, Number(settings.hold_seconds ?? 60)));
+    const held = holdSeconds > 0;
+    // The customer record is made when the order reaches the kitchen, so a withdrawn order leaves no trace.
+    const customerId = held ? null : await upsertCustomer(tx, input.phone, input.name);
     const token = randomBytes(12).toString('base64url');
-    const [o] = await tx<{ id: number; number: number; token: string }[]>`
-      insert into orders (token, source, table_label, customer_id, customer_name, customer_phone, note, gst_rate,
+    const [o] = await tx<{ id: number; number: number | null; token: string; hold_until: Date | null }[]>`
+      insert into orders (token, number, status, hold_until, source, table_label, customer_id, customer_name, customer_phone, note, gst_rate,
                           subtotal_paise, discount_paise, discount_note, taxable_paise, cgst_paise, sgst_paise,
                           round_off_paise, total_paise, created_by)
-      values (${token}, ${input.source}, ${input.source === 'table' ? input.table!.trim() : null}, ${customerId},
+      values (${token}, ${held ? null : sql`nextval('order_number_seq')`}, ${held ? 'held' : 'new'},
+              ${held ? sql`now() + make_interval(secs => ${holdSeconds})` : null},
+              ${input.source}, ${input.source === 'table' ? input.table!.trim() : null}, ${customerId},
               ${input.name?.trim() || null}, ${normalisePhone(input.phone)}, ${input.note?.trim() || null}, ${rate},
               ${t.subtotal}, ${t.discount}, ${input.discountNote ?? null}, ${t.taxable}, ${t.cgst}, ${t.sgst},
               ${t.roundOff}, ${t.total}, ${input.staffId ?? null})
-      returning id, number, token`;
+      returning id, number, token, hold_until`;
     for (const l of lines) {
       await tx`insert into order_lines (order_id, item_id, option_id, name, option_label, diet, unit_paise, qty, line_paise)
                values (${o.id}, ${l.item_id}, ${l.option_id}, ${l.name}, ${l.option_label}, ${l.diet}, ${l.unit_paise}, ${l.qty}, ${l.line_paise})`;
     }
     return o;
   });
-  bus.publish({ type: 'order.created', orderId: order.id, number: order.number, source: input.source, table: input.table ?? null });
+  if (order.hold_until) runtime().scheduleRelease?.(order.hold_until);
+  else bus.publish({ type: 'order.created', orderId: order.id, number: order.number!, source: input.source, table: input.table ?? null });
   return getOrder(order.id);
 }
 
@@ -199,6 +213,7 @@ export async function addLines(orderId: number, lines: LineInput[]) {
   await sql.begin(async tx => {
     const [o] = await tx<{ status: string }[]>`select status from orders where id = ${orderId} for update`;
     if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
+    refuseHeld(o.status);
     if (o.status === 'completed' || o.status === 'cancelled') throw new HttpError(409, 'This order is closed. Start a new order instead.', 'closed');
     const priced = await priceLines(tx, lines, true);
     for (const l of priced) {
@@ -217,6 +232,7 @@ export async function addPayment(orderId: number, method: string, amountPaise: n
     const [o] = await tx<{ status: string; total_paise: number; paid_paise: number }[]>`
       select status, total_paise, paid_paise from orders where id = ${orderId} for update`;
     if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
+    refuseHeld(o.status);
     if (o.status === 'cancelled') throw new HttpError(409, 'This order was cancelled.', 'cancelled');
     await tx`insert into payments (order_id, method, amount_paise, reference, staff_id)
              values (${orderId}, ${method}, ${amountPaise}, ${reference ?? null}, ${staffId})`;
@@ -237,15 +253,62 @@ export async function addPayment(orderId: number, method: string, amountPaise: n
 
 export async function publishUpdate(orderId: number) {
   const o = await getOrder(orderId);
-  if (o) bus.publish({ type: 'order.updated', orderId, number: o.number });
+  if (o && o.number !== null) bus.publish({ type: 'order.updated', orderId, number: o.number });
   return o;
 }
 
 export async function getOrder(id: number) {
-  const [o] = await sql<({ id: number; number: number; token: string } & Record<string, any>)[]>`select * from orders where id = ${id}`;
+  const [o] = await sql<({ id: number; number: number | null; token: string; status: string } & Record<string, any>)[]>`select * from orders where id = ${id}`;
   if (!o) return null;
   const lines = await sql`select id, item_id, option_id, name, option_label, diet, unit_paise, qty, line_paise
                           from order_lines where order_id = ${id} order by id`;
   const payments = await sql`select id, method, amount_paise, reference, created_at from payments where order_id = ${id} order by id`;
   return { ...o, lines, payments };
+}
+
+/**
+ * Releases held orders whose minute is up: next order number, status 'new', kitchen timer from now, customer
+ * record made. Safe to run from several places at once (skip locked). Returns how many were released.
+ */
+export async function releaseDue(): Promise<number> {
+  const released = await sql.begin(async tx => {
+    const due = await tx<{ id: number; customer_name: string | null; customer_phone: string | null }[]>`
+      select id, customer_name, customer_phone from orders
+      where status = 'held' and hold_until <= now()
+      order by hold_until, id
+      for update skip locked`;
+    const out: { id: number; number: number; source: string; table_label: string | null }[] = [];
+    for (const o of due) {
+      const customerId = await upsertCustomer(tx, o.customer_phone, o.customer_name);
+      const [r] = await tx<{ id: number; number: number; source: string; table_label: string | null }[]>`
+        update orders set status = 'new', number = nextval('order_number_seq'), customer_id = ${customerId},
+                          created_at = now(), updated_at = now()
+        where id = ${o.id} returning id, number, source, table_label`;
+      out.push(r);
+    }
+    return out;
+  });
+  for (const r of released) bus.publish({ type: 'order.created', orderId: r.id, number: r.number, source: r.source, table: r.table_label });
+  return released.length;
+}
+
+/** When the next held order is due, if any. */
+export async function nextReleaseAt(): Promise<Date | null> {
+  const [r] = await sql<{ at: Date | null }[]>`select min(hold_until) as at from orders where status = 'held'`;
+  return r.at;
+}
+
+/** Guest's Change order: deletes a still-held order and hands its lines back for the cart. */
+export async function withdrawOrder(token: string) {
+  return sql.begin(async tx => {
+    const [o] = await tx<{ id: number; status: string; due: boolean }[]>`
+      select id, status, hold_until <= now() as due from orders where token = ${token} for update`;
+    if (!o) throw new HttpError(404, 'We couldn’t find that order. The link may be incomplete.', 'not_found');
+    if (o.status !== 'held' || o.due)
+      throw new HttpError(409, 'Too late to change this one: the kitchen has it. Ask your server and they can change it.', 'too_late');
+    const lines = await tx<{ itemId: number; optionId: number; qty: number }[]>`
+      select item_id as "itemId", option_id as "optionId", qty from order_lines where order_id = ${o.id} order by id`;
+    await tx`delete from orders where id = ${o.id}`;
+    return lines;
+  });
 }

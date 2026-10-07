@@ -7,7 +7,7 @@ import { atLeast, requireStaff, type AppEnv } from '../auth.js';
 import { hashPassword } from '../password.js';
 import { runtime } from '../context.js';
 import { checkUpload, FileRef } from '../files.js';
-import { addLines, addPayment, createOrder, freeTableCheck, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
+import { addLines, addPayment, createOrder, freeTableCheck, refuseHeld, releaseDue, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
 import { menuTree } from './public.js';
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -44,6 +44,7 @@ export function adminRoutes() {
     const q = z
       .object({ view: z.enum(['open', 'day']).default('open'), date: Day.optional(), search: z.string().trim().max(40).optional() })
       .parse(c.req.query());
+    await releaseDue(); // backstop if the release alarm is running late
     if (q.view === 'open') {
       // Everything the floor still has to act on: not finished, or finished but not paid.
       const rows = await sql`
@@ -60,7 +61,7 @@ export function adminRoutes() {
       select o.*, (select coalesce(json_agg(json_build_object('name', l.name, 'option', l.option_label, 'qty', l.qty, 'diet', l.diet) order by l.id), '[]')
                    from order_lines l where l.order_id = o.id) as lines
       from orders o
-      where o.created_at >= ${start} and o.created_at < ${end}
+      where o.created_at >= ${start} and o.created_at < ${end} and o.status <> 'held'
         and (${s}::text is null or o.number::text like ${s} or o.customer_name ilike ${s} or o.customer_phone like ${s} or o.table_label = ${q.search ?? ''})
       order by o.created_at desc`;
     return c.json({ orders: rows });
@@ -68,7 +69,7 @@ export function adminRoutes() {
 
   app.get('/orders/:id', async c => {
     const o = await getOrder(Number(c.req.param('id')));
-    if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
+    if (!o || o.status === 'held') throw new HttpError(404, 'Order not found.', 'not_found');
     return c.json({ order: o });
   });
 
@@ -110,6 +111,7 @@ export function adminRoutes() {
       const wasBusy = await lockTable(tx, label);
       const [o] = await tx<{ id: number; status: string }[]>`select id, status from orders where id = ${id} for update`;
       if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
+      refuseHeld(o.status);
       if (b.status) {
         const closing = b.status === 'completed' || b.status === 'cancelled';
         await tx`update orders set status = ${b.status}, closed_at = ${closing ? new Date() : null}, updated_at = now() where id = ${id}`;
@@ -140,6 +142,7 @@ export function adminRoutes() {
       const wasBusy = await lockTable(tx, label);
       const [o] = await tx<{ status: string }[]>`select status from orders where id = ${id} for update`;
       if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
+      refuseHeld(o.status);
       if (o.status === 'completed' || o.status === 'cancelled') throw new HttpError(409, 'This order is closed.', 'closed');
       if (b.qty === 0) {
         const [{ n }] = await tx<{ n: number }[]>`select count(*)::int as n from order_lines where order_id = ${id}`;
@@ -465,7 +468,7 @@ export function adminRoutes() {
              coalesce(sum(cgst_paise), 0)::bigint as cgst,
              coalesce(sum(sgst_paise), 0)::bigint as sgst,
              coalesce(sum(greatest(total_paise - paid_paise, 0)), 0)::bigint as unpaid
-      from orders where status <> 'cancelled' and created_at >= ${start} and created_at < ${end}`;
+      from orders where status not in ('cancelled', 'held') and created_at >= ${start} and created_at < ${end}`;
     const [{ cancelled }] = await sql`
       select count(*)::int as cancelled from orders where status = 'cancelled' and created_at >= ${start} and created_at < ${end}`;
     const byMethod = await sql`
@@ -473,17 +476,17 @@ export function adminRoutes() {
       from payments where created_at >= ${start} and created_at < ${end} group by method order by amount desc`;
     const bySource = await sql`
       select source, count(*)::int as orders, sum(total_paise)::bigint as amount
-      from orders where status <> 'cancelled' and created_at >= ${start} and created_at < ${end} group by source`;
+      from orders where status not in ('cancelled', 'held') and created_at >= ${start} and created_at < ${end} group by source`;
     const daily = await sql`
       select to_char(created_at at time zone 'Asia/Kolkata', 'YYYY-MM-DD') as day, count(*)::int as orders, sum(total_paise)::bigint as amount
-      from orders where status <> 'cancelled' and created_at >= ${start} and created_at < ${end} group by 1 order by 1`;
+      from orders where status not in ('cancelled', 'held') and created_at >= ${start} and created_at < ${end} group by 1 order by 1`;
     const hourly = await sql`
       select extract(hour from created_at at time zone 'Asia/Kolkata')::int as hour, count(*)::int as orders
-      from orders where status <> 'cancelled' and created_at >= ${start} and created_at < ${end} group by 1 order by 1`;
+      from orders where status not in ('cancelled', 'held') and created_at >= ${start} and created_at < ${end} group by 1 order by 1`;
     const topItems = await sql`
       select l.name, sum(l.qty)::int as qty, sum(l.line_paise)::bigint as amount
       from order_lines l join orders o on o.id = l.order_id
-      where o.status <> 'cancelled' and o.created_at >= ${start} and o.created_at < ${end}
+      where o.status not in ('cancelled', 'held') and o.created_at >= ${start} and o.created_at < ${end}
       group by l.name order by qty desc, amount desc limit 10`;
     return c.json({ range: q, totals: { ...totals, cancelled }, byMethod, bySource, daily, hourly, topItems });
   });
@@ -495,7 +498,7 @@ export function adminRoutes() {
       select number, created_at, to_char(created_at at time zone 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI') as at,
              coalesce(customer_name, case source when 'table' then 'Table ' || table_label else initcap(source) end) as customer,
              subtotal_paise, discount_paise, taxable_paise, cgst_paise, sgst_paise, round_off_paise, total_paise, payment_status
-      from orders where status <> 'cancelled' and created_at >= ${start} and created_at < ${end} order by created_at`;
+      from orders where status not in ('cancelled', 'held') and created_at >= ${start} and created_at < ${end} order by created_at`;
     if (q.format === 'csv') {
       const s = await getSettings();
       const head = [['Order', 'Date', 'Customer', 'Subtotal', 'Discount', 'Taxable value', `CGST ${Number(s.gst_rate) * 50}%`, `SGST ${Number(s.gst_rate) * 50}%`, 'Round off', 'Total', 'Payment']];
@@ -538,6 +541,7 @@ export function adminRoutes() {
         ordering_enabled: z.boolean().optional(),
         takeaway_enabled: z.boolean().optional(),
         booking_enabled: z.boolean().optional(),
+        hold_seconds: z.number().int().min(0).max(300).optional(),
         cafe: z
           .object({ name: z.string().max(80), address: z.string().max(160), phone: z.string().max(20), email: z.string().max(80), gstin: z.string().max(15) })
           .partial()

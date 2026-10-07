@@ -29,6 +29,8 @@ export interface Runtime {
   allow(key: string, max: number, windowMs: number): Promise<boolean>;
   /** Hands a signed-in WebSocket upgrade to the live feed. Missing where there's no feed (tests). */
   openStream?(req: Request): Promise<Response>;
+  /** Asks for held orders to be released at `at` (the LiveHub alarm). No-op in tests: they release lazily. */
+  scheduleRelease?(at: Date): void;
   /** The deployed Worker version, reported by /health. Missing outside Cloudflare. */
   version?: string;
   /** Document storage. Missing where no bucket is bound. */

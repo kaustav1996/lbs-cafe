@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   ordering_enabled: true,
   takeaway_enabled: true,
   booking_enabled: true,
+  hold_seconds: 60,
   licences: [],
   cafe: {
     name: "LB's Hemp Cafe & Lounge",
