@@ -5,7 +5,7 @@ import { sql } from '../db.js';
 import { bus } from '../events.js';
 import { rateLimit, signTablePass, verifyTablePass } from '../auth.js';
 import { getInvoice, invoiceForOrder } from '../invoices.js';
-import { createOrder, getOrder, getSettings, HttpError, normalisePhone, releaseDue, upsertCustomer, withdrawOrder } from '../orders.js';
+import { confirmOrder, createOrder, getOrder, getSettings, HttpError, normalisePhone, releaseDue, upsertCustomer, withdrawOrder } from '../orders.js';
 
 /**
  * The menu as a tree of sections, items and options.
@@ -150,6 +150,11 @@ export function publicRoutes() {
     if (row.due) await releaseDue(); // backstop if the release alarm is running late
     return c.json({ order: publicOrder(await getOrder(row.id)) });
   });
+
+  // Confirm order: the guest is happy, send it to the kitchen without waiting out the hold. Safe to repeat.
+  app.post('/orders/:token/confirm', rateLimit('withdraw', 20, 10 * 60_000), async c =>
+    c.json({ order: publicOrder(await getOrder(await confirmOrder(c.req.param('token') ?? ''))) }),
+  );
 
   // Change order: only while the order is still held.
   app.post('/orders/:token/withdraw', rateLimit('withdraw', 20, 10 * 60_000), async c =>

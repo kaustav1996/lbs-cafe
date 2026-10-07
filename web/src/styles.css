@@ -610,6 +610,9 @@ mark {
 .footer .footer-line {
   line-height: 1.15;
 }
+.footer-line span {
+  display: inline-block;
+}
 .footer-links {
   display: flex;
   flex-direction: column;
@@ -1296,6 +1299,17 @@ button.buy:hover {
 }
 .hold .status-meta {
   color: var(--ink);
+}
+.hold-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+.hold-actions .btn {
+  flex: 1 1 0;
+  padding-inline: 12px;
+  white-space: nowrap;
 }
 .bill {
   display: grid;

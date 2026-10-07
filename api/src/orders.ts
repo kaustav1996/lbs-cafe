@@ -335,3 +335,13 @@ export async function withdrawOrder(token: string) {
     return lines;
   });
 }
+
+/** Guest's Confirm order: skip the rest of the hold and send a held order to the kitchen now. */
+export async function confirmOrder(token: string) {
+  const [o] = await sql<{ id: number }[]>`
+    update orders set hold_until = now() where token = ${token} and status = 'held' returning id`;
+  if (o) await releaseDue();
+  const [row] = await sql<{ id: number }[]>`select id from orders where token = ${token}`;
+  if (!row) throw new HttpError(404, 'We couldn’t find that order. The link may be incomplete.', 'not_found');
+  return row.id;
+}

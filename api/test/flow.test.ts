@@ -1000,3 +1000,21 @@ test('whatsapp webhook: signed notifications only; a STOP reply opts the number 
   assert.equal((await post(body, sign(body))).status, 503);
   rt.whatsapp = saved;
 });
+
+test('hold: Confirm order sends it to the kitchen at once; confirming again changes nothing', async () => {
+  await sql`update settings set value = '60'::jsonb where key = 'hold_seconds'`;
+  const latte = find('Cafe Latte');
+  const placed = (await app.inject({ method: 'POST', url: '/api/public/orders', payload: { mode: 'takeaway', phone: '9123400020', lines: [{ ...latte, qty: 1 }] } })).json();
+  assert.equal(placed.order.status, 'held');
+  const before = events.length;
+  const ok = await app.inject({ method: 'POST', url: `/api/public/orders/${placed.token}/confirm` });
+  assert.equal(ok.statusCode, 200, ok.body);
+  assert.equal(ok.json().order.status, 'new');
+  assert.ok(ok.json().order.number > 0);
+  assert.ok(events.slice(before).some(e => e.type === 'order.created'));
+  const again = await app.inject({ method: 'POST', url: `/api/public/orders/${placed.token}/confirm` });
+  assert.equal(again.json().order.number, ok.json().order.number);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/public/orders/${placed.token}/withdraw` })).json().error, 'too_late');
+  assert.equal((await app.inject({ method: 'POST', url: '/api/public/orders/nope/confirm' })).statusCode, 404);
+  await sql`update settings set value = '0'::jsonb where key = 'hold_seconds'`;
+});

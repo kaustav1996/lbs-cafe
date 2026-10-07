@@ -143,7 +143,9 @@ export function Footer() {
   return (
     <footer className="footer">
       <div className="wrap footer-grid">
-        <p className="footer-line">Eat loud. Stay late. Be a Bandit.</p>
+        <p className="footer-line">
+          <span>Eat loud. Stay late.</span> <span>Be a Bandit.</span>
+        </p>
         <div className="footer-cols">
           <div>
             <h2>Find us</h2>

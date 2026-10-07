@@ -6,7 +6,7 @@ import { inr } from '../lib/format';
 import { useCart } from '../state/cart';
 import { useUi } from '../state/ui';
 import { useLive } from '../state/live';
-import { forgetOrder } from '../lib/orders';
+import { forgetOrder, rememberOrder } from '../lib/orders';
 
 interface PublicOrder {
   number: number | null;
@@ -43,7 +43,7 @@ const STEPS = [
 function headline(o: PublicOrder) {
   switch (o.status) {
     case 'held':
-      return 'Order placed. You have a minute to change it.';
+      return 'Order placed. Confirm it now, or change it within a minute.';
     case 'new':
       return 'The kitchen has your order.';
     case 'preparing':
@@ -125,6 +125,24 @@ export default function OrderStatus() {
   const secondsLeft = deadline === null ? 0 : Math.max(0, Math.ceil((deadline - now) / 1000));
 
   /** Change order: withdraw it and put everything back in the cart. */
+  /** Confirm order: happy with it, so send it to the kitchen now instead of waiting out the minute. */
+  const [confirming, setConfirming] = useState(false);
+  const confirmOrder = async () => {
+    setConfirming(true);
+    setChangeError('');
+    try {
+      const r = await api<{ order: PublicOrder }>(`/api/public/orders/${encodeURIComponent(token)}/confirm`, { method: 'POST' });
+      setOrder(r.order);
+      setDeadline(null);
+      if (r.order.number) rememberOrder(token, r.order.number);
+    } catch (e) {
+      setChangeError(e instanceof ApiError ? e.message : 'Couldn’t send it yet. It goes to the kitchen on its own in a moment.');
+      setReloadKey(k => k + 1);
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   const changeOrder = async () => {
     setChanging(true);
     setChangeError('');
@@ -206,15 +224,20 @@ export default function OrderStatus() {
                 <p className="hold-count" aria-live="off">
                   Sending to the kitchen in <span className="num">{`${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`}</span>
                 </p>
-                <p className="status-meta">Want to add, remove or change something? Do it now and it goes to the kitchen when you place it again.</p>
+                <p className="status-meta">Happy with it? Confirm and it goes to the kitchen now. Want to add, remove or change something? Change it first.</p>
                 {changeError && (
                   <p className="error" role="alert">
                     {changeError}
                   </p>
                 )}
-                <button type="button" className="btn btn-ink" onClick={changeOrder} disabled={changing || secondsLeft === 0}>
-                  {changing ? 'Opening your cart…' : 'Change order'}
-                </button>
+                <div className="hold-actions">
+                  <button type="button" className="btn btn-ink" onClick={confirmOrder} disabled={confirming || changing}>
+                    {confirming ? 'Sending…' : 'Confirm order'}
+                  </button>
+                  <button type="button" className="btn btn-line" onClick={changeOrder} disabled={changing || confirming || secondsLeft === 0}>
+                    {changing ? 'Opening your cart…' : 'Change order'}
+                  </button>
+                </div>
               </section>
             )}
 
