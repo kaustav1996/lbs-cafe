@@ -60,9 +60,9 @@ export default function Card() {
   };
 
   return (
-    <div className="zone-night">
-      <Nav tone="night" />
-      <main className="wrap status-page card-page">
+    <div className="page">
+      <Nav />
+      <main className="wrap narrow status-page card-page">
         <header>
           <h1 className="display">LB’s card</h1>
           <p className="status-meta">A stamp for every visit. Your 5th visit is half price.</p>
@@ -122,7 +122,7 @@ function SignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
     return (
       <section className="card-box">
         <p>{off}</p>
-        <Link to="/menu" className="btn btn-lemon">
+        <Link to="/menu" className="btn btn-ink">
           See the menu
         </Link>
       </section>
@@ -148,7 +148,7 @@ function SignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
               {error}
             </p>
           )}
-          <button className="btn btn-lemon" disabled={busy}>
+          <button className="btn btn-ink" disabled={busy}>
             {busy ? 'Sending…' : 'Send me a code on WhatsApp'}
           </button>
         </form>
@@ -164,7 +164,7 @@ function SignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
               {error}
             </p>
           )}
-          <button className="btn btn-lemon" disabled={busy || code.length !== 6}>
+          <button className="btn btn-ink" disabled={busy || code.length !== 6}>
             {busy ? 'Checking…' : 'Open my card'}
           </button>
           <button type="button" className="linkish" onClick={() => (setSent(false), setCode(''))}>
@@ -225,16 +225,16 @@ function CardFace({ card, token, onChange, onGone }: { card: CardView; token: st
       )}
 
       <div className="status-actions">
-        <Link to="/menu" className="btn btn-lemon">
+        <Link to="/menu" className="btn btn-ink">
           See the menu
         </Link>
         {card.links.google && (
-          <a className="btn btn-line btn-outline-night" href={card.links.google} target="_blank" rel="noreferrer">
+          <a className="btn btn-line" href={card.links.google} target="_blank" rel="noreferrer">
             Review us on Google
           </a>
         )}
         {card.links.instagram && (
-          <a className="btn btn-line btn-outline-night" href={card.links.instagram} target="_blank" rel="noreferrer">
+          <a className="btn btn-line" href={card.links.instagram} target="_blank" rel="noreferrer">
             Follow us on Instagram
           </a>
         )}
@@ -248,7 +248,7 @@ function CardFace({ card, token, onChange, onGone }: { card: CardView; token: st
         {confirmDelete ? (
           <p>
             This deletes your card, your stamps and your details. Your bills stay as they are.{' '}
-            <button type="button" className="btn btn-line btn-outline-night" disabled={busy} onClick={remove}>
+            <button type="button" className="btn btn-line" disabled={busy} onClick={remove}>
               Yes, delete my details
             </button>{' '}
             <button type="button" className="linkish" onClick={() => setConfirmDelete(false)}>

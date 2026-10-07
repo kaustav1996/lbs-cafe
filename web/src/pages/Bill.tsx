@@ -61,14 +61,14 @@ export default function Bill() {
   }, [token]);
 
   return (
-    <div className="zone-night">
-      <Nav tone="night" />
-      <main className="wrap status-page bill-page">
+    <div className="page">
+      <Nav />
+      <main className="wrap narrow status-page bill-page">
         {!inv && !error && <p className="status-meta">Loading your bill…</p>}
         {error && !inv && (
           <div className="empty">
             <p>{error}</p>
-            <Link to="/menu" className="btn btn-lemon">
+            <Link to="/menu" className="btn btn-ink">
               Back to the menu
             </Link>
           </div>
@@ -153,7 +153,7 @@ export default function Bill() {
               {inv.card ? (
                 <p>This bill is on an LB’s card.</p>
               ) : cardToken ? (
-                <button type="button" className="btn btn-line btn-outline-night" onClick={addToCard} disabled={adding}>
+                <button type="button" className="btn btn-line" onClick={addToCard} disabled={adding}>
                   Add to my LB’s card
                 </button>
               ) : (
@@ -165,7 +165,7 @@ export default function Bill() {
             </section>
 
             <div className="status-actions no-print">
-              <button type="button" className="btn btn-lemon" onClick={() => window.print()}>
+              <button type="button" className="btn btn-ink" onClick={() => window.print()}>
                 Print or save as PDF
               </button>
             </div>

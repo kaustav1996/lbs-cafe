@@ -29,9 +29,9 @@ export default function Licences() {
   const empty = data && !data.gstin && data.licences.length === 0;
 
   return (
-    <div className="zone-night">
-      <Nav tone="night" />
-      <main className="wrap status-page licences-page">
+    <div className="page">
+      <Nav />
+      <main className="wrap narrow status-page licences-page">
         <header>
           <h1 className="display">Licences and registrations</h1>
           <p className="status-meta">LB's Hemp Cafe & Lounge, Salt Lake, Kolkata.</p>
@@ -59,7 +59,7 @@ export default function Licences() {
                 )}
                 {l.validUntil && <p className="status-meta">Valid until {longDate(l.validUntil)}</p>}
                 {l.file && (
-                  <a className="btn btn-lemon" href={`/files/${l.file.key}`} target="_blank" rel="noreferrer">
+                  <a className="btn btn-ink" href={`/files/${l.file.key}`} target="_blank" rel="noreferrer">
                     View document
                   </a>
                 )}

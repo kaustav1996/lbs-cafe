@@ -93,29 +93,10 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
 - **Customers are keyed by phone** (normalised to `+91…`), created from takeaway, counter orders and bookings.
 - **Menu seed** comes from the old site's menu (scraped Oct 2026, `data/old-site-scrape.json`); 139 prices merged
   into 126 rows (veg/non-veg pairs became one item with two options). Spellings were corrected.
-- **Design**: lemon yellow from the mascot, Shrikhand display + Archivo body (Google Fonts), the orange record
-  wall as the menu index, a dark menu page for dim rooms, black-and-white checker strips from the floor.
-  The admin is a dark utilitarian theme in the same palette.
-
-## 4. Facts confirmed by the cafe
-
-- Name: LB's Hemp Cafe & Lounge (from the Limon Bandits music/culture crew). Mascot: the lemon bandit.
-- Address (as Google Maps lists it): Bidhan Nagar, 29 BJ, BJ Block, Sector 2, Kolkata, Bidhannagar, West Bengal 700091.
-  "Get directions" links to exactly this string.
-- Phone +91 98754 31882, email lbsfrequency@gmail.com.
-- Hours: 10 am to 10 pm, every day. GST 18%. Payments: cash, cards, UPI.
-
-## 5. Gotchas found along the way
-
-- `embedded-postgres` refuses to run as root; in root containers start Postgres with `pg_ctl` as the `postgres` user
-  (see `api/scripts/localdb.ts`; on a Mac `npm run localdb` works as is).
-- Playwright `waitUntil: 'networkidle'` never settles on admin pages because of the SSE stream; wait for selectors.
-- `pkill -f "<pattern>"` inside a shell whose own command line contains the pattern kills the shell.
-- HTML `width`/`height` attributes on `<img>` need `height: auto` in CSS or `aspect-ratio` is ignored (fixed globally).
-- The preview build (`--mode preview`) uses `HashRouter` and relative asset paths; production uses `BrowserRouter`
-  with Netlify's SPA redirect.
-
-## 6. Suggested first prompt in Claude Code (used 6 Oct 2026)
-
-> Read CLAUDE.md and docs/HANDOVER.md. Then help me deploy: walk me through Supabase, Render and Netlify one step
-> at a time, verify each step with curl, and update netlify.toml with the real API URL when we have it.
+- **Design** (redesigned 7 Oct 2026, "Ticket", mobile-first): white paper, black ink and dashed rules like a printed bill.
+  Lime #D0FF00 is a highlighter (a marked phrase, the selected chip, the active tab), never body text; cyan #00BCC8 is a
+  stamp (status, card stamps), with #00747C when it has to be text. Deep teal only in the footer. Shrikhand for one page
+  title per page, Archivo for the rest; nothing below 14px; tap targets 44px+. Phones get a bottom bar (Menu, Order,
+  Table or Book, Card) and sheets for the cart, booking and waiter; from 1000px a top bar takes over. Checked against
+  impeccable.style's anti-pattern catalog (no glows, bounce, pulsing, identical card grids or repeated slogans).
+  The admin keeps its own dark theme.

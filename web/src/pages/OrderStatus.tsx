@@ -43,7 +43,7 @@ const STEPS = [
 function headline(o: PublicOrder) {
   switch (o.status) {
     case 'held':
-      return 'Sending it to the kitchen.';
+      return 'Order placed. You have a minute to change it.';
     case 'new':
       return 'The kitchen has your order.';
     case 'preparing':
@@ -171,14 +171,14 @@ export default function OrderStatus() {
   const finished = order?.status === 'completed';
 
   return (
-    <div className="zone-night">
-      <Nav tone="night" />
-      <main className="wrap status-page">
+    <div className="page">
+      <Nav />
+      <main className="wrap narrow status-page">
         {!order && !error && <p className="status-meta">Loading your order…</p>}
         {error && !order && (
           <div className="empty">
             <p>{error}</p>
-            <Link to="/menu" className="btn btn-lemon">
+            <Link to="/menu" className="btn btn-ink">
               Back to the menu
             </Link>
           </div>
@@ -212,7 +212,7 @@ export default function OrderStatus() {
                     {changeError}
                   </p>
                 )}
-                <button type="button" className="btn btn-lemon" onClick={changeOrder} disabled={changing || secondsLeft === 0}>
+                <button type="button" className="btn btn-ink" onClick={changeOrder} disabled={changing || secondsLeft === 0}>
                   {changing ? 'Opening your cart…' : 'Change order'}
                 </button>
               </section>
@@ -279,16 +279,16 @@ export default function OrderStatus() {
 
             {order.status !== 'held' && (
               <div className="status-actions">
-                <Link to="/menu" className="btn btn-lemon">
+                <Link to="/menu" className="btn btn-ink">
                   Add more
                 </Link>
                 {order.status !== 'cancelled' && (
-                  <button type="button" className="btn btn-line btn-outline-night" onClick={getBill} disabled={billing}>
+                  <button type="button" className="btn btn-line" onClick={getBill} disabled={billing}>
                     Get the bill
                   </button>
                 )}
                 {order.source === 'table' && !finished && (
-                  <button type="button" className="btn btn-line btn-outline-night" onClick={() => open('waiter')}>
+                  <button type="button" className="btn btn-line" onClick={() => open('waiter')}>
                     Call a server
                   </button>
                 )}

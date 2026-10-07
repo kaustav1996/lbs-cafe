@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { SITE } from '../data/site';
 import { useCart } from '../state/cart';
+import { useLive } from '../state/live';
 import { asset, useUi } from '../state/ui';
-import { inr } from '../lib/format';
+import { openState } from '../lib/format';
 
 export function Checker({ className = '' }: { className?: string }) {
   return <div className={`checker ${className}`} aria-hidden="true" />;
@@ -18,76 +20,111 @@ export function useSectionLink() {
   };
 }
 
-export function Nav({ tone }: { tone: 'lemon' | 'night' }) {
+/** Open or closed right now, as a small stamp. */
+export function OpenStamp() {
+  const { settings } = useLive();
+  const status = useMemo(() => openState(settings.hours), [settings.hours]);
+  return <span className={`stamp ${status.open ? 'stamp-open' : ''}`}>{status.open ? status.label : 'Closed now'}</span>;
+}
+
+/** The slim top bar. On phones the bottom bar carries the actions; wider screens get links here too. */
+export function Nav(_props: { tone?: string } = {}) {
   const { count } = useCart();
   const { open } = useUi();
   const go = useSectionLink();
   return (
-    <header className={`nav nav-${tone}`}>
-      <div className="wrap nav-row">
-        <Link to="/" className="brand" aria-label={`${SITE.short} home`}>
-          <img src={asset('img/bandit-256.webp')} alt="" width="44" height="34" />
-          <span>LB's</span>
-        </Link>
-        <nav className="nav-links" aria-label="Main">
-          <NavLink to="/menu">Menu</NavLink>
-          <button type="button" className="linkish hide-sm" onClick={() => go('space')}>
-            The space
-          </button>
-          <button type="button" className="linkish hide-sm" onClick={() => go('visit')}>
-            Visit
-          </button>
-        </nav>
-        <div className="nav-actions">
-          <button type="button" className="btn btn-ink btn-sm" onClick={() => open('booking')}>
-            <span className="hide-sm">Book a table</span>
-            <span className="show-sm">Book</span>
-          </button>
-          <button
-            type="button"
-            className="bag"
-            onClick={() => open('cart')}
-            aria-label={count ? `Your order, ${count} items` : 'Your order is empty'}
-          >
-            <BagIcon />
-            {count > 0 && <span className="bag-count">{count}</span>}
-          </button>
+    <>
+      <Checker />
+      <header className="topbar">
+        <div className="wrap topbar-row">
+          <Link to="/" className="brand" aria-label={`${SITE.short} home`}>
+            <img src={asset('img/bandit-256.webp')} alt="" width="40" height="31" />
+            <span>LB’s</span>
+          </Link>
+          <nav className="topbar-links" aria-label="Main">
+            <NavLink to="/menu">Menu</NavLink>
+            <button type="button" className="linkish" onClick={() => go('space')}>
+              The space
+            </button>
+            <button type="button" className="linkish" onClick={() => go('visit')}>
+              Visit
+            </button>
+            <NavLink to="/card">LB’s card</NavLink>
+          </nav>
+          <div className="topbar-end">
+            <OpenStamp />
+            <button type="button" className="btn btn-ink btn-sm wide-only" onClick={() => open('booking')}>
+              Book a table
+            </button>
+            <button
+              type="button"
+              className="bag wide-only"
+              onClick={() => open('cart')}
+              aria-label={count ? `Your order, ${count} items` : 'Your order is empty'}
+            >
+              <Icon name="bag" />
+              {count > 0 && <span className="badge">{count}</span>}
+            </button>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+    </>
   );
 }
 
-function BagIcon() {
+const ICONS = {
+  menu: 'M6 4h12v16H6zM9 8h6M9 12h6M9 16h3',
+  bag: 'M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 8Zm4 0V6.5a3 3 0 0 1 6 0V8',
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Zm4 4h4',
+  calendar: 'M7 3v3M17 3v3M4 8h16M5 5h14v15H5z',
+  card: 'M4 6h16v12H4zM8 10h.01M12 10h.01M16 10h.01M8 14h8',
+} as const;
+
+export function Icon({ name }: { name: keyof typeof ICONS }) {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <path
-        d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 8Zm4 0V6.5a3 3 0 0 1 6 0V8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <path d={ICONS[name]} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-export function CartBar() {
-  const { count, subtotal } = useCart();
+/**
+ * Phone navigation, in thumb reach: the menu, the order, the table (call a server, get the bill) or a booking
+ * when no table is set, and LB's card. Hidden on wide screens, where the top bar has these.
+ */
+export function BottomBar() {
+  const { count, mode, table } = useCart();
   const { open, panel } = useUi();
-  if (!count || panel) return null;
+  const atTable = mode === 'table' && !!table.trim();
   return (
-    <div className="cartbar" role="region" aria-label="Order summary">
-      <div className="cartbar-inner">
-        <span className="cartbar-sum">
-          <b>{count} {count === 1 ? 'item' : 'items'}</b>
-          <span>{inr(subtotal)} before GST</span>
+    <nav className="bottombar" aria-label="Quick actions">
+      <NavLink to="/menu" className="tab">
+        <Icon name="menu" />
+        Menu
+      </NavLink>
+      <button type="button" className={`tab ${panel === 'cart' ? 'active' : ''}`} onClick={() => open('cart')} aria-label={count ? `Your order, ${count} items` : 'Your order'}>
+        <span className="tab-icon">
+          <Icon name="bag" />
+          {count > 0 && <span className="badge">{count}</span>}
         </span>
-        <button type="button" className="btn btn-lemon" onClick={() => open('cart')}>
-          Review order
+        Order
+      </button>
+      {atTable ? (
+        <button type="button" className={`tab ${panel === 'waiter' ? 'active' : ''}`} onClick={() => open('waiter')}>
+          <Icon name="bell" />
+          Table {table.trim()}
         </button>
-      </div>
-    </div>
+      ) : (
+        <button type="button" className={`tab ${panel === 'booking' ? 'active' : ''}`} onClick={() => open('booking')}>
+          <Icon name="calendar" />
+          Book
+        </button>
+      )}
+      <NavLink to="/card" className="tab">
+        <Icon name="card" />
+        Card
+      </NavLink>
+    </nav>
   );
 }
 
@@ -105,21 +142,11 @@ export function Footer() {
   const { open } = useUi();
   return (
     <footer className="footer">
-      <Checker />
       <div className="wrap footer-grid">
-        <div className="footer-sign">
-          <p className="display footer-line">
-            Eat loud.
-            <br />
-            Stay late.
-            <br />
-            Be a Bandit.
-          </p>
-        </div>
-        <img className="sticker footer-sticker" src={asset('img/bandit.webp')} alt="The Limon Bandit, LB's mascot" />
+        <p className="footer-line">Eat loud. Stay late. Be a Bandit.</p>
         <div className="footer-cols">
           <div>
-            <h3>Find us</h3>
+            <h2>Find us</h2>
             <p>
               {SITE.address.line1}
               <br />
@@ -130,7 +157,7 @@ export function Footer() {
             </a>
           </div>
           <div>
-            <h3>Get in touch</h3>
+            <h2>Get in touch</h2>
             <p>
               <a href={SITE.phoneHref}>{SITE.phone}</a>
               <br />
@@ -138,7 +165,7 @@ export function Footer() {
             </p>
           </div>
           <div>
-            <h3>On this site</h3>
+            <h2>On this site</h2>
             <p className="footer-links">
               <Link to="/menu">Menu</Link>
               <button type="button" className="linkish" onClick={() => open('booking')}>
@@ -147,6 +174,7 @@ export function Footer() {
               <button type="button" className="linkish" onClick={() => go('visit')}>
                 Opening hours
               </button>
+              <Link to="/card">LB’s card</Link>
               {SITE.instagram && (
                 <a href={SITE.instagram} target="_blank" rel="noreferrer">
                   Instagram

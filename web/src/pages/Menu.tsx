@@ -28,7 +28,7 @@ export default function Menu() {
   const [q, setQ] = useState('');
   const [vegOnly, setVegOnly] = useState(false);
   const cart = useCart();
-  const { open, say } = useUi();
+  const { say } = useUi();
   const [params] = useSearchParams();
   const loc = useLocation();
   const { menu: MENU, settings } = useLive();
@@ -86,9 +86,9 @@ export default function Menu() {
   const shown = cats.reduce((a, c) => a + c.items.length, 0);
 
   return (
-    <div className="zone-night menu-page">
-      <Nav tone="night" />
-      <header className="wrap menu-head">
+    <div className="page menu-page">
+      <Nav />
+      <header className="wrap narrow menu-head">
         <h1 className="display">The menu</h1>
         <p className="menu-sub">
           Prices in rupees. {Math.round(settings.gstRate * 100)}% GST is added to the bill. Tell us about allergies before you order.
@@ -145,19 +145,17 @@ export default function Menu() {
         </nav>
       )}
 
-      <div className="wrap menu-body">
+      <div className="wrap narrow menu-body">
         {cats.map(c => (
           <section key={c.id} id={c.id} className="cat" style={{ '--label': c.color } as CSSProperties} aria-labelledby={`${c.id}-h`}>
-            <div className="sleeve">
-              <div className="sleeve-face">
-                <h2 id={`${c.id}-h`} className="display">
-                  {c.name}
-                </h2>
-                <p className="num">
+            <div className="cat-head">
+              <Vinyl color={c.color} className="cat-disc" />
+              <div>
+                <h2 id={`${c.id}-h`}>{c.name}</h2>
+                <p className="muted num">
                   {c.items.length} {c.items.length === 1 ? 'item' : 'items'}, {inr(c.min)} to {inr(c.max)}
                 </p>
               </div>
-              <Vinyl color={c.color} className="sleeve-disc" />
             </div>
             <ul className="tracks">
               {c.items.map(i => (
@@ -174,7 +172,7 @@ export default function Menu() {
             </p>
             <button
               type="button"
-              className="btn btn-lemon"
+              className="btn btn-ink"
               onClick={() => {
                 setQ('');
                 setVegOnly(false);
@@ -185,12 +183,6 @@ export default function Menu() {
           </div>
         )}
       </div>
-
-      {cart.mode === 'table' && cart.table && (
-        <button type="button" className="waiter-fab" onClick={() => open('waiter')}>
-          Call a server
-        </button>
-      )}
 
       <Footer />
     </div>

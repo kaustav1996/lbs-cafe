@@ -19,7 +19,7 @@ function Drawer({ title, children, footer, label }: { title: string; label: stri
     <div className="scrim" onMouseDown={e => e.target === e.currentTarget && close()}>
       <div className="drawer" role="dialog" aria-modal="true" aria-label={label} ref={ref}>
         <div className="drawer-head">
-          <h2 className="display">{title}</h2>
+          <h2>{title}</h2>
           <button type="button" className="icon-btn" onClick={close} aria-label="Close">
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
               <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
