@@ -6,6 +6,7 @@ import { LiveProvider } from './state/live';
 import { UiProvider } from './state/ui';
 import { BottomBar, Footer, Nav, Toast } from './components/Chrome';
 import { Panels } from './components/Panels';
+import { OrderAlerts } from './components/OrderAlerts';
 import Home from './pages/Home';
 import Menu from './pages/Menu';
 import OrderStatus from './pages/OrderStatus';
@@ -69,6 +70,7 @@ createRoot(document.getElementById('root')!).render(
                   <BottomBar />
                   <Panels />
                   <Toast />
+                  <OrderAlerts />
                 </CartProvider>
               </UiProvider>
             </LiveProvider>

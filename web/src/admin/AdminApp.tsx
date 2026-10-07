@@ -12,6 +12,7 @@ import Reports from './Reports';
 import Customers from './Customers';
 import Offers from './Offers';
 import Settings from './Settings';
+import ReadyAlerts from './ReadyAlerts';
 import './admin.css';
 
 export default function AdminApp() {
@@ -101,16 +102,20 @@ const NAV = [
 
 function Shell() {
   const { me, signOut } = useAuth();
-  const { connected, soundOn, setSoundOn, chime } = useStream();
+  const { connected, soundOn, setSoundOn, chime, notify } = useStream();
   const [bookingBadge, setBookingBadge] = useState(0);
 
   useOnEvent(['order.created'], e => {
     chime('order');
-    toast(`New order #${e.number}${e.table ? `, table ${e.table}` : e.source === 'takeaway' ? ', takeaway' : ''}`);
+    const msg = `New order #${e.number}${e.table ? `, table ${e.table}` : e.source === 'takeaway' ? ', takeaway' : ''}`;
+    toast(msg);
+    notify(msg, 'Open the orders board to start it.');
   });
   useOnEvent(['service.created'], e => {
     chime('call');
-    toast(`Table ${e.table} wants ${e.kind === 'bill' ? 'the bill' : e.kind === 'water' ? 'water' : 'a server'}`);
+    const msg = `Table ${e.table} wants ${e.kind === 'bill' ? 'the bill' : e.kind === 'water' ? 'water' : 'a server'}`;
+    toast(msg);
+    notify(msg, 'Tap to open the orders board.');
   });
   useOnEvent(['reservation.created'], () => {
     setBookingBadge(n => n + 1);
@@ -137,7 +142,7 @@ function Shell() {
         </nav>
         <div className="a-side-foot">
           <button type="button" className={`a-sound ${soundOn ? 'on' : ''}`} onClick={() => setSoundOn(!soundOn)}>
-            {soundOn ? 'Sound on' : 'Turn sound on'}
+            {soundOn ? 'Sound and alerts on' : 'Turn on sound and alerts'}
           </button>
           <p className={`a-conn ${connected ? 'ok' : ''}`}>
             <i aria-hidden="true" />
@@ -153,6 +158,7 @@ function Shell() {
         </div>
       </aside>
       <main className="a-main">
+        <ReadyAlerts />
         <Routes>
           <Route index element={<Orders />} />
           <Route path="pos" element={<Pos />} />

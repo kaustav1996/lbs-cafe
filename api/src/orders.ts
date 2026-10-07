@@ -271,12 +271,13 @@ export async function addPayment(orderId: number, method: string, amountPaise: n
 
 export async function publishUpdate(orderId: number) {
   const o = await getOrder(orderId);
-  if (o && o.number !== null) bus.publish({ type: 'order.updated', orderId, number: o.number });
+  if (o && o.number !== null)
+    bus.publish({ type: 'order.updated', orderId, number: o.number, status: o.status, source: o.source, table: o.table_label });
   return o;
 }
 
 export async function getOrder(id: number) {
-  const [o] = await sql<({ id: number; number: number | null; token: string; status: string; invoice_id: number | null; invoice_number: string | null; invoice_status: string | null } & Record<string, any>)[]>`
+  const [o] = await sql<({ id: number; number: number | null; token: string; status: string; invoice_id: number | null; invoice_number: string | null; invoice_status: string | null; source: string; table_label: string | null } & Record<string, any>)[]>`
     select o.*, i.number as invoice_number, i.status as invoice_status
     from orders o left join invoices i on i.id = o.invoice_id where o.id = ${id}`;
   if (!o) return null;

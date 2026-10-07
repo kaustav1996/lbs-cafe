@@ -57,6 +57,15 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   verification with Worker secret `WHATSAPP_VERIFY_TOKEN` (value in `api/.env`, pasted into Meta's webhook form). POST
   needs `WHATSAPP_APP_SECRET` (Meta app secret, set by Kaustav) and a valid `X-Hub-Signature-256`; a STOP reply opts the
   number out. Delivery statuses come with part 2.
+- **Live order status** (7 Oct 2026): `web/src/lib/orderWatch.ts` checks this phone's orders (placed here, or the
+  order page that's open) every 4 s while the page is visible, 15 s in the background, and stops at completed or
+  cancelled. Each move pops up a notice on any page (`components/OrderAlerts.tsx`) and buzzes the phone. The order
+  page also lists the phone's other orders with their status. Staff: `order.updated` now carries status, source and
+  table; when an order turns ready every admin screen shows a banner (`admin/ReadyAlerts.tsx`) with a chime and Mark
+  served / Picked up, and a system notification if the screen is in the background and "Turn on sound and alerts"
+  was tapped (it asks for notification permission).
+- **Record player and music gear** (7 Oct 2026): 3D-tilted turntable in the home hero (`components/Gear.tsx`, Deck);
+  line drawings mark the menu (turntable), orders and bills (cassette), LB's card (Walkman), booking (boombox).
 
 ### B. Data the cafe still owes (enter in Admin once live)
 - Veg / non-veg for: Recheado Masala, Herbed Rice, Lemongrass Rice, Mexican Rice, Mix Burnt Garlic Hakka Noodles,

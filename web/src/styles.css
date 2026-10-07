@@ -1756,6 +1756,78 @@ button.buy:hover {
   }
 }
 
+/* ---------- Order alerts: a pop-up when an order moves on ---------- */
+.order-alert-slot {
+  position: fixed;
+  top: calc(var(--topbar-h) + 18px);
+  left: 16px;
+  right: 16px;
+  z-index: 70;
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+}
+.order-alert {
+  pointer-events: auto;
+  width: min(100%, 420px);
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 0 var(--ink);
+  animation: alert-in 0.22s ease-out;
+}
+.order-alert.is-ready {
+  background: var(--lime);
+}
+.order-alert-title {
+  font-weight: 800;
+  font-size: var(--t-lg);
+}
+.order-alert.is-ready mark {
+  background: var(--paper);
+}
+.order-alert-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+@keyframes alert-in {
+  from {
+    transform: translateY(-12px);
+  }
+}
+.status-live {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.your-orders {
+  display: grid;
+  gap: 10px;
+}
+.your-orders h2 {
+  font-size: var(--t-lg);
+}
+.your-orders ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 2px solid var(--ink);
+}
+.your-orders a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  border-bottom: 1.5px dashed var(--ink);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 /* ---------- Print: the guest's bill, plain ---------- */
 @media print {
   .topbar,

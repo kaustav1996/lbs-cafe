@@ -106,7 +106,9 @@ interface StreamApi {
   subscribe: (fn: Listener) => () => void;
   soundOn: boolean;
   setSoundOn: (v: boolean) => void;
-  chime: (kind?: 'order' | 'call') => void;
+  chime: (kind?: 'order' | 'call' | 'ready') => void;
+  /** A system notification, for when this screen is in the background. Needs sound on (which asks for permission). */
+  notify: (title: string, body: string) => void;
 }
 const StreamCtx = createContext<StreamApi | null>(null);
 
@@ -118,10 +120,10 @@ export function StreamProvider({ children }: { children: ReactNode }) {
   const audio = useRef<AudioContext | null>(null);
 
   const chime = useCallback(
-    (kind: 'order' | 'call' = 'order') => {
+    (kind: 'order' | 'call' | 'ready' = 'order') => {
       if (!soundOn || !audio.current) return;
       const ctx = audio.current;
-      const notes = kind === 'order' ? [880, 1175, 1568] : [660, 660];
+      const notes = kind === 'order' ? [880, 1175, 1568] : kind === 'ready' ? [1047, 1319, 1047, 1319] : [660, 660];
       notes.forEach((f, i) => {
         const o = ctx.createOscillator();
         const g = ctx.createGain();
@@ -142,6 +144,7 @@ export function StreamProvider({ children }: { children: ReactNode }) {
   const setSoundOn = useCallback((v: boolean) => {
     if (v && !audio.current) audio.current = new AudioContext();
     if (v) void audio.current?.resume();
+    if (v && 'Notification' in window && Notification.permission === 'default') void Notification.requestPermission().catch(() => {});
     setSoundOnState(v);
   }, []);
 
@@ -182,7 +185,16 @@ export function StreamProvider({ children }: { children: ReactNode }) {
     return () => void listeners.current.delete(fn);
   }, []);
 
-  const value = useMemo(() => ({ connected, subscribe, soundOn, setSoundOn, chime }), [connected, subscribe, soundOn, setSoundOn, chime]);
+  const notify = useCallback((title: string, body: string) => {
+    if (!document.hidden || !('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+      new Notification(title, { body, tag: title });
+    } catch {
+      /* some phones only allow notifications from an installed app; the chime and banner still show */
+    }
+  }, []);
+
+  const value = useMemo(() => ({ connected, subscribe, soundOn, setSoundOn, chime, notify }), [connected, subscribe, soundOn, setSoundOn, chime, notify]);
   return <StreamCtx.Provider value={value}>{children}</StreamCtx.Provider>;
 }
 

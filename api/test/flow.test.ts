@@ -154,6 +154,9 @@ test('the order shows on the live board, moves through the kitchen, and is paid 
   for (const status of ['preparing', 'ready', 'served']) {
     const r = await app.inject({ method: 'PATCH', url: `/api/admin/orders/${orderId}`, headers: auth(), payload: { status } });
     assert.equal(r.json().order.status, status);
+    // Each move tells the live feed the new status and where to take it, so waiters hear when food is ready.
+    const e = events.at(-1)!;
+    assert.equal(e.type === 'order.updated' && e.orderId === orderId && e.status === status && e.table === r.json().order.table_label, true);
   }
   const o = (await app.inject({ method: 'GET', url: `/api/admin/orders/${orderId}`, headers: auth() })).json().order;
   const pay = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/payments`, headers: auth(), payload: { method: 'upi', amountPaise: o.total_paise, reference: 'UPI-628301' } });

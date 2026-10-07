@@ -1690,3 +1690,40 @@ textarea.a-input {
   color: var(--a-ink);
   overflow-wrap: anywhere;
 }
+
+/* Orders the kitchen marked ready: stays on every screen until served. */
+.a-ready {
+  position: sticky;
+  top: 8px;
+  z-index: 30;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.a-ready-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--a-lemon);
+  color: #05191c;
+  font-size: 16px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+.a-ready-actions {
+  display: flex;
+  gap: 8px;
+}
+.a-ready-row .a-btn:not(.a-btn-primary) {
+  background: transparent;
+  color: #05191c;
+  border-color: #05191c;
+}
+.a-ready-row .a-btn-primary {
+  background: #05191c;
+  color: var(--a-lemon);
+  border-color: #05191c;
+}

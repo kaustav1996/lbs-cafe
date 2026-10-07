@@ -8,57 +8,8 @@ import { useUi } from '../state/ui';
 import { useLive } from '../state/live';
 import { forgetOrder, rememberOrder } from '../lib/orders';
 import { Cassette, Spinner } from '../components/Gear';
-
-interface PublicOrder {
-  number: number | null;
-  status: 'held' | 'new' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled';
-  holdSecondsLeft: number | null;
-  source: 'table' | 'takeaway' | 'counter';
-  table: string | null;
-  createdAt: string;
-  paymentStatus: 'unpaid' | 'partial' | 'paid';
-  totals: {
-    subtotal: number;
-    discount: number;
-    cgst: number;
-    sgst: number;
-    roundOff: number;
-    total: number;
-  };
-  lines: {
-    name: string;
-    option: string;
-    qty: number;
-    unit: number;
-    total: number;
-  }[];
-}
-
-const STEPS = [
-  { key: 'new', label: 'Received' },
-  { key: 'preparing', label: 'Preparing' },
-  { key: 'ready', label: 'Ready' },
-  { key: 'served', label: 'Served' },
-] as const;
-
-function headline(o: PublicOrder) {
-  switch (o.status) {
-    case 'held':
-      return 'Order placed. Confirm it now, or change it within a minute.';
-    case 'new':
-      return 'The kitchen has your order.';
-    case 'preparing':
-      return 'It’s being made now.';
-    case 'ready':
-      return o.source === 'takeaway' ? 'Ready. Pick it up at the counter.' : 'Ready. It’s on its way to your table.';
-    case 'served':
-      return 'Served. Enjoy.';
-    case 'completed':
-      return o.paymentStatus === 'paid' ? 'All done and paid. Thanks for coming.' : 'All done.';
-    case 'cancelled':
-      return 'This order was cancelled. Ask your server if that’s a surprise.';
-  }
-}
+import { YourOrders } from '../components/OrderAlerts';
+import { headline, noteStatus, onOrderUpdate, STEPS, watchOrder, type PublicOrder } from '../lib/orderWatch';
 
 export default function OrderStatus() {
   const { token = '' } = useParams();
@@ -93,6 +44,7 @@ export default function OrderStatus() {
       try {
         const r = await api<{ order: PublicOrder }>(`/api/public/orders/${encodeURIComponent(token)}`);
         if (!stop) {
+          noteStatus(token, r.order.status);
           setOrder(r.order);
           setDeadline(r.order.status === 'held' && r.order.holdSecondsLeft !== null ? Date.now() + r.order.holdSecondsLeft * 1000 : null);
           setError('');
@@ -102,13 +54,25 @@ export default function OrderStatus() {
       }
     };
     load();
-    const t = setInterval(load, order?.status === 'held' ? 5000 : 8000);
     return () => {
       stop = true;
-      clearInterval(t);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, reloadKey, order?.status === 'held']);
+  }, [token, reloadKey]);
+
+  // Live updates: the order watcher checks every few seconds and pops up a notice when the status moves.
+  useEffect(() => {
+    const unwatch = watchOrder(token);
+    const off = onOrderUpdate(u => {
+      if (u.token !== token) return;
+      setOrder(u.order);
+      setDeadline(u.order.status === 'held' && u.order.holdSecondsLeft !== null ? Date.now() + u.order.holdSecondsLeft * 1000 : null);
+      setError('');
+    });
+    return () => {
+      off();
+      unwatch();
+    };
+  }, [token]);
 
   // Tick the countdown; when it runs out, fetch again so the page flips to the kitchen view.
   useEffect(() => {
@@ -133,6 +97,7 @@ export default function OrderStatus() {
     setChangeError('');
     try {
       const r = await api<{ order: PublicOrder }>(`/api/public/orders/${encodeURIComponent(token)}/confirm`, { method: 'POST' });
+      noteStatus(token, r.order.status);
       setOrder(r.order);
       setDeadline(null);
       if (r.order.number) rememberOrder(token, r.order.number);
@@ -257,6 +222,7 @@ export default function OrderStatus() {
                 ))}
               </ol>
             )}
+            {order.status !== 'cancelled' && !finished && <p className="status-live">This page updates by itself as your order moves along.</p>}
 
             <section className="bill" aria-label="Bill">
               <ul className="lines">
@@ -322,6 +288,7 @@ export default function OrderStatus() {
             )}
           </>
         )}
+        <YourOrders current={token} />
       </main>
       <Footer />
     </div>
