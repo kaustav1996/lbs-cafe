@@ -20,6 +20,8 @@ repo owner (Kaustav). Read `docs/HANDOVER.md` for status, decisions and the next
   - `src/orders.ts` order pricing/GST/payments; `src/routes/{public,auth,admin}.ts`.
   - Menus: one master list (categories/items/item_options); `menus` + `menu_items` + `menu_prices` select dishes and
     override prices. Exactly one menu is live; guests, pricing and staff order screens use it (`menuTree('live')`).
+  - LB's card: `src/loyalty.ts` (the bill's one discount, stamps on payment, linking), `src/routes/card.ts` (guest card),
+    `src/messaging.ts` (WhatsApp sender; none in production yet, `CARD_CODES_IN_LOG=yes` in `.dev.vars` prints codes locally).
   - `test/flow.test.ts` end-to-end tests against a real Postgres (Hono app on Node). `scripts/smoke.ts` checks a running Worker.
 - `scripts/build-menu.mjs` regenerates `web/src/data/menu.ts` and `api/seed/menu.json` from `data/old-site-scrape.json`.
 

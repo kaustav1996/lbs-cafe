@@ -10,6 +10,7 @@ import MenuAdmin from './MenuAdmin';
 import Bookings from './Bookings';
 import Reports from './Reports';
 import Customers from './Customers';
+import Offers from './Offers';
 import Settings from './Settings';
 import './admin.css';
 
@@ -93,6 +94,7 @@ const NAV = [
   { to: '/admin/bookings', label: 'Bookings', icon: 'M7 3v3M17 3v3M4 8h16M5 5h14v15H5z' },
   { to: '/admin/menu', label: 'Menu', icon: 'M6 4h12v16H6zM9 8h6M9 12h6M9 16h3' },
   { to: '/admin/reports', label: 'Reports', icon: 'M5 20V10M12 20V4M19 20v-7' },
+  { to: '/admin/offers', label: 'Offers', icon: 'M9 15l6-6M9.5 9.5h.01M14.5 14.5h.01M4 12l8-8 8 8-8 8z' },
   { to: '/admin/customers', label: 'Customers', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0' },
   { to: '/admin/settings', label: 'Settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z' },
 ];
@@ -157,6 +159,7 @@ function Shell() {
           <Route path="bookings" element={<Bookings />} />
           <Route path="menu" element={<MenuAdmin />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="offers" element={<Offers />} />
           <Route path="customers" element={<Customers />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />

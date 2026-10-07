@@ -12,6 +12,8 @@ const { migrate, nodeSql } = await import('../src/migrate.js');
 const { withRuntime } = await import('../src/context.js');
 const { computeTotals } = await import('../src/money.js');
 const { financialYear } = await import('../src/invoices.js');
+const { LogMessenger } = await import('../src/messaging.js');
+const messenger = new LogMessenger();
 import type { CafeEvent } from '../src/events.js';
 
 const sql = nodeSql();
@@ -29,6 +31,7 @@ const rt = {
     hits.set(key, recent.length < max ? [...recent, now] : recent);
     return recent.length < max;
   },
+  messenger,
   files: {
     put: async (key: string, body: ArrayBuffer, type: string) => void stored.set(key, { body, type, size: body.byteLength }),
     get: async (key: string) => stored.get(key) ?? null,
@@ -713,4 +716,243 @@ test('invoices: the payments report has one row per transaction and its totals a
   assert.equal(csv.body.trim().split('\n').length, n + 1);
   const gst = (await app.inject({ method: 'GET', url: `/api/admin/reports/gst?from=${day}&to=${day}`, headers: auth() })).json().rows;
   assert.ok(gst.some((g: any) => g.invoice === tableInvoice.number));
+});
+
+// ---------- LB's card ----------
+const LATTE = () => find('Cafe Latte');
+/** One visit at the counter: order, bill, card linked by phone (by staff), and optionally paid in full in cash. */
+const visit = async (phone: string | null, lattes: number, pay = true) => {
+  const o = await app.inject({ method: 'POST', url: '/api/admin/orders', headers: auth(), payload: { source: 'counter', lines: [{ ...LATTE(), qty: lattes }] } });
+  assert.equal(o.statusCode, 201, o.body);
+  let inv = await invoiceFor(o.json().order.id);
+  if (phone) {
+    const l = await app.inject({ method: 'PUT', url: `/api/admin/invoices/${inv.id}/customer`, headers: auth(), payload: { phone } });
+    assert.equal(l.statusCode, 200, l.body);
+    inv = l.json().invoice;
+  }
+  if (pay && inv.totals.due > 0) inv = (await payInv(inv.id, { method: 'cash' })).json().invoice;
+  return inv;
+};
+const card = async (phone: string) =>
+  (await sql<{ id: number; stamps: number; visits: number; welcome_used_at: Date | null }[]>`select id, stamps, visits, welcome_used_at from customers where phone = ${phone}`)[0];
+/** Pretend the earlier visits happened yesterday, so today's visit can earn a stamp. */
+const nextDay = () => sql`update stamp_events set created_at = created_at - interval '1 day'`;
+const setLoyalty = (loyalty: object) => app.inject({ method: 'PUT', url: '/api/admin/settings', headers: auth(), payload: { loyalty } });
+
+test('card: welcome 20% on the first visit, a stamp a day up to 4, then 50% off capped at ₹1,000', async () => {
+  const phone = '+919800000001';
+  // Visit 1: welcome offer and the first stamp.
+  const v1 = await visit('9800000001', 2);
+  assert.equal(v1.discount.kind, 'welcome');
+  assert.equal(v1.totals.discount, Math.round(2 * 18900 * 0.2));
+  assert.equal(v1.status, 'paid');
+  assert.equal((await card(phone)).stamps, 1);
+  assert.ok((await card(phone)).welcome_used_at);
+  assert.equal((await card(phone)).visits, 1);
+
+  // Same day again: no welcome, no second stamp.
+  const v1b = await visit('9800000001', 1);
+  assert.equal(v1b.discount.kind, 'none');
+  assert.equal((await card(phone)).stamps, 1);
+
+  for (let n = 2; n <= 4; n++) {
+    await nextDay();
+    await visit('9800000001', 1);
+    assert.equal((await card(phone)).stamps, n);
+  }
+  // Visit 5: 50% off, capped at ₹1,000 (11 lattes = ₹2,079 before GST), no stamp, card back to 0.
+  await nextDay();
+  const v5 = await visit('9800000001', 11, false);
+  assert.equal(v5.discount.kind, 'reward');
+  assert.equal(v5.totals.discount, 100000);
+  assert.match(v5.totals.discountNote, /5th-visit reward/);
+  await payInv(v5.id, { method: 'cash' });
+  assert.equal((await card(phone)).stamps, 0);
+  // And round again.
+  await nextDay();
+  await visit('9800000001', 1);
+  assert.equal((await card(phone)).stamps, 1);
+});
+
+test('card: the reward is held by one bill at a time, even once that bill is part-paid', async () => {
+  const phone = '9800000002';
+  const c = (await sql<{ id: number }[]>`insert into customers (phone, stamps, welcome_used_at) values ('+919800000002', 4, now()) returning id`)[0];
+  const a = await visit(phone, 4, false);
+  assert.equal(a.discount.kind, 'reward');
+  // Part-pay bill A: it's frozen but still holds the reward.
+  assert.equal((await payInv(a.id, { method: 'cash', amountPaise: 1000 })).statusCode, 200);
+  const b = await visit(phone, 4, false);
+  assert.equal(b.discount.kind, 'none');
+  assert.equal(c.id, (await card('+919800000002')).id);
+});
+
+test('card: best discount wins; a better offer keeps the 4 stamps; members-only offers need a card', async () => {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const coffee = menu.find((cat: any) => cat.items.some((i: any) => i.name === 'Cafe Latte')).id;
+  const big = await app.inject({ method: 'POST', url: '/api/admin/offers', headers: auth(), payload: { name: 'Puja coffee', percent: 60, scope: 'sections', sections: [coffee], audience: 'members', startsOn: today, endsOn: today } });
+  assert.equal(big.statusCode, 201, big.body);
+  await sql`insert into customers (phone, stamps, welcome_used_at) values ('+919800000003', 4, now())`;
+  const v = await visit('9800000003', 2);
+  assert.equal(v.discount.kind, 'offer');
+  assert.equal(v.totals.discount, Math.round(2 * 18900 * 0.6));
+  assert.equal((await card('+919800000003')).stamps, 4); // reward kept for next time
+
+  // Without a card, a members-only offer doesn't apply.
+  const anon = await visit(null, 2, false);
+  assert.equal(anon.discount.kind, 'none');
+
+  // Pause it: the open anonymous bill is worked out again (still nothing), and a new card visit falls back.
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/offers/${big.json().id}`, headers: auth(), payload: { name: 'Puja coffee', percent: 60, scope: 'sections', sections: [coffee], audience: 'members', startsOn: today, endsOn: today, paused: true } })).statusCode, 200);
+  const everyone = await app.inject({ method: 'POST', url: '/api/admin/offers', headers: auth(), payload: { name: 'Happy hour', percent: 10, scope: 'bill', audience: 'everyone', startsOn: today, endsOn: today } });
+  assert.equal(everyone.statusCode, 201);
+  // The open anonymous bill now gets the everyone offer, worked out again when the offer was made.
+  const anonNow = (await app.inject({ method: 'GET', url: `/api/admin/invoices/${anon.id}`, headers: auth() })).json().invoice;
+  assert.equal(anonNow.discount.kind, 'offer');
+  assert.equal(anonNow.totals.discount, Math.round(2 * 18900 * 0.1));
+  // A tie between an offer and the welcome goes to the offer (welcome kept).
+  await setLoyalty({ welcome_percent: 10 });
+  const tie = await visit('9800000004', 2, false);
+  assert.equal(tie.discount.kind, 'offer');
+  await setLoyalty({ welcome_percent: 20 });
+  await app.inject({ method: 'PATCH', url: `/api/admin/offers/${everyone.json().id}`, headers: auth(), payload: { name: 'Happy hour', percent: 10, scope: 'bill', audience: 'everyone', startsOn: today, endsOn: today, paused: true } });
+  const offers = (await app.inject({ method: 'GET', url: '/api/admin/offers', headers: auth() })).json().offers;
+  assert.ok(offers.every((o: any) => o.status === 'paused'));
+  assert.equal(offers.find((o: any) => o.name === 'Puja coffee').bills, 1);
+});
+
+test('card: manual discount replaces the automatic one; discounts freeze once payment starts', async () => {
+  const v = await visit('9800000005', 3, false); // would get the welcome offer
+  assert.equal(v.discount.kind, 'welcome');
+  const manual = await app.inject({ method: 'PUT', url: `/api/admin/invoices/${v.id}/discount`, headers: auth(), payload: { mode: 'manual', amountPaise: 5000, note: 'Cold coffee' } });
+  assert.equal(manual.statusCode, 200, manual.body);
+  assert.equal(manual.json().invoice.discount.kind, 'manual');
+  assert.equal(manual.json().invoice.totals.discount, 5000);
+  const back = await app.inject({ method: 'PUT', url: `/api/admin/invoices/${v.id}/discount`, headers: auth(), payload: { mode: 'auto' } });
+  assert.equal(back.json().invoice.discount.kind, 'welcome');
+  // A per-order discount on a billed order goes to the bill.
+  const [o] = await sql<{ id: number }[]>`select id from orders where invoice_id = ${v.id}`;
+  const perOrder = await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o.id}`, headers: auth(), payload: { discountPaise: 100 } });
+  assert.equal(perOrder.json().error, 'use_invoice');
+  // Part-pay: now frozen.
+  await payInv(v.id, { method: 'cash', amountPaise: 1000 });
+  const late = await app.inject({ method: 'PUT', url: `/api/admin/invoices/${v.id}/discount`, headers: auth(), payload: { mode: 'manual', amountPaise: 9000, note: 'x' } });
+  assert.equal(late.statusCode, 409);
+  assert.equal(late.json().error, 'frozen');
+  const unlink = await app.inject({ method: 'PUT', url: `/api/admin/invoices/${v.id}/customer`, headers: auth(), payload: { phone: null } });
+  assert.equal(unlink.json().error, 'frozen');
+  // Only managers set discounts.
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } });
+  assert.equal((await app.inject({ method: 'PUT', url: `/api/admin/invoices/${v.id}/discount`, headers: { authorization: `Bearer ${login.json().token}` }, payload: { mode: 'auto' } })).statusCode, 403);
+});
+
+test('card: linking after payment gives the stamp only, never a discount or an overpaid order', async () => {
+  const o = await app.inject({ method: 'POST', url: '/api/admin/orders', headers: auth(), payload: { source: 'counter', lines: [{ ...LATTE(), qty: 2 }] } });
+  const order = o.json().order;
+  await app.inject({ method: 'POST', url: `/api/admin/orders/${order.id}/payments`, headers: auth(), payload: { method: 'cash' } });
+  const inv = await invoiceFor(order.id);
+  assert.equal(inv.status, 'paid');
+  const l = await app.inject({ method: 'PUT', url: `/api/admin/invoices/${inv.id}/customer`, headers: auth(), payload: { phone: '9800000006' } });
+  assert.equal(l.statusCode, 200, l.body);
+  assert.equal(l.json().invoice.totals.discount, 0);
+  const [row] = await sql<{ paid_paise: number; total_paise: number }[]>`select paid_paise, total_paise from orders where id = ${order.id}`;
+  assert.equal(row.paid_paise, row.total_paise);
+  const c = await card('+919800000006');
+  assert.equal(c.stamps, 1);
+  assert.equal(c.welcome_used_at, null); // no welcome was given, so it's still to come
+  // Bills paid more than a day ago can't be added.
+  await sql`update invoices set paid_at = now() - interval '2 days' where id = ${inv.id}`;
+  await sql`update invoices set customer_id = null where id = ${inv.id}`;
+  const old = await app.inject({ method: 'PUT', url: `/api/admin/invoices/${inv.id}/customer`, headers: auth(), payload: { phone: '9800000007' } });
+  assert.equal(old.json().error, 'too_old');
+});
+
+test('card: the welcome offer stops at the limit and a place is released when a bill is unlinked', async () => {
+  const used = (await app.inject({ method: 'GET', url: '/api/admin/settings', headers: auth() })).json().welcomesUsed;
+  await setLoyalty({ welcome_limit: used + 1 });
+  const first = await visit('9800000008', 1, false);
+  assert.equal(first.discount.kind, 'welcome');
+  const second = await visit('9800000009', 1, false); // the last place is held by the first bill
+  assert.equal(second.discount.kind, 'none');
+  // Unlink the first: its place frees up; re-linking the second bill now gets it.
+  await app.inject({ method: 'PUT', url: `/api/admin/invoices/${first.id}/customer`, headers: auth(), payload: { phone: null } });
+  await app.inject({ method: 'PUT', url: `/api/admin/invoices/${second.id}/customer`, headers: auth(), payload: { phone: null } });
+  const relinked = await app.inject({ method: 'PUT', url: `/api/admin/invoices/${second.id}/customer`, headers: auth(), payload: { phone: '9800000009' } });
+  assert.equal(relinked.json().invoice.discount.kind, 'welcome');
+  await setLoyalty({ welcome_limit: 420 });
+});
+
+test('card: sign in with a WhatsApp code, see the card, add a bill, opt out, delete my details', async () => {
+  const phone = '+919800000010';
+  const ask = await app.inject({ method: 'POST', url: '/api/public/card/code', payload: { phone: '98000 00010', name: 'Mitra', optIn: true } });
+  assert.equal(ask.statusCode, 204, ask.body);
+  // Nothing is saved for the number until the code is entered.
+  assert.equal((await sql`select 1 from customers where phone = ${phone}`).length, 0);
+  const code = messenger.lastCode(phone)!;
+  assert.match(code, /^\d{6}$/);
+  const wrong = await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code: code === '000000' ? '111111' : '000000' } });
+  assert.equal(wrong.json().error, 'bad_code');
+  const ok = await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code } });
+  assert.equal(ok.statusCode, 200, ok.body);
+  const token = ok.json().token;
+  const bearer = { authorization: `Bearer ${token}` };
+  // A card token is never a staff login.
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/orders', headers: bearer })).statusCode, 401);
+
+  let mine = (await app.inject({ method: 'GET', url: '/api/public/card', headers: bearer })).json();
+  assert.equal(mine.name, 'Mitra');
+  assert.equal(mine.stamps, 0);
+  assert.equal(mine.optedIn, true);
+  assert.equal(mine.welcome.percent, 20);
+
+  // Add a bill from the guest's copy.
+  const v = await visit(null, 2, false);
+  const added = await app.inject({ method: 'POST', url: `/api/public/card/invoices/${v.token}`, headers: bearer });
+  assert.equal(added.statusCode, 200, added.body);
+  assert.equal(added.json().invoice.discount.kind, 'welcome');
+  assert.deepEqual(added.json().invoice.card, { linked: true });
+  // Someone else can't take it over.
+  await app.inject({ method: 'POST', url: '/api/public/card/code', payload: { phone: '9800000011' } });
+  const other = (await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone: '+919800000011', code: messenger.lastCode('+919800000011') } })).json().token;
+  const steal = await app.inject({ method: 'POST', url: `/api/public/card/invoices/${v.token}`, headers: { authorization: `Bearer ${other}` } });
+  assert.equal(steal.json().error, 'linked');
+  await payInv(v.id, { method: 'cash' });
+  mine = (await app.inject({ method: 'GET', url: '/api/public/card', headers: bearer })).json();
+  assert.equal(mine.stamps, 1);
+  assert.equal(mine.welcome, null);
+
+  assert.equal((await app.inject({ method: 'PATCH', url: '/api/public/card', headers: bearer, payload: { optIn: false } })).json().optedIn, false);
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/public/card', headers: bearer })).statusCode, 204);
+  assert.equal((await sql`select 1 from customers where phone = ${phone}`).length, 0);
+  assert.equal((await sql`select 1 from orders where customer_phone = ${phone}`).length, 0);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/public/card', headers: bearer })).statusCode, 401);
+  // The paid bill keeps its amounts.
+  assert.equal((await app.inject({ method: 'GET', url: `/api/admin/invoices/${v.id}`, headers: auth() })).json().invoice.status, 'paid');
+});
+
+test('card: codes expire, and too many wrong tries need a new code', async () => {
+  await app.inject({ method: 'POST', url: '/api/public/card/code', payload: { phone: '9800000012' } });
+  const phone = '+919800000012';
+  for (let i = 0; i < 5; i++) await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code: '999999' } });
+  const locked = await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code: messenger.lastCode(phone) } });
+  assert.equal(locked.json().error, 'code_locked');
+  await sql`delete from customer_codes where phone = ${phone}`;
+  await app.inject({ method: 'POST', url: '/api/public/card/code', headers: { 'cf-connecting-ip': '198.51.100.20' }, payload: { phone: '9800000012' } });
+  await sql`update customer_codes set expires_at = now() - interval '1 minute' where phone = ${phone}`;
+  const expired = await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code: messenger.lastCode(phone) } });
+  assert.equal(expired.json().error, 'code_expired');
+});
+
+test('card: owner can correct stamps; the customers list shows the card', async () => {
+  const c = await card('+919800000001');
+  const set = await app.inject({ method: 'PATCH', url: `/api/admin/customers/${c.id}/stamps`, headers: auth(), payload: { stamps: 3, note: 'Missed a stamp on Sunday' } });
+  assert.equal(set.statusCode, 200, set.body);
+  assert.equal((await card('+919800000001')).stamps, 3);
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/customers/${c.id}/stamps`, headers: auth(), payload: { stamps: 9, note: 'x' } })).statusCode, 400);
+  const list = (await app.inject({ method: 'GET', url: '/api/admin/customers?search=9800000001', headers: auth() })).json().customers;
+  assert.equal(list[0].stamps, 3);
+  assert.equal(list[0].rewards, 1);
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const summary = (await app.inject({ method: 'GET', url: `/api/admin/reports/summary?from=${day}&to=${day}`, headers: auth() })).json();
+  assert.ok(summary.discounts.some((d: any) => d.kind === 'reward'));
+  assert.ok(summary.discounts.some((d: any) => d.kind === 'welcome'));
 });

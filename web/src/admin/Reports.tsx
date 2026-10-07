@@ -9,6 +9,7 @@ interface Summary {
   daily: { day: string; orders: number; amount: string }[];
   hourly: { hour: number; orders: number }[];
   topItems: { name: string; qty: number; amount: string }[];
+  discounts: { kind: string; offer: string | null; bills: number; amount: string }[];
 }
 interface GstRow { number: number; invoice: string | null; at: string; customer: string; subtotal_paise: number; discount_paise: number; taxable_paise: number; cgst_paise: number; sgst_paise: number; round_off_paise: number; total_paise: number; payment_status: string }
 
@@ -149,6 +150,18 @@ export default function Reports() {
                 <figcaption>Best sellers</figcaption>
                 <HBars rows={s.topItems.map(t => ({ label: t.name, value: t.qty, note: rs(t.amount) }))} format={v => `${v} sold`} empty="Nothing sold yet." />
               </figure>
+              <figure className="a-chart-card">
+                <figcaption>Discounts given</figcaption>
+                <HBars
+                  rows={(s.discounts ?? []).map(d => ({
+                    label: d.kind === 'offer' ? d.offer ?? 'Offer' : DISCOUNT_LABEL[d.kind] ?? d.kind,
+                    value: Number(d.amount),
+                    note: `${d.bills} ${d.bills === 1 ? 'bill' : 'bills'}`,
+                  }))}
+                  format={v => rs(v)}
+                  empty="No discounts in this range."
+                />
+              </figure>
             </div>
           )}
 
@@ -215,6 +228,7 @@ export default function Reports() {
 }
 
 interface PaymentRow { time: string; method: string; amount: number; reference: string | null; invoice: string | null; orders: string; tables: string | null; staff: string | null }
+const DISCOUNT_LABEL: Record<string, string> = { reward: '5th-visit reward', welcome: 'Welcome offer', manual: 'Manual (on a bill)', order: 'Manual (on an order)' };
 const METHOD_LABEL: Record<string, string> = { upi: 'UPI', cash: 'Cash', card: 'Card', other: 'Other' };
 
 /** Reconciliation: one row per transaction, to match against the card machine's settlement and the UPI statement. */

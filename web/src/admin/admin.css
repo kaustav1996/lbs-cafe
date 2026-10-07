@@ -1649,3 +1649,23 @@ textarea.a-input {
   color: var(--a-good);
   font-weight: 800;
 }
+.a-card-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--a-line);
+}
+.a-card-holder {
+  margin: 0;
+}
+.a-offer-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--a-muted);
+}
+.a-offer-status.running {
+  color: var(--a-good);
+}
+.a-offer-status.scheduled {
+  color: var(--a-amber);
+}

@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { sql, type Tx } from './db.js';
 import { bus } from './events.js';
 import { freeTableCheck, getSettings, HttpError, lockTable, publishTable, publishUpdate } from './orders.js';
+import { applyInvoiceDiscount, onInvoicePaid } from './loyalty.js';
 
 /** ₹840 or ₹840.50, for messages. */
 export const rupees = (paise: number) =>
@@ -47,6 +48,7 @@ export async function settleInvoiceCheck(tx: Tx, invoiceId: number | null | unde
       and exists (select 1 from orders where invoice_id = ${invoiceId} and status <> 'cancelled')
       and not exists (select 1 from orders where invoice_id = ${invoiceId} and status <> 'cancelled' and paid_paise < total_paise)
     returning id`;
+  if (r) await onInvoicePaid(tx, invoiceId); // stamps, rewards and the visit
   return !!r;
 }
 
@@ -59,8 +61,25 @@ export async function joinOpenInvoice(tx: Tx, orderId: number): Promise<number |
       and i.source = 'table' and i.status = 'open' and i.table_label = o.table_label and i.sitting = o.sitting
     returning i.id`;
   if (!r) return null;
+  await keepOrderDiscounts(tx, r.id, orderId);
+  await applyInvoiceDiscount(tx, r.id); // the bill's discount now covers this order too
   await settleInvoiceCheck(tx, r.id);
   return r.id;
+}
+
+/**
+ * A discount a manager gave on an order before it was on a bill (e.g. at New order) carries over as the bill's
+ * manual discount, so working out the bill's discount never drops it.
+ */
+async function keepOrderDiscounts(tx: Tx, invoiceId: number, onlyOrder?: number) {
+  const [d] = await tx<{ amount: number; notes: string | null }[]>`
+    select coalesce(sum(discount_paise), 0)::int as amount, string_agg(distinct discount_note, ', ') as notes
+    from orders where invoice_id = ${invoiceId} and status <> 'cancelled' and discount_paise > 0
+      and (${onlyOrder ?? null}::int is null or id = ${onlyOrder ?? null})`;
+  if (!d.amount) return;
+  await tx`update invoices set discount_kind = 'manual', manual_note = coalesce(manual_note, ${d.notes ?? 'discount'}),
+             discount_paise = case when discount_kind = 'manual' then discount_paise else 0 end + ${d.amount}
+           where id = ${invoiceId} and status = 'open'`;
 }
 
 export function publishInvoice(id: number | null | undefined) {
@@ -99,6 +118,8 @@ export async function invoiceForOrder(orderId: number, staffId: number | null, h
           select id, token from invoices where source = 'table' and status = 'open' and table_label = ${o.table_label} and sitting = ${o.sitting}`;
         if (open) {
           await tx`update orders set invoice_id = ${open.id} where id = ${o.id}`;
+          await keepOrderDiscounts(tx, open.id, o.id);
+          await applyInvoiceDiscount(tx, open.id);
           await settleInvoiceCheck(tx, open.id);
           return open;
         }
@@ -116,6 +137,9 @@ export async function invoiceForOrder(orderId: number, staffId: number | null, h
       } else {
         await tx`update orders set invoice_id = ${inv.id} where id = ${o.id}`;
       }
+      await keepOrderDiscounts(tx, inv.id);
+      // The bill's one discount (an offer running today, or a card's reward once one is linked).
+      await applyInvoiceDiscount(tx, inv.id);
       // Orders that were already paid one by one make a bill that is paid from the start.
       await settleInvoiceCheck(tx, inv.id);
       return inv;
@@ -161,9 +185,7 @@ export async function payInvoice(invoiceId: number, method: string, amountPaise:
       const paid = o.paid_paise + take;
       const status = paid >= o.total_paise ? 'paid' : 'partial';
       await tx`update orders set paid_paise = ${paid}, payment_status = ${status}, updated_at = now() where id = ${o.id}`;
-      if (status === 'paid' && o.customer_id)
-        await tx`update customers set visits = visits + 1, spent_paise = spent_paise + ${o.total_paise}, last_seen_at = now()
-                 where id = ${o.customer_id}`;
+      // Visits and spend are counted once for the whole bill when it's settled (onInvoicePaid).
       touched.push(o.id);
       left -= take;
       if (left === 0) break;
@@ -186,14 +208,17 @@ interface InvoiceRow {
   status: string;
   created_at: Date;
   paid_at: Date | null;
+  customer_id: number | null;
+  discount_kind: string;
+  manual_note: string | null;
 }
 
 /** The bill as shown to staff (with who took each payment) or to the guest (without). */
 export async function getInvoice(by: { id: number } | { token: string }, view: 'staff' | 'guest') {
   const [inv] =
     'id' in by
-      ? await sql<InvoiceRow[]>`select id, number, token, source, table_label, status, created_at, paid_at from invoices where id = ${by.id}`
-      : await sql<InvoiceRow[]>`select id, number, token, source, table_label, status, created_at, paid_at from invoices where token = ${by.token}`;
+      ? await sql<InvoiceRow[]>`select id, number, token, source, table_label, status, created_at, paid_at, customer_id, discount_kind, manual_note from invoices where id = ${by.id}`
+      : await sql<InvoiceRow[]>`select id, number, token, source, table_label, status, created_at, paid_at, customer_id, discount_kind, manual_note from invoices where token = ${by.token}`;
   if (!inv) return null;
   const s = await getSettings();
   const orders = await sql<{ id: number; number: number; gst_rate: string; subtotal_paise: number; discount_paise: number; discount_note: string | null; taxable_paise: number; cgst_paise: number; sgst_paise: number; round_off_paise: number; total_paise: number; paid_paise: number }[]>`
@@ -211,6 +236,10 @@ export async function getInvoice(by: { id: number } | { token: string }, view: '
     from payments p left join staff s on s.id = p.staff_id
     where p.order_id = any(${ids})
     group by p.txn_group, p.method order by min(p.created_at)`;
+  const [customer] = inv.customer_id
+    ? await sql<{ id: number; name: string | null; phone: string; stamps: number }[]>`select id, name, phone, stamps from customers where id = ${inv.customer_id}`
+    : [];
+  const frozen = orders.some(o => o.paid_paise > 0);
   const sum = (k: keyof (typeof orders)[number]) => orders.reduce((a, o) => a + Number(o[k]), 0);
   const rate = orders.length ? Number(orders[0].gst_rate) : Number(s.gst_rate ?? 0.18);
   const discountNotes = [...new Set(orders.map(o => o.discount_note).filter(Boolean))];
@@ -240,6 +269,9 @@ export async function getInvoice(by: { id: number } | { token: string }, view: '
       paid: sum('paid_paise'),
       due: orders.reduce((a, o) => a + Math.max(o.total_paise - o.paid_paise, 0), 0),
     },
+    discount: { kind: inv.discount_kind, manualNote: inv.manual_note, locked: inv.status === 'paid' || frozen },
+    // Guests see only whether it's on a card; staff see who.
+    card: customer ? (view === 'staff' ? { id: customer.id, name: customer.name, phone: customer.phone, stamps: customer.stamps } : { linked: true }) : null,
     payments: payments.map(p => ({ at: p.at, method: p.method, amount: p.amount, reference: p.reference, ...(view === 'staff' ? { staff: p.staff } : {}) })),
   };
 }

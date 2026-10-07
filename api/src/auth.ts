@@ -53,6 +53,21 @@ export async function verifyTablePass(token: string | undefined): Promise<TableP
   }
 }
 
+/** A signed-in LB's card holder (a phone that entered a WhatsApp code), for 90 days. */
+const CARD_TTL_SECONDS = 90 * 24 * 3600;
+export function signCustomer(id: number) {
+  return sign({ kind: 'customer', sub: String(id), exp: Math.floor(Date.now() / 1000) + CARD_TTL_SECONDS }, runtime().jwtSecret, 'HS256');
+}
+export async function verifyCustomer(token: string | undefined): Promise<number | null> {
+  if (!token) return null;
+  try {
+    const p = await verify(token, runtime().jwtSecret, 'HS256');
+    return p.kind === 'customer' && Number.isInteger(Number(p.sub)) ? Number(p.sub) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Bearer token check for every /api/admin route. Also re-checks the account is still active. */
 export const requireStaff = createMiddleware<AppEnv>(async (c, next) => {
   const h = c.req.header('authorization');

@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type postgres from 'postgres';
 import type { CafeEvent } from './events.js';
+import type { Messenger } from './messaging.js';
 
 /** Public documents (licences). R2 on Workers, in memory in tests. */
 export interface StoredFile {
@@ -33,6 +34,8 @@ export interface Runtime {
   scheduleRelease?(at: Date): void;
   /** The deployed Worker version, reported by /health. Missing outside Cloudflare. */
   version?: string;
+  /** WhatsApp sender for card sign-in codes. Missing until WhatsApp is set up: card sign-in is then off. */
+  messenger?: Messenger;
   /** Document storage. Missing where no bucket is bound. */
   files?: FileStore;
 }

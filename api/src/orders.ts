@@ -4,6 +4,7 @@ import { computeTotals } from './money.js';
 import { bus } from './events.js';
 import { runtime } from './context.js';
 import { checkReference, joinOpenInvoice, publishInvoice, refuseInvoiced, rupees, settleInvoiceCheck } from './invoices.js';
+import { applyInvoiceDiscount } from './loyalty.js';
 
 export class HttpError extends Error {
   constructor(public status: number, message: string, public code = 'bad_request') {
@@ -229,6 +230,8 @@ export async function addLines(orderId: number, lines: LineInput[]) {
                values (${orderId}, ${l.item_id}, ${l.option_id}, ${l.name}, ${l.option_label}, ${l.diet}, ${l.unit_paise}, ${l.qty}, ${l.line_paise})`;
     }
     await recalc(tx, orderId);
+    const [{ invoice_id } = { invoice_id: null }] = await tx<{ invoice_id: number | null }[]>`select invoice_id from orders where id = ${orderId}`;
+    if (invoice_id) await applyInvoiceDiscount(tx, invoice_id);
   });
   return publishUpdate(orderId);
 }

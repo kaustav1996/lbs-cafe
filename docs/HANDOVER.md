@@ -48,7 +48,11 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   orders join an open bill. Payments on a bill need a transaction ID for card/UPI and are spread over its orders;
   overpaying is refused everywhere. Guests get their copy at /bill/<token> (waiter drawer "The bill", or Get the bill
   on the order page). Reports → Payments lists one row per transaction with totals per method and a CSV.
-  Next: the loyalty card (docs/specs/2026-10-06-loyalty-campaigns.md, migration 008).
+- **LB's card, part 1** (7 Oct 2026, migration 008): stamps (one per paid bill a day, up to 4), the 5th-visit 50% reward
+  (max ₹1,000), the 20% welcome offer for the first 420, campaign offers (Admin → Offers), one discount per bill (the
+  biggest; a manager's manual discount overrides). Staff add a bill to a card by phone on the invoice. Guests see
+  their card at /card; sign-in needs WhatsApp (part 2) and says "coming soon" until then. Rules in Settings → LB's card.
+  Next: part 2, WhatsApp (Meta Cloud API, webhook, reminders, broadcasts). Needs Kaustav's Meta setup first.
 
 ### B. Data the cafe still owes (enter in Admin once live)
 - Veg / non-veg for: Recheado Masala, Herbed Rice, Lemongrass Rice, Mexican Rice, Mix Burnt Garlic Hakka Noodles,

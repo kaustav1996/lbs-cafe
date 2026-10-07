@@ -24,6 +24,7 @@ export default function Settings() {
       <PageHead title="Settings" />
       <div className="a-settings">
         <OrderingSettings />
+        <LoyaltyCard />
         <LicencesCard />
         <TablesCard />
         {can('manager') && <StaffCard />}
@@ -137,6 +138,98 @@ function OrderingSettings() {
         </form>
       </section>
     </>
+  );
+}
+
+interface Loyalty {
+  reward_stamps: number;
+  reward_percent: number;
+  reward_cap_paise: number;
+  welcome_percent: number;
+  welcome_limit: number;
+  google_review_url: string;
+  instagram_url: string;
+  reminder_days: number;
+  reminder_cap: number;
+  reminder_hour: number;
+}
+
+/** LB's card rules. Changes apply to bills worked out from now on. */
+function LoyaltyCard() {
+  const { call, can } = useAuth();
+  const [l, setL] = useState<Loyalty | null>(null);
+  const [used, setUsed] = useState(0);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    call<{ settings: { loyalty: Loyalty }; welcomesUsed: number }>('/api/admin/settings')
+      .then(r => (setL(r.settings.loyalty), setUsed(r.welcomesUsed)))
+      .catch(e => toast(errText(e), 'bad'));
+  }, [call]);
+  if (!l) return null;
+  const readOnly = !can('manager');
+  const num = (k: keyof Loyalty, label: string, opts: { min?: number; max?: number; rupees?: boolean } = {}) => (
+    <label className="a-field">
+      <span>{label}</span>
+      <input
+        className="a-input num"
+        type="number"
+        min={opts.min ?? 0}
+        max={opts.max}
+        disabled={readOnly}
+        value={opts.rupees ? Number(l[k]) / 100 : Number(l[k])}
+        onChange={e => setL({ ...l, [k]: opts.rupees ? Math.round(Number(e.target.value) * 100) : Number(e.target.value) })}
+      />
+    </label>
+  );
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await call<{ settings: { loyalty: Loyalty } }>('/api/admin/settings', { method: 'PUT', json: { loyalty: l } });
+      if (r.settings.loyalty) setL(r.settings.loyalty);
+      toast('LB’s card rules saved');
+    } catch (err) {
+      toast(errText(err), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="a-card-panel">
+      <h2>LB’s card</h2>
+      <p className="a-muted">
+        A stamp for each paid bill (one a day), up to {l.reward_stamps}; the next visit gets {l.reward_percent}% off, at most ₹{(l.reward_cap_paise / 100).toLocaleString('en-IN')}.
+        New card holders get {l.welcome_percent}% off their first visit: {used} of {l.welcome_limit} welcome offers used.
+      </p>
+      <form className="a-form" onSubmit={save}>
+        <div className="a-row2">
+          {num('reward_stamps', 'Stamps for a reward', { min: 1, max: 20 })}
+          {num('reward_percent', 'Reward, % off', { min: 1, max: 100 })}
+        </div>
+        <div className="a-row2">
+          {num('reward_cap_paise', 'Reward at most (₹)', { rupees: true })}
+          {num('welcome_percent', 'Welcome, % off', { max: 100 })}
+        </div>
+        <div className="a-row2">
+          {num('welcome_limit', 'Welcome offers in total')}
+          {num('reminder_days', 'Reminder after (days away)', { min: 1, max: 365 })}
+        </div>
+        <label className="a-field">
+          <span>Google review link</span>
+          <input className="a-input" type="url" disabled={readOnly} value={l.google_review_url} onChange={e => setL({ ...l, google_review_url: e.target.value.trim() })} placeholder="https://g.page/r/…/review" />
+        </label>
+        <label className="a-field">
+          <span>Instagram link</span>
+          <input className="a-input" type="url" disabled={readOnly} value={l.instagram_url} onChange={e => setL({ ...l, instagram_url: e.target.value.trim() })} placeholder="https://instagram.com/…" />
+        </label>
+        <p className="a-hint">The card page links to these. Nothing on the card depends on reviews or follows.</p>
+        {!readOnly && (
+          <button className="a-btn a-btn-primary" disabled={busy}>
+            Save card rules
+          </button>
+        )}
+      </form>
+    </section>
   );
 }
 

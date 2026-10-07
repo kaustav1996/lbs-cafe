@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Footer, Nav } from '../components/Chrome';
 import { api, ApiError, paiseToRupees } from '../lib/api';
 import { inr } from '../lib/format';
+import { getCardToken } from '../lib/card';
 
 interface GuestInvoice {
   number: string;
@@ -14,6 +15,7 @@ interface GuestInvoice {
   lines: { name: string; option: string; unit: number; qty: number; amount: number }[];
   totals: { subtotal: number; discount: number; discountNote: string | null; cgstRate: number; sgstRate: number; cgst: number; sgst: number; roundOff: number; total: number; paid: number; due: number };
   payments: { at: string; method: string; amount: number; reference: string | null }[];
+  card: { linked: true } | null;
 }
 
 const money = (p: number) => inr(paiseToRupees(p));
@@ -26,6 +28,22 @@ export default function Bill() {
   const { token = '' } = useParams();
   const [inv, setInv] = useState<GuestInvoice | null>(null);
   const [error, setError] = useState('');
+  const [cardMsg, setCardMsg] = useState('');
+  const [adding, setAdding] = useState(false);
+  const cardToken = getCardToken();
+  const addToCard = async () => {
+    setAdding(true);
+    setCardMsg('');
+    try {
+      const r = await api<{ invoice: GuestInvoice }>(`/api/public/card/invoices/${encodeURIComponent(token)}`, { method: 'POST', token: cardToken });
+      setInv(r.invoice);
+      setCardMsg('Added to your LB’s card. The stamp lands when the bill is paid.');
+    } catch (e) {
+      setCardMsg(e instanceof ApiError ? e.message : 'Couldn’t add it. Ask your server.');
+    } finally {
+      setAdding(false);
+    }
+  };
 
   useEffect(() => {
     document.title = "Your bill | LB's";
@@ -129,6 +147,21 @@ export default function Bill() {
                   </div>
                 )}
               </dl>
+            </section>
+
+            <section className="card-box no-print" aria-label="LB’s card">
+              {inv.card ? (
+                <p>This bill is on an LB’s card.</p>
+              ) : cardToken ? (
+                <button type="button" className="btn btn-line btn-outline-night" onClick={addToCard} disabled={adding}>
+                  Add to my LB’s card
+                </button>
+              ) : (
+                <p>
+                  Collect a stamp for this visit: <Link to={`/card?bill=${encodeURIComponent(token)}`}>open LB’s card</Link>, or give your server your number.
+                </p>
+              )}
+              {cardMsg && <p className="status-meta">{cardMsg}</p>}
             </section>
 
             <div className="status-actions no-print">

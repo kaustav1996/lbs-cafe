@@ -29,6 +29,8 @@ export interface Invoice {
     due: number;
   };
   payments: { at: string; method: string; amount: number; reference: string | null; staff?: string | null }[];
+  discount: { kind: 'none' | 'reward' | 'welcome' | 'offer' | 'manual'; manualNote: string | null; locked: boolean };
+  card: { id: number; name: string | null; phone: string; stamps: number } | null;
 }
 
 export const METHODS = [
@@ -161,6 +163,7 @@ export function InvoiceModal({ orderId, invoiceId, onClose, onChanged }: { order
                 ))}
               </ul>
             )}
+            <CardAndDiscount inv={inv} onChange={i => (show(i), onChanged?.())} />
             {inv.status === 'open' && inv.totals.due > 0 && (
               <form className="a-pay-form" onSubmit={pay}>
                 <span className="a-label">Take payment</span>
@@ -193,6 +196,92 @@ export function InvoiceModal({ orderId, invoiceId, onClose, onChanged }: { order
         </div>
       )}
     </Modal>
+  );
+}
+
+const KIND_LABEL = { none: 'No discount', reward: '5th-visit reward', welcome: 'Welcome offer', offer: 'Offer', manual: 'Manual' };
+
+/** LB's card on the bill (by phone, no code needed for staff) and the bill's one discount. */
+function CardAndDiscount({ inv, onChange }: { inv: Invoice; onChange: (i: Invoice) => void }) {
+  const { call, can } = useAuth();
+  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [mode, setMode] = useState<'auto' | 'manual'>(inv.discount.kind === 'manual' ? 'manual' : 'auto');
+  const [amount, setAmount] = useState(inv.discount.kind === 'manual' ? String(inv.totals.discount / 100) : '');
+  const [note, setNote] = useState(inv.discount.manualNote ?? '');
+  const [busy, setBusy] = useState(false);
+  const run = async (fn: () => Promise<{ invoice: Invoice }>, msg: string) => {
+    setBusy(true);
+    try {
+      onChange((await fn()).invoice);
+      toast(msg);
+    } catch (e) {
+      toast(errText(e), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const link = (e: FormEvent) => {
+    e.preventDefault();
+    if (phone.replace(/\D/g, '').length < 10) return toast('Add a 10-digit mobile number.', 'bad');
+    void run(() => call(`/api/admin/invoices/${inv.id}/customer`, { method: 'PUT', json: { phone, name: name || undefined } }), 'Added to their LB’s card');
+  };
+  const discount = (e: FormEvent) => {
+    e.preventDefault();
+    if (mode === 'auto') return void run(() => call(`/api/admin/invoices/${inv.id}/discount`, { method: 'PUT', json: { mode: 'auto' } }), 'Best offer applied');
+    const paise = Math.round(Number(amount) * 100);
+    if (!Number.isFinite(paise) || paise < 0) return toast('Enter the discount in rupees.', 'bad');
+    if (!note.trim()) return toast('Add a note saying why, for example "Cold coffee".', 'bad');
+    void run(() => call(`/api/admin/invoices/${inv.id}/discount`, { method: 'PUT', json: { mode: 'manual', amountPaise: paise, note: note.trim() } }), 'Discount set');
+  };
+  return (
+    <div className="a-card-box">
+      <span className="a-label">LB’s card</span>
+      {inv.card ? (
+        <p className="a-card-holder">
+          <b>{inv.card.name || inv.card.phone}</b> <small className="a-muted">{inv.card.name ? inv.card.phone : ''}</small>
+          <br />
+          <small className="a-muted">
+            {inv.card.stamps} {inv.card.stamps === 1 ? 'stamp' : 'stamps'}
+            {inv.discount.kind === 'reward' ? ', using the 5th-visit reward on this bill' : ''}
+          </small>{' '}
+          {!inv.discount.locked && (
+            <button type="button" className="a-link" disabled={busy} onClick={() => run(() => call(`/api/admin/invoices/${inv.id}/customer`, { method: 'PUT', json: { phone: null } }), 'Taken off the card')}>
+              Remove
+            </button>
+          )}
+        </p>
+      ) : (
+        <form className="a-inline-form" onSubmit={link}>
+          <input className="a-input" inputMode="tel" placeholder="Guest’s mobile" value={phone} onChange={e => setPhone(e.target.value)} aria-label="Guest’s mobile" />
+          <input className="a-input" placeholder="Name (optional)" value={name} onChange={e => setName(e.target.value)} aria-label="Guest’s name" />
+          <button className="a-btn a-btn-sm" disabled={busy}>
+            Add to card
+          </button>
+        </form>
+      )}
+      <p className="a-hint">
+        Discount: {inv.discount.kind !== 'none' && inv.totals.discountNote ? inv.totals.discountNote : KIND_LABEL[inv.discount.kind]}
+        {inv.discount.locked && inv.status === 'open' ? '. Fixed now that payment has started.' : '.'}
+      </p>
+      {can('manager') && !inv.discount.locked && (
+        <form className="a-inline-form" onSubmit={discount}>
+          <select className="a-input" value={mode} onChange={e => setMode(e.target.value as 'auto' | 'manual')} aria-label="Discount">
+            <option value="auto">Best offer (automatic)</option>
+            <option value="manual">Manual</option>
+          </select>
+          {mode === 'manual' && (
+            <>
+              <input className="a-input num" inputMode="decimal" placeholder="₹ off" value={amount} onChange={e => setAmount(e.target.value.replace(/[^\d.]/g, ''))} aria-label="Discount in rupees" />
+              <input className="a-input" placeholder="Why" value={note} maxLength={60} onChange={e => setNote(e.target.value)} aria-label="Reason" />
+            </>
+          )}
+          <button className="a-btn a-btn-sm" disabled={busy}>
+            Apply
+          </button>
+        </form>
+      )}
+    </div>
   );
 }
 

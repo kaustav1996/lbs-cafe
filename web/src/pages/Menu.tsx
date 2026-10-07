@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import type { MenuCategory, MenuItem } from '../data/types';
 import { Footer, Nav } from '../components/Chrome';
 import { DietMark } from '../components/DietMark';
@@ -93,6 +93,9 @@ export default function Menu() {
         <p className="menu-sub">
           Prices in rupees. {Math.round(settings.gstRate * 100)}% GST is added to the bill. Tell us about allergies before you order.
         </p>
+        <Link to="/card" className="card-banner">
+          <b>Collect stamps</b> with LB’s card. Your 5th visit is half price.
+        </Link>
         <div className="menu-tools">
           <label className="search" htmlFor="menu-search">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">

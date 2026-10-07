@@ -5,6 +5,7 @@ import { withRuntime, type FileStore, type Runtime } from './context.js';
 import { PG_OPTIONS } from './db.js';
 import type { CafeEvent } from './events.js';
 import { nextReleaseAt, releaseDue } from './orders.js';
+import { ConsoleMessenger } from './messaging.js';
 
 export interface Env {
   HYPERDRIVE: Hyperdrive;
@@ -13,6 +14,8 @@ export interface Env {
   CORS_ORIGINS: string;
   FILES?: R2Bucket;
   CF_VERSION_METADATA?: WorkerVersionMetadata;
+  /** Local development only: print card sign-in codes in the log instead of sending them. */
+  CARD_CODES_IN_LOG?: string;
 }
 
 const app = buildApp();
@@ -38,6 +41,7 @@ export default {
       scheduleRelease: at => ctx.waitUntil(hub.scheduleRelease(at.getTime()).catch(err => console.error('could not schedule a release', err))),
       files: env.FILES ? r2Store(env.FILES) : undefined,
       version: env.CF_VERSION_METADATA?.id,
+      messenger: env.CARD_CODES_IN_LOG === 'yes' ? new ConsoleMessenger() : undefined,
     };
     try {
       return await withRuntime(rt, () => app.fetch(req, env, ctx));

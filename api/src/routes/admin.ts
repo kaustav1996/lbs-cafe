@@ -8,6 +8,7 @@ import { hashPassword } from '../password.js';
 import { runtime } from '../context.js';
 import { checkUpload, FileRef } from '../files.js';
 import { getInvoice, invoiceForOrder, payInvoice, publishInvoice, refuseInvoiced, settleInvoiceCheck } from '../invoices.js';
+import { applyInvoiceDiscount, LOYALTY_DEFAULTS, linkInvoice, loyaltySettings, reapplyOpenBills, setManualDiscount, welcomesTaken } from '../loyalty.js';
 import { addLines, addPayment, createOrder, freeTableCheck, refuseHeld, releaseDue, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
 import { menuTree } from './public.js';
 
@@ -122,6 +123,10 @@ export function adminRoutes() {
       refuseHeld(o.status);
       // On a paid bill only forward status moves are allowed; an order on any bill can't change table.
       if (b.status === 'cancelled' || b.discountPaise !== undefined) await refuseInvoiced(tx, id, 'edit');
+      if (b.discountPaise !== undefined && o.invoice_id) {
+        const [i] = await tx<{ number: string }[]>`select number from invoices where id = ${o.invoice_id}`;
+        throw new HttpError(409, `Set the discount on invoice ${i.number}.`, 'use_invoice');
+      }
       if (b.table !== undefined && b.table !== o.table_label) await refuseInvoiced(tx, id, 'move');
       if (b.status) {
         const closing = b.status === 'completed' || b.status === 'cancelled';
@@ -133,7 +138,8 @@ export function adminRoutes() {
         await tx`update orders set discount_paise = ${b.discountPaise}, discount_note = ${b.discountNote ?? null} where id = ${id}`;
         await recalc(tx, id);
       }
-      // A cancellation or discount can leave the bill with nothing left to pay.
+      // A cancellation changes the bill's discount, and can leave it with nothing left to pay.
+      if (o.invoice_id && b.status === 'cancelled') await applyInvoiceDiscount(tx, o.invoice_id);
       await settleInvoiceCheck(tx, o.invoice_id);
       // Closing, paying off or moving the order may free its (old) table.
       return { freed: await freeTableCheck(tx, label, wasBusy), invoice: o.invoice_id };
@@ -168,6 +174,7 @@ export function adminRoutes() {
                  where id = ${Number(c.req.param('lineId'))} and order_id = ${id}`;
       }
       await recalc(tx, id);
+      if (o.invoice_id) await applyInvoiceDiscount(tx, o.invoice_id);
       await settleInvoiceCheck(tx, o.invoice_id);
       return { freed: await freeTableCheck(tx, label, wasBusy), invoice: o.invoice_id };
     });
@@ -199,6 +206,96 @@ export function adminRoutes() {
   app.post('/invoices/:id/payments', async c => {
     const b = z.object({ method: Method, amountPaise: z.number().int().positive().optional(), reference: z.string().max(60).optional() }).parse(await c.req.json());
     return c.json({ invoice: await payInvoice(Number(c.req.param('id')), b.method, b.amountPaise, c.get('staff').sub, b.reference) });
+  });
+
+  // Put a bill on a customer's LB's card by phone (staff don't need the customer's code), or take it off.
+  app.put('/invoices/:id/customer', async c => {
+    const b = z.object({ phone: z.string().trim().max(20).nullable(), name: z.string().trim().max(60).optional() }).parse(await c.req.json());
+    let customerId: number | null = null;
+    if (b.phone) {
+      const phone = normalisePhone(b.phone);
+      if (!phone) throw new HttpError(400, 'Add a 10-digit mobile number.', 'bad_phone');
+      customerId = await sql.begin(tx => upsertCustomer(tx, phone, b.name));
+    }
+    await linkInvoice(Number(c.req.param('id')), customerId, 'staff');
+    return c.json({ invoice: await getInvoice({ id: Number(c.req.param('id')) }, 'staff') });
+  });
+
+  // A manager's own discount on a bill, or back to the best automatic one.
+  app.put('/invoices/:id/discount', atLeast('manager'), async c => {
+    const b = z
+      .discriminatedUnion('mode', [
+        z.object({ mode: z.literal('auto') }),
+        z.object({ mode: z.literal('manual'), amountPaise: z.number().int().min(0).max(10_000_000), note: z.string().trim().min(1).max(60) }),
+      ])
+      .parse(await c.req.json());
+    await setManualDiscount(Number(c.req.param('id')), b.mode === 'manual' ? { amountPaise: b.amountPaise, note: b.note } : null);
+    return c.json({ invoice: await getInvoice({ id: Number(c.req.param('id')) }, 'staff') });
+  });
+
+  // ---------- Campaign offers ----------
+  const OfferIn = z
+    .object({
+      name: z.string().trim().min(1).max(40),
+      percent: z.number().int().min(1).max(90),
+      scope: z.enum(['bill', 'sections']),
+      sections: z.array(z.number().int().positive()).max(30).default([]),
+      audience: z.enum(['everyone', 'members']),
+      startsOn: Day,
+      endsOn: Day,
+      paused: z.boolean().default(false),
+    })
+    .refine(o => o.endsOn >= o.startsOn, { message: 'The end date is before the start date.', path: ['endsOn'] })
+    .refine(o => o.scope === 'bill' || o.sections.length > 0, { message: 'Pick at least one section.', path: ['sections'] });
+
+  app.get('/offers', async c => {
+    const offers = await sql`
+      select o.id, o.name, o.percent, o.scope, o.audience, to_char(o.starts_on, 'YYYY-MM-DD') as "startsOn",
+             to_char(o.ends_on, 'YYYY-MM-DD') as "endsOn", o.paused,
+             coalesce((select array_agg(category_id) from offer_sections s where s.offer_id = o.id), '{}') as sections,
+             case when o.paused then 'paused'
+                  when o.ends_on < (now() at time zone 'Asia/Kolkata')::date then 'ended'
+                  when o.starts_on > (now() at time zone 'Asia/Kolkata')::date then 'scheduled'
+                  else 'running' end as status,
+             (select count(*)::int from invoices i where i.offer_id = o.id and i.status = 'paid') as bills,
+             (select coalesce(sum(i.discount_paise), 0)::int from invoices i where i.offer_id = o.id and i.status = 'paid') as given
+      from offers o order by o.starts_on desc, o.id desc`;
+    return c.json({ offers });
+  });
+
+  const saveOffer = async (tx: any, id: number, o: z.infer<typeof OfferIn>) => {
+    await tx`delete from offer_sections where offer_id = ${id}`;
+    if (o.scope === 'sections')
+      for (const cat of new Set(o.sections)) await tx`insert into offer_sections (offer_id, category_id) values (${id}, ${cat})`;
+  };
+
+  app.post('/offers', atLeast('manager'), async c => {
+    const o = OfferIn.parse(await c.req.json());
+    const id = await sql.begin(async tx => {
+      const [r] = await tx<{ id: number }[]>`
+        insert into offers (name, percent, scope, audience, starts_on, ends_on, paused, created_by)
+        values (${o.name}, ${o.percent}, ${o.scope}, ${o.audience}, ${o.startsOn}, ${o.endsOn}, ${o.paused}, ${c.get('staff').sub})
+        returning id`;
+      await saveOffer(tx, r.id, o);
+      return r.id;
+    });
+    await reapplyOpenBills();
+    return c.json({ id }, 201);
+  });
+
+  app.patch('/offers/:id', atLeast('manager'), async c => {
+    const id = Number(c.req.param('id'));
+    const o = OfferIn.parse(await c.req.json());
+    await sql.begin(async tx => {
+      const [r] = await tx`
+        update offers set name = ${o.name}, percent = ${o.percent}, scope = ${o.scope}, audience = ${o.audience},
+                          starts_on = ${o.startsOn}, ends_on = ${o.endsOn}, paused = ${o.paused}
+        where id = ${id} returning id`;
+      if (!r) throw new HttpError(404, 'Offer not found.', 'not_found');
+      await saveOffer(tx, id, o);
+    });
+    await reapplyOpenBills();
+    return c.json({ ok: true });
   });
 
   // ---------- Service requests (call a server) ----------
@@ -525,7 +622,13 @@ export function adminRoutes() {
       from order_lines l join orders o on o.id = l.order_id
       where o.status not in ('cancelled', 'held') and o.created_at >= ${start} and o.created_at < ${end}
       group by l.name order by qty desc, amount desc limit 10`;
-    return c.json({ range: q, totals: { ...totals, cancelled }, byMethod, bySource, daily, hourly, topItems });
+    const discounts = await sql`
+      select coalesce(i.discount_kind, 'order') as kind, max(f.name) as offer, count(distinct coalesce(i.id, -o.id))::int as bills,
+             sum(o.discount_paise)::bigint as amount
+      from orders o left join invoices i on i.id = o.invoice_id left join offers f on f.id = i.offer_id
+      where o.status not in ('cancelled', 'held') and o.discount_paise > 0 and o.created_at >= ${start} and o.created_at < ${end}
+      group by coalesce(i.discount_kind, 'order'), i.offer_id order by amount desc`;
+    return c.json({ range: q, totals: { ...totals, cancelled }, byMethod, bySource, daily, hourly, topItems, discounts });
   });
 
   app.get('/reports/gst', async c => {
@@ -589,21 +692,42 @@ export function adminRoutes() {
     const s = q.search ? `%${q.search}%` : null;
     const rows = await sql`
       select c.*, (select count(*)::int from orders o where o.customer_id = c.id) as orders,
-                  (select count(*)::int from reservations r where r.customer_id = c.id) as bookings
+                  (select count(*)::int from reservations r where r.customer_id = c.id) as bookings,
+                  (select count(*)::int from stamp_events e where e.customer_id = c.id and e.kind = 'reward_used') as rewards
       from customers c
       where ${s}::text is null or c.name ilike ${s} or c.phone like ${s} or c.email ilike ${s}
       order by c.last_seen_at desc limit 500`;
     if (q.format === 'csv') {
       return c.body(csv([
-        ['Name', 'Phone', 'Email', 'Orders', 'Bookings', 'Paid visits', 'Spent (₹)', 'First seen', 'Last seen'],
-        ...rows.map(r => [r.name, r.phone, r.email, r.orders, r.bookings, r.visits, r2(Number(r.spent_paise)), r.created_at.toISOString().slice(0, 10), r.last_seen_at.toISOString().slice(0, 10)]),
+        ['Name', 'Phone', 'Email', 'Orders', 'Bookings', 'Paid visits', 'Spent (₹)', 'Stamps', 'Rewards used', 'Welcome used', 'WhatsApp opt-in', 'Last visit', 'First seen', 'Last seen'],
+        ...rows.map(r => [
+          r.name, r.phone, r.email, r.orders, r.bookings, r.visits, r2(Number(r.spent_paise)), r.stamps, r.rewards,
+          r.welcome_used_at ? r.welcome_used_at.toISOString().slice(0, 10) : '', r.opted_in ? 'Yes' : 'No',
+          r.last_visit_at ? r.last_visit_at.toISOString().slice(0, 10) : '', r.created_at.toISOString().slice(0, 10), r.last_seen_at.toISOString().slice(0, 10),
+        ]),
       ]), 200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="lbs-customers.csv"' });
     }
     return c.json({ customers: rows });
   });
 
+  // Owner-only correction to a customer's stamps (logged with a note).
+  app.patch('/customers/:id/stamps', atLeast('owner'), async c => {
+    const id = Number(c.req.param('id'));
+    const ls = await loyaltySettings();
+    const b = z.object({ stamps: z.number().int().min(0).max(ls.reward_stamps), note: z.string().trim().min(1).max(120) }).parse(await c.req.json());
+    await sql.begin(async tx => {
+      const [r] = await tx`update customers set stamps = ${b.stamps} where id = ${id} returning id`;
+      if (!r) throw new HttpError(404, 'Customer not found.', 'not_found');
+      await tx`insert into stamp_events (customer_id, kind, note, staff_id) values (${id}, 'manual_adjust', ${`Set to ${b.stamps}: ${b.note}`}, ${c.get('staff').sub})`;
+    });
+    return c.json({ ok: true });
+  });
+
   // ---------- Settings & tables ----------
-  app.get('/settings', async c => c.json({ settings: await getSettings() }));
+  app.get('/settings', async c => {
+    const s = await getSettings();
+    return c.json({ settings: { ...s, loyalty: { ...LOYALTY_DEFAULTS, ...(s.loyalty ?? {}) } }, welcomesUsed: await welcomesTaken(sql) });
+  });
 
   app.put('/settings', atLeast('manager'), async c => {
     const b = z
@@ -614,6 +738,21 @@ export function adminRoutes() {
         takeaway_enabled: z.boolean().optional(),
         booking_enabled: z.boolean().optional(),
         hold_seconds: z.number().int().min(0).max(300).optional(),
+        loyalty: z
+          .object({
+            reward_stamps: z.number().int().min(1).max(20),
+            reward_percent: z.number().int().min(1).max(100),
+            reward_cap_paise: z.number().int().min(0).max(10_000_000),
+            welcome_percent: z.number().int().min(0).max(100),
+            welcome_limit: z.number().int().min(0).max(1_000_000),
+            google_review_url: z.union([z.string().url().max(300), z.literal('')]),
+            instagram_url: z.union([z.string().url().max(300), z.literal('')]),
+            reminder_days: z.number().int().min(1).max(365),
+            reminder_cap: z.number().int().min(0).max(50),
+            reminder_hour: z.number().int().min(0).max(23),
+          })
+          .partial()
+          .optional(),
         cafe: z
           .object({ name: z.string().max(80), address: z.string().max(160), phone: z.string().max(20), email: z.string().max(80), gstin: z.string().max(15) })
           .partial()
@@ -636,6 +775,12 @@ export function adminRoutes() {
     const before = b.licences ? (((await getSettings()).licences ?? []) as { file?: { key: string } | null }[]) : [];
     for (const [k, v] of Object.entries(b)) {
       if (v === undefined) continue;
+      if (k === 'loyalty') {
+        const merged = { ...(await loyaltySettings()), ...(v as object) };
+        await sql`insert into settings (key, value) values ('loyalty', ${sql.json(merged as never)})
+                  on conflict (key) do update set value = excluded.value`;
+        continue;
+      }
       if (k === 'cafe') {
         await sql`update settings set value = value || ${sql.json(v as never)} where key = 'cafe'`;
       } else {
