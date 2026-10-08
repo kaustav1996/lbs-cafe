@@ -34,11 +34,11 @@ function Svg({ w, h, size, className = '', children }: { w: number; h: number; s
   return (
     <button
       type="button"
-      className={`gear gear-btn ${music.playing ? 'is-playing' : ''} ${className}`}
+      className={`gear gear-btn ${music.playing ? 'is-playing' : ''} ${music.loading ? 'is-loading' : ''} ${className}`}
       onClick={music.toggle}
-      aria-pressed={music.playing}
-      aria-label={music.playing ? 'Pause the music' : 'Play LB’s set'}
-      title={music.playing ? 'Pause the music' : 'Play LB’s set'}
+      aria-pressed={music.playing || music.loading}
+      aria-label={music.loading ? 'Starting the music' : music.playing ? 'Pause the music' : 'Play LB’s set'}
+      title={music.loading ? 'Starting the music' : music.playing ? 'Pause the music' : 'Play LB’s set'}
     >
       {svg}
     </button>
@@ -166,11 +166,11 @@ export function Boombox({ className, size }: GearProps) {
 export function Deck() {
   const music = useMusic();
   const [spin, setSpin] = useState(() => !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
-  const on = music.available ? music.playing : spin;
+  const on = music.available ? music.playing || music.loading : spin;
   const setOn = () => (music.available ? music.toggle() : setSpin(v => !v));
   const [fast, setFast] = useState(false);
   return (
-    <div className={`deck ${on ? 'deck-on' : ''} ${fast ? 'deck-45' : ''}`}>
+    <div className={`deck ${on ? 'deck-on' : ''} ${music.loading ? 'deck-loading' : ''} ${fast ? 'deck-45' : ''}`}>
       <div className="deck-body">
         <button type="button" className="deck-speed" onClick={() => setFast(f => !f)} aria-label={`Speed ${fast ? 45 : 33} rpm. Switch to ${fast ? 33 : 45}.`}>
           {fast ? 45 : 33}

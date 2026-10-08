@@ -71,3 +71,15 @@ export function musicKey(name: string, type: string): MusicFile['key'] {
 
 /** The public file paths: licence scans and the music. */
 export const PUBLIC_FILE = /^(licences\/[a-z0-9-]+\.(pdf|jpg|png|webp)|music\/[a-z0-9-]+\.(mp3|m4a))$/;
+
+/**
+ * An MP3 often starts with an ID3 tag holding cover art, sometimes megabytes of it, which a browser downloads
+ * before it can play or jump to the start time. Given the file's first bytes, this says how many bytes that tag
+ * takes (0 when there's none), so the stored copy can start at the audio. The audio itself is untouched.
+ */
+export function id3Length(first: Uint8Array, size: number, type: AudioKind) {
+  if (type !== 'audio/mpeg' || first.length < 10 || first[0] !== 0x49 || first[1] !== 0x44 || first[2] !== 0x33) return 0;
+  const tag = ((first[6] & 0x7f) << 21) | ((first[7] & 0x7f) << 14) | ((first[8] & 0x7f) << 7) | (first[9] & 0x7f);
+  const total = 10 + tag + (first[5] & 0x10 ? 10 : 0);
+  return total < size ? total : 0;
+}

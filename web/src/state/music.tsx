@@ -11,14 +11,17 @@ import { useLive } from './live';
 interface MusicApi {
   /** There's music to play (uploaded in Admin). */
   available: boolean;
+  /** Sound is coming out. */
   playing: boolean;
+  /** Play was pressed and the sound is on its way (downloading or seeking). */
+  loading: boolean;
   /** Played at least once on this visit, so the pause control stays in reach. */
   started: boolean;
   toggle: () => void;
   pause: () => void;
 }
 
-const Ctx = createContext<MusicApi>({ available: false, playing: false, started: false, toggle: () => {}, pause: () => {} });
+const Ctx = createContext<MusicApi>({ available: false, playing: false, loading: false, started: false, toggle: () => {}, pause: () => {} });
 const POS_KEY = 'lbs.music.pos';
 
 function readPos(url: string): number | null {
@@ -43,6 +46,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const src = music ? (/^https?:/.test(music.url) ? music.url : (API_URL || '') + music.url) : null;
   const audio = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [started, setStarted] = useState(false);
   const win = useRef({ start: 0, end: null as number | null });
   win.current = { start: music?.start ?? 0, end: music?.end ?? null };
@@ -67,8 +71,14 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       back();
       void a.play().catch(() => setPlaying(false));
     });
-    a.addEventListener('play', () => setPlaying(true));
+    a.addEventListener('play', () => setLoading(a.readyState < 3));
+    a.addEventListener('waiting', () => !a.paused && setLoading(true));
+    a.addEventListener('playing', () => {
+      setLoading(false);
+      setPlaying(true);
+    });
     a.addEventListener('pause', () => {
+      setLoading(false);
       setPlaying(false);
       writePos(src, a.currentTime);
     });
@@ -102,6 +112,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       audio.current.pause();
       audio.current = null;
       setPlaying(false);
+      setLoading(false);
     }
   }, [src]);
 
@@ -110,12 +121,16 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (!a) return;
     if (a.paused) {
       setStarted(true);
-      void a.play().catch(() => setPlaying(false));
+      setLoading(true);
+      void a.play().catch(() => {
+        setLoading(false);
+        setPlaying(false);
+      });
     } else a.pause();
   }, [get]);
   const pause = useCallback(() => audio.current?.pause(), []);
 
-  const value = useMemo(() => ({ available: !!src, playing, started, toggle, pause }), [src, playing, started, toggle, pause]);
+  const value = useMemo(() => ({ available: !!src, playing, loading, started, toggle, pause }), [src, playing, loading, started, toggle, pause]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

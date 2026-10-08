@@ -1066,13 +1066,15 @@ test('roles: a chef sees only the kitchen and moves orders up to ready; a server
 });
 
 test('music: a manager uploads an MP3, sets start and end, and it streams in ranges; bad files and servers are refused', async () => {
+  // A 110-byte ID3 tag (say, cover art), then MPEG audio frames.
   const mp3 = new Uint8Array(4000);
-  mp3.set([0x49, 0x44, 0x33, 0x04]); // an ID3 tag
-  for (let i = 4; i < mp3.length; i++) mp3[i] = i % 251;
+  for (let i = 0; i < mp3.length; i++) mp3[i] = i % 251;
+  mp3.set([0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 100]);
+  mp3.set([0xff, 0xfb, 0x90, 0x64], 110);
   const put = (raw: Uint8Array, type: string, headers = auth()) =>
     app.inject({ method: 'PUT', url: '/api/admin/music', raw, headers: { ...headers, 'content-type': type, 'x-file-name': encodeURIComponent('LB’s set.mp3') } });
 
-  assert.equal((await put(new Uint8Array([0x25, 0x50, 0x44, 0x46, 1, 2, 3]), 'audio/mpeg')).statusCode, 400); // a PDF in disguise
+  assert.equal((await put(new Uint8Array([0x25, 0x50, 0x44, 0x46, 1, 2, 3, 4, 5, 6, 7, 8]), 'audio/mpeg')).statusCode, 400); // a PDF in disguise
   assert.equal((await put(mp3, 'application/pdf')).statusCode, 400);
   const login = await app.inject({ method: 'POST', url: '/api/auth/login', headers: { 'cf-connecting-ip': '203.0.113.40' }, payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } });
   assert.equal(login.statusCode, 200, login.body);
@@ -1094,9 +1096,13 @@ test('music: a manager uploads an MP3, sets start and end, and it streams in ran
   const whole = await app.inject({ method: 'GET', url: pub.url });
   assert.equal(whole.statusCode, 200);
   assert.equal(whole.headers['accept-ranges'], 'bytes');
+  // The tag is gone, so playback starts with the audio itself.
+  assert.equal(up.json().settings.music.file.size, 3890);
+  const start = await app.inject({ method: 'GET', url: pub.url, headers: { range: 'bytes=0-1' } });
+  assert.equal(start.headers['content-range'], 'bytes 0-1/3890');
   const part = await app.inject({ method: 'GET', url: pub.url, headers: { range: 'bytes=100-199' } });
   assert.equal(part.statusCode, 206);
-  assert.equal(part.headers['content-range'], 'bytes 100-199/4000');
+  assert.equal(part.headers['content-range'], 'bytes 100-199/3890');
   assert.equal(part.headers['content-length'], '100');
   assert.equal((await app.inject({ method: 'GET', url: pub.url, headers: { range: 'bytes=9000-' } })).statusCode, 416);
 

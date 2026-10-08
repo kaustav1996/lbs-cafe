@@ -81,13 +81,15 @@ function MusicButton() {
   return (
     <button
       type="button"
-      className={`music-btn ${music.playing ? 'is-playing' : ''}`}
+      className={`music-btn ${music.playing || music.loading ? 'is-playing' : ''}`}
       onClick={music.toggle}
       aria-pressed={music.playing}
       aria-label={music.playing ? 'Pause the music' : 'Play the music'}
       title={music.playing ? 'Pause the music' : 'Play the music'}
     >
-      {music.playing ? (
+      {music.loading ? (
+        <span className="music-wait" aria-hidden="true" />
+      ) : music.playing ? (
         <span className="music-bars" aria-hidden="true">
           <i />
           <i />

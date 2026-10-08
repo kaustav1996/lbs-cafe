@@ -6,7 +6,7 @@ import { bus } from '../events.js';
 import { atLeast, cooks, isManager, requireStaff, type AppEnv } from '../auth.js';
 import { hashPassword } from '../password.js';
 import { runtime } from '../context.js';
-import { audioKind, audioMagic, checkUpload, FileRef, MAX_AUDIO_BYTES, musicKey, type MusicFile } from '../files.js';
+import { audioKind, audioMagic, checkUpload, FileRef, MAX_AUDIO_BYTES, musicKey, id3Length, type MusicFile } from '../files.js';
 import { getInvoice, invoiceForOrder, payInvoice, publishInvoice, refuseInvoiced, settleInvoiceCheck } from '../invoices.js';
 import { applyInvoiceDiscount, LOYALTY_DEFAULTS, linkInvoice, loyaltySettings, reapplyOpenBills, setManualDiscount, welcomesTaken } from '../loyalty.js';
 import { addLines, addPayment, createOrder, freeTableCheck, refuseHeld, releaseDue, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
@@ -843,11 +843,25 @@ export function adminRoutes() {
     const size = Number(c.req.header('content-length') ?? 0);
     if (!size || !c.req.raw.body) throw new HttpError(400, 'That file is empty. Pick the audio file again.', 'empty_file');
     if (size > MAX_AUDIO_BYTES) throw new HttpError(413, 'That file is over 95 MB. Export it at 96 or 128 kbps and try again.', 'too_large');
-    const key = musicKey(name, type);
+    // Stored as sent first (a native stream, never held in memory), then, if it opens with a big ID3 tag, copied
+    // from the end of the tag so guests' phones start on the audio.
+    const bytesOf = async (f: { body: ReadableStream | ArrayBuffer } | null) =>
+      f ? new Uint8Array(f.body instanceof ArrayBuffer ? f.body : await new Response(f.body).arrayBuffer()) : new Uint8Array();
+    let key = musicKey(name, type);
     await store.put(key, c.req.raw.body, type);
+    const sent = await store.get(key, { offset: 0, length: 16 });
+    const skip = sent ? id3Length(await bytesOf(sent), sent.size, type) : 0;
+    if (sent && skip) {
+      const rest = await store.get(key, { offset: skip, length: sent.size - skip });
+      const trimmed = musicKey(name, type);
+      if (rest) {
+        await store.put(trimmed, rest.body, type);
+        await store.delete(key).catch(() => {});
+        key = trimmed;
+      }
+    }
     const head = await store.get(key, { offset: 0, length: 16 });
-    const first = head ? new Uint8Array(head.body instanceof ArrayBuffer ? head.body : await new Response(head.body).arrayBuffer()) : new Uint8Array();
-    if (!head || !audioMagic(type, first)) {
+    if (!head || !audioMagic(type, await bytesOf(head))) {
       await store.delete(key).catch(() => {});
       throw new HttpError(400, 'That doesn’t look like an MP3 or M4A file. Export the set as MP3 and upload that.', 'bad_file_type');
     }

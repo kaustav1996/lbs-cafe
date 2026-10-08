@@ -2073,3 +2073,32 @@ button.buy:hover {
     transform: scaleY(0.3);
   }
 }
+
+/* Play pressed, sound on its way: the arm is on, the record waits, the light blinks. */
+.deck-loading .deck-record {
+  animation-play-state: paused;
+}
+.deck-loading .deck-led {
+  animation: led-blink 0.8s steps(2, jump-none) infinite;
+}
+@keyframes led-blink {
+  50% {
+    background: #6f7472;
+  }
+}
+.gear-btn.is-loading {
+  animation: gear-wait 1s ease-in-out infinite alternate;
+}
+@keyframes gear-wait {
+  to {
+    opacity: 0.55;
+  }
+}
+.music-wait {
+  width: 16px;
+  height: 16px;
+  border: 2.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: deck-spin 0.8s linear infinite;
+}
