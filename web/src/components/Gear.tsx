@@ -1,17 +1,21 @@
 import { useState, type ReactNode } from 'react';
 import { asset } from '../state/ui';
+import { useMusic } from '../state/music';
 
 /**
  * LB's music gear, drawn in the ticket style: black ink lines (2px at their drawn size), lime and cyan accents.
  * Each one marks a part of the site: turntable = menu, cassette = your order and bill, Walkman = LB's card,
  * boombox = booking. They're decorative (aria-hidden); the text next to them carries the meaning.
+ * Once there's music (Admin, Settings, Music), each one is also a play/pause button for it, and its reels or
+ * record turn while it plays.
  */
 type GearProps = { className?: string; size?: number };
 
 function Svg({ w, h, size, className = '', children }: { w: number; h: number; size?: number; className?: string; children: ReactNode }) {
-  return (
+  const music = useMusic();
+  const svg = (
     <svg
-      className={`gear ${className}`}
+      className={music.available ? 'gear-svg' : `gear ${className}`}
       viewBox={`0 0 ${w} ${h}`}
       width={size}
       height={size ? (size * h) / w : undefined}
@@ -25,6 +29,19 @@ function Svg({ w, h, size, className = '', children }: { w: number; h: number; s
     >
       {children}
     </svg>
+  );
+  if (!music.available) return svg;
+  return (
+    <button
+      type="button"
+      className={`gear gear-btn ${music.playing ? 'is-playing' : ''} ${className}`}
+      onClick={music.toggle}
+      aria-pressed={music.playing}
+      aria-label={music.playing ? 'Pause the music' : 'Play LB’s set'}
+      title={music.playing ? 'Pause the music' : 'Play LB’s set'}
+    >
+      {svg}
+    </button>
   );
 }
 
@@ -49,7 +66,7 @@ function Reel({ cx, cy, r }: { cx: number; cy: number; r: number }) {
     );
   });
   return (
-    <g>
+    <g className="reel">
       <circle cx={cx} cy={cy} r={r} fill={PAPER} />
       {spokes}
     </g>
@@ -63,11 +80,14 @@ export function Turntable({ className, size }: GearProps) {
       <line x1="16" y1="106" x2="16" y2="113" />
       <line x1="144" y1="106" x2="144" y2="113" />
       <circle cx="62" cy="59" r="40" fill={PAPER} />
-      <circle cx="62" cy="59" r="35" fill={INK} stroke="none" />
-      <circle cx="62" cy="59" r="27" stroke={PAPER} strokeOpacity="0.35" strokeWidth="1.5" />
-      <circle cx="62" cy="59" r="20" stroke={PAPER} strokeOpacity="0.35" strokeWidth="1.5" />
-      <circle cx="62" cy="59" r="12" fill={LIME} stroke="none" />
-      <circle cx="62" cy="59" r="2.5" fill={INK} stroke="none" />
+      <g className="reel reel-slow">
+        <circle cx="62" cy="59" r="35" fill={INK} stroke="none" />
+        <circle cx="62" cy="59" r="27" stroke={PAPER} strokeOpacity="0.35" strokeWidth="1.5" />
+        <circle cx="62" cy="59" r="20" stroke={PAPER} strokeOpacity="0.35" strokeWidth="1.5" />
+        <circle cx="62" cy="59" r="12" fill={LIME} stroke="none" />
+        <path d="M62 49 A10 10 0 0 1 72 59" stroke={INK} strokeWidth="2" />
+        <circle cx="62" cy="59" r="2.5" fill={INK} stroke="none" />
+      </g>
       <circle cx="128" cy="30" r="8" fill={CYAN} />
       <path d="M128 30 L134 66 L108 84" strokeWidth="4" />
       <rect x="100" y="80" width="14" height="9" rx="2" transform="rotate(-32 107 84)" fill={INK} />
@@ -139,11 +159,15 @@ export function Boombox({ className, size }: GearProps) {
 
 /**
  * The record player in the home hero: a rounded deck tilted in 3D, a spinning record and a tonearm that swings
- * onto the record when you switch it on. It plays while the page is open, and starts switched off for
- * people who ask for reduced motion.
+ * onto the record when you switch it on. With music uploaded, On plays LB's set and Off pauses it (browsers only
+ * play sound after a tap, so it starts off). Without music it just spins while the page is open, and starts
+ * switched off for people who ask for reduced motion.
  */
 export function Deck() {
-  const [on, setOn] = useState(() => !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  const music = useMusic();
+  const [spin, setSpin] = useState(() => !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  const on = music.available ? music.playing : spin;
+  const setOn = () => (music.available ? music.toggle() : setSpin(v => !v));
   const [fast, setFast] = useState(false);
   return (
     <div className={`deck ${on ? 'deck-on' : ''} ${fast ? 'deck-45' : ''}`}>
@@ -165,7 +189,7 @@ export function Deck() {
           <span className="deck-rod" />
           <span className="deck-head" />
         </div>
-        <button type="button" className="deck-power" aria-pressed={on} onClick={() => setOn(v => !v)}>
+        <button type="button" className="deck-power" aria-pressed={on} onClick={setOn}>
           <span className="deck-led" aria-hidden="true" />
           <span className="deck-switch" aria-hidden="true">
             <span />
@@ -173,7 +197,7 @@ export function Deck() {
           <span className="deck-power-text">
             <span className={on ? '' : 'is-on'}>Off</span> <span className={on ? 'is-on' : ''}>On</span>
           </span>
-          <span className="sr-only">Record player</span>
+          <span className="sr-only">{music.available ? 'Play LB’s set' : 'Record player'}</span>
         </button>
       </div>
     </div>

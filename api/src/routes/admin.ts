@@ -6,7 +6,7 @@ import { bus } from '../events.js';
 import { atLeast, cooks, isManager, requireStaff, type AppEnv } from '../auth.js';
 import { hashPassword } from '../password.js';
 import { runtime } from '../context.js';
-import { checkUpload, FileRef } from '../files.js';
+import { audioKind, audioMagic, checkUpload, FileRef, MAX_AUDIO_BYTES, musicKey, type MusicFile } from '../files.js';
 import { getInvoice, invoiceForOrder, payInvoice, publishInvoice, refuseInvoiced, settleInvoiceCheck } from '../invoices.js';
 import { applyInvoiceDiscount, LOYALTY_DEFAULTS, linkInvoice, loyaltySettings, reapplyOpenBills, setManualDiscount, welcomesTaken } from '../loyalty.js';
 import { addLines, addPayment, createOrder, freeTableCheck, refuseHeld, releaseDue, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
@@ -782,6 +782,11 @@ export function adminRoutes() {
           .object({ name: z.string().max(80), address: z.string().max(160), phone: z.string().max(20), email: z.string().max(80), gstin: z.string().max(15) })
           .partial()
           .optional(),
+        // The music's start and end, in seconds into the file (end null: play to the end). The file is set by PUT /music.
+        music: z
+          .object({ start: z.number().int().min(0).max(86_400), end: z.number().int().min(1).max(86_400).nullable() })
+          .refine(m => m.end === null || m.end > m.start, 'the end has to come after the start')
+          .optional(),
         licences: z
           .array(
             z.object({
@@ -806,6 +811,12 @@ export function adminRoutes() {
                   on conflict (key) do update set value = excluded.value`;
         continue;
       }
+      if (k === 'music') {
+        const now = (await getSettings()).music ?? {};
+        await sql`insert into settings (key, value) values ('music', ${sql.json({ ...now, ...(v as object) } as never)})
+                  on conflict (key) do update set value = excluded.value`;
+        continue;
+      }
       if (k === 'cafe') {
         await sql`update settings set value = value || ${sql.json(v as never)} where key = 'cafe'`;
       } else {
@@ -817,6 +828,42 @@ export function adminRoutes() {
       const kept = new Set(b.licences.map(l => l.file?.key).filter(Boolean));
       for (const l of before) if (l.file?.key && !kept.has(l.file.key)) await runtime().files?.delete(l.file.key).catch(() => {});
     }
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ settings: await getSettings() });
+  });
+
+  // ---------- Music ----------
+  // The raw file is the request body (not a form), streamed to storage so a long set never sits in memory.
+  // Its name comes in X-File-Name. The new file replaces the old one, which is deleted.
+  app.put('/music', atLeast('manager'), async c => {
+    const store = runtime().files;
+    if (!store) throw new HttpError(503, 'File uploads aren’t switched on yet.', 'no_storage');
+    const name = decodeURIComponent(c.req.header('x-file-name') ?? 'music').slice(0, 120);
+    const type = audioKind(c.req.header('content-type') ?? '');
+    const size = Number(c.req.header('content-length') ?? 0);
+    if (!size || !c.req.raw.body) throw new HttpError(400, 'That file is empty. Pick the audio file again.', 'empty_file');
+    if (size > MAX_AUDIO_BYTES) throw new HttpError(413, 'That file is over 95 MB. Export it at 96 or 128 kbps and try again.', 'too_large');
+    const key = musicKey(name, type);
+    await store.put(key, c.req.raw.body, type);
+    const head = await store.get(key, { offset: 0, length: 16 });
+    const first = head ? new Uint8Array(head.body instanceof ArrayBuffer ? head.body : await new Response(head.body).arrayBuffer()) : new Uint8Array();
+    if (!head || !audioMagic(type, first)) {
+      await store.delete(key).catch(() => {});
+      throw new HttpError(400, 'That doesn’t look like an MP3 or M4A file. Export the set as MP3 and upload that.', 'bad_file_type');
+    }
+    const file: MusicFile = { key, name, type, size: head.size };
+    const old = (await getSettings()).music ?? {};
+    await sql`insert into settings (key, value) values ('music', ${sql.json({ start: 144, end: null, ...old, file } as never)})
+              on conflict (key) do update set value = excluded.value`;
+    if (old.file?.key && old.file.key !== key) await store.delete(old.file.key).catch(() => {});
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ settings: await getSettings() }, 201);
+  });
+  app.delete('/music', atLeast('manager'), async c => {
+    const old = (await getSettings()).music ?? {};
+    if (old.file?.key) await runtime().files?.delete(old.file.key).catch(() => {});
+    await sql`insert into settings (key, value) values ('music', ${sql.json({ ...old, file: null } as never)})
+              on conflict (key) do update set value = excluded.value`;
     bus.publish({ type: 'menu.updated' });
     return c.json({ settings: await getSettings() });
   });

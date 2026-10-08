@@ -36,3 +36,38 @@ export function checkUpload(name: string, type: string, bytes: Uint8Array): File
   const base = name.replace(/\.[^.]*$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40) || 'document';
   return { key: `licences/${randomBytes(4).toString('hex')}-${base}.${kind.ext}`, name: name.slice(0, 120), type: type as FileKind, size: bytes.length };
 }
+
+/** The music: one MP3 or M4A, streamed straight to storage. Cloudflare takes request bodies up to 100 MB. */
+export const MAX_AUDIO_BYTES = 95 * 1024 * 1024;
+export const MUSIC_PATH = '/api/admin/music';
+const AUDIO = {
+  'audio/mpeg': {
+    ext: 'mp3',
+    // An ID3 tag, or straight into an MPEG audio frame.
+    magic: (b: Uint8Array) => (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0),
+  },
+  'audio/mp4': { ext: 'm4a', magic: (b: Uint8Array) => String.fromCharCode(...b.slice(4, 8)) === 'ftyp' },
+} as const;
+export type AudioKind = keyof typeof AUDIO;
+export const AUDIO_TYPES = Object.keys(AUDIO) as [AudioKind, ...AudioKind[]];
+export const audioKind = (type: string) => (type === 'audio/mp3' ? 'audio/mpeg' : type === 'audio/x-m4a' || type === 'audio/m4a' ? 'audio/mp4' : type) as AudioKind;
+export const audioMagic = (type: AudioKind, b: Uint8Array) => !!AUDIO[type]?.magic(b);
+
+export const MusicFile = z.object({
+  key: z.string().regex(/^music\/[a-z0-9-]+\.(mp3|m4a)$/),
+  name: z.string().max(120),
+  type: z.enum(AUDIO_TYPES),
+  size: z.number().int().min(1).max(MAX_AUDIO_BYTES),
+});
+export type MusicFile = z.infer<typeof MusicFile>;
+
+/** Where an upload goes, before its first bytes are checked. */
+export function musicKey(name: string, type: string): MusicFile['key'] {
+  const kind = AUDIO[audioKind(type)];
+  if (!kind) throw new HttpError(400, 'Upload an MP3 or M4A audio file.', 'bad_file_type');
+  const base = name.replace(/\.[^.]*$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40) || 'music';
+  return `music/${randomBytes(4).toString('hex')}-${base}.${kind.ext}`;
+}
+
+/** The public file paths: licence scans and the music. */
+export const PUBLIC_FILE = /^(licences\/[a-z0-9-]+\.(pdf|jpg|png|webp)|music\/[a-z0-9-]+\.(mp3|m4a))$/;

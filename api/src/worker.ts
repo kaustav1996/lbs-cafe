@@ -59,8 +59,8 @@ export default {
 function r2Store(bucket: R2Bucket): FileStore {
   return {
     put: async (key, body, type) => void (await bucket.put(key, body, { httpMetadata: { contentType: type } })),
-    get: async key => {
-      const o = await bucket.get(key);
+    get: async (key, range) => {
+      const o = await bucket.get(key, range ? { range } : undefined);
       return o ? { body: o.body, type: o.httpMetadata?.contentType ?? 'application/octet-stream', size: o.size } : null;
     },
     delete: key => bucket.delete(key),

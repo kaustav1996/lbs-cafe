@@ -69,6 +69,12 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   table calls, serving, invoices and payments, bookings; can't move orders to preparing or ready), Server and kitchen
   (both, for quiet days; migration 010) and Manager/Owner (everything). Reports, offers
   and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
+- **Music** (9 Oct 2026): Admin → Settings → Music takes one MP3/M4A (up to 95 MB, streamed to R2 under `music/`,
+  served from `/files/` with byte ranges, which iPhones need) and a start and loop-back time (default 2:24 to
+  1:11:44). The home record player's On/Off, every cassette/Walkman/boombox/turntable drawing and a top-bar button
+  all play or pause the same track (`web/src/state/music.tsx`); the place is kept on the phone and it loops back to
+  the start time. Nothing downloads until play. Only upload audio LB's has the rights to; the YouTube link can't be
+  used as hidden background audio under YouTube's terms.
 - **Guest menu sections fold** (8 Oct 2026): tap a section heading to close or open it, or Close all sections. The
   phone remembers closed sections; a search shows every match (Veg only keeps sections foldable), and tapping a section chip opens it.
 - **Record player and music gear** (7 Oct 2026): 3D-tilted turntable in the home hero (`components/Gear.tsx`, Deck);

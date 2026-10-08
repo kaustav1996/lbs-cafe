@@ -5,6 +5,7 @@ import { useCart } from '../state/cart';
 import { useLive } from '../state/live';
 import { asset, useUi } from '../state/ui';
 import { openState } from '../lib/format';
+import { useMusic } from '../state/music';
 
 export function Checker({ className = '' }: { className?: string }) {
   return <div className={`checker ${className}`} aria-hidden="true" />;
@@ -52,6 +53,7 @@ export function Nav(_props: { tone?: string } = {}) {
             <NavLink to="/card">LB’s card</NavLink>
           </nav>
           <div className="topbar-end">
+            <MusicButton />
             <OpenStamp />
             <button type="button" className="btn btn-ink btn-sm wide-only" onClick={() => open('booking')}>
               Book a table
@@ -69,6 +71,34 @@ export function Nav(_props: { tone?: string } = {}) {
         </div>
       </header>
     </>
+  );
+}
+
+/** Pause or carry on with the music from any page, once it has started. */
+function MusicButton() {
+  const music = useMusic();
+  if (!music.available || !music.started) return null;
+  return (
+    <button
+      type="button"
+      className={`music-btn ${music.playing ? 'is-playing' : ''}`}
+      onClick={music.toggle}
+      aria-pressed={music.playing}
+      aria-label={music.playing ? 'Pause the music' : 'Play the music'}
+      title={music.playing ? 'Pause the music' : 'Play the music'}
+    >
+      {music.playing ? (
+        <span className="music-bars" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+      ) : (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M8 5v14l11-7z" fill="currentColor" />
+        </svg>
+      )}
+    </button>
   );
 }
 

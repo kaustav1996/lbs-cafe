@@ -3,15 +3,16 @@ import type postgres from 'postgres';
 import type { CafeEvent } from './events.js';
 import type { Messenger } from './messaging.js';
 
-/** Public documents (licences). R2 on Workers, in memory in tests. */
+/** Public files (licence scans, the music). R2 on Workers, in memory in tests. */
 export interface StoredFile {
   body: ReadableStream | ArrayBuffer;
   type: string;
+  /** The whole object's size, even when only a range was asked for. */
   size: number;
 }
 export interface FileStore {
-  put(key: string, body: ArrayBuffer, type: string): Promise<void>;
-  get(key: string): Promise<StoredFile | null>;
+  put(key: string, body: ArrayBuffer | ReadableStream, type: string): Promise<void>;
+  get(key: string, range?: { offset: number; length: number }): Promise<StoredFile | null>;
   delete(key: string): Promise<void>;
 }
 

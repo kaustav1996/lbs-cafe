@@ -1946,3 +1946,79 @@ button.buy:hover {
 .head-mark .menu-sub {
   margin-top: 8px;
 }
+
+/* Gear as play buttons: reels and records turn while the music plays. */
+.gear-btn {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 8px;
+}
+.gear-btn:focus-visible {
+  outline: 3px solid var(--cyan-ink);
+  outline-offset: 4px;
+}
+.gear-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.gear .reel {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.gear-btn.is-playing .reel {
+  animation: deck-spin 1.4s linear infinite;
+}
+.gear-btn.is-playing .reel-slow {
+  animation-duration: 1.8s;
+}
+
+/* The pause/play control in the top bar, once the music has started. */
+.music-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  flex: none;
+}
+.music-btn.is-playing {
+  background: var(--lime);
+}
+.music-btn:focus-visible {
+  outline: 3px solid var(--cyan-ink);
+  outline-offset: 2px;
+}
+.music-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+.music-bars i {
+  width: 3px;
+  height: 100%;
+  background: currentColor;
+  border-radius: 1px;
+  transform-origin: bottom;
+  animation: music-bar 0.9s ease-in-out infinite alternate;
+}
+.music-bars i:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.music-bars i:nth-child(3) {
+  animation-delay: -0.6s;
+}
+@keyframes music-bar {
+  from {
+    transform: scaleY(0.3);
+  }
+}

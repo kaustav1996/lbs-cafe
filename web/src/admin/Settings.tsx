@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
 import { errText, ROLE_LABEL, useAuth, useOnEvent, type Role } from './core';
 import { Modal, PageHead, Toggle, toast } from './ui';
+import MusicCard from './MusicCard';
 
 interface SettingsShape {
   gst_rate: number;
@@ -26,6 +27,7 @@ export default function Settings() {
         <OrderingSettings />
         <LoyaltyCard />
         <LicencesCard />
+        <MusicCard />
         <TablesCard />
         {can('manager') && <StaffCard />}
         <PasswordCard />

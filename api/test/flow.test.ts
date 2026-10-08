@@ -35,8 +35,15 @@ const rt = {
   messenger,
   whatsapp: { verifyToken: 'test-verify-token', appSecret: 'test-app-secret' } as { verifyToken?: string; appSecret?: string } | undefined,
   files: {
-    put: async (key: string, body: ArrayBuffer, type: string) => void stored.set(key, { body, type, size: body.byteLength }),
-    get: async (key: string) => stored.get(key) ?? null,
+    put: async (key: string, body: ArrayBuffer | ReadableStream, type: string) => {
+      const buf = body instanceof ArrayBuffer ? body : await new Response(body).arrayBuffer();
+      stored.set(key, { body: buf, type, size: buf.byteLength });
+    },
+    get: async (key: string, range?: { offset: number; length: number }) => {
+      const f = stored.get(key);
+      if (!f || !range) return f ?? null;
+      return { ...f, body: (f.body as ArrayBuffer).slice(range.offset, range.offset + range.length) };
+    },
     delete: async (key: string) => void stored.delete(key),
   },
 };
@@ -44,10 +51,11 @@ const rt = {
 const hono = buildApp();
 /** Same shape as Fastify's inject(), so the tests read as before. */
 const app = {
-  async inject(o: { method: string; url: string; payload?: unknown; form?: FormData; headers?: Record<string, string> }) {
+  async inject(o: { method: string; url: string; payload?: unknown; form?: FormData; raw?: Uint8Array; headers?: Record<string, string> }) {
     const headers = { ...o.headers } as Record<string, string>;
     if (o.payload !== undefined) headers['content-type'] = 'application/json';
-    const reqBody = o.form ?? (o.payload === undefined ? undefined : JSON.stringify(o.payload));
+    if (o.raw) headers['content-length'] = String(o.raw.byteLength);
+    const reqBody = o.raw ?? o.form ?? (o.payload === undefined ? undefined : JSON.stringify(o.payload));
     const res = await withRuntime(rt, () => hono.request(o.url, { method: o.method, headers, body: reqBody }));
     const body = await res.text();
     return { statusCode: res.status, headers: Object.fromEntries(res.headers), body, json: () => JSON.parse(body) };
@@ -1055,4 +1063,48 @@ test('roles: a chef sees only the kitchen and moves orders up to ready; a server
     assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o2.id}`, headers: both, payload: { status } })).json().order.status, status);
   assert.equal((await app.inject({ method: 'GET', url: '/api/admin/reports/summary', headers: both })).statusCode, 403);
   assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o2.id}`, headers: server, payload: { status: 'completed' } })).statusCode, 200);
+});
+
+test('music: a manager uploads an MP3, sets start and end, and it streams in ranges; bad files and servers are refused', async () => {
+  const mp3 = new Uint8Array(4000);
+  mp3.set([0x49, 0x44, 0x33, 0x04]); // an ID3 tag
+  for (let i = 4; i < mp3.length; i++) mp3[i] = i % 251;
+  const put = (raw: Uint8Array, type: string, headers = auth()) =>
+    app.inject({ method: 'PUT', url: '/api/admin/music', raw, headers: { ...headers, 'content-type': type, 'x-file-name': encodeURIComponent('LB’s set.mp3') } });
+
+  assert.equal((await put(new Uint8Array([0x25, 0x50, 0x44, 0x46, 1, 2, 3]), 'audio/mpeg')).statusCode, 400); // a PDF in disguise
+  assert.equal((await put(mp3, 'application/pdf')).statusCode, 400);
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', headers: { 'cf-connecting-ip': '203.0.113.40' }, payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } });
+  assert.equal(login.statusCode, 200, login.body);
+  assert.equal((await put(mp3, 'audio/mpeg', { authorization: `Bearer ${login.json().token}` })).statusCode, 403);
+
+  const up = await put(mp3, 'audio/mpeg');
+  assert.equal(up.statusCode, 201);
+  const first = up.json().settings.music.file.key as string;
+  assert.match(first, /^music\/[a-z0-9]+-lb-s-set\.mp3$/);
+  let pub = (await app.inject({ method: 'GET', url: '/api/public/settings' })).json().music;
+  assert.deepEqual(pub, { url: `/files/${first}`, start: 144, end: null });
+
+  const set = await app.inject({ method: 'PUT', url: '/api/admin/settings', headers: auth(), payload: { music: { start: 144, end: 4304 } } });
+  assert.equal(set.statusCode, 200);
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/settings', headers: auth(), payload: { music: { start: 300, end: 200 } } })).statusCode, 400);
+  pub = (await app.inject({ method: 'GET', url: '/api/public/settings' })).json().music;
+  assert.equal(pub.end, 4304);
+
+  const whole = await app.inject({ method: 'GET', url: pub.url });
+  assert.equal(whole.statusCode, 200);
+  assert.equal(whole.headers['accept-ranges'], 'bytes');
+  const part = await app.inject({ method: 'GET', url: pub.url, headers: { range: 'bytes=100-199' } });
+  assert.equal(part.statusCode, 206);
+  assert.equal(part.headers['content-range'], 'bytes 100-199/4000');
+  assert.equal(part.headers['content-length'], '100');
+  assert.equal((await app.inject({ method: 'GET', url: pub.url, headers: { range: 'bytes=9000-' } })).statusCode, 416);
+
+  // A new upload replaces the old file; removing it takes the music off the site.
+  const second = (await put(mp3, 'audio/mpeg')).json().settings.music;
+  assert.notEqual(second.file.key, first);
+  assert.equal(second.end, 4304, 'start and end survive a new upload');
+  assert.equal((await app.inject({ method: 'GET', url: `/files/${first}` })).statusCode, 404);
+  await app.inject({ method: 'DELETE', url: '/api/admin/music', headers: auth() });
+  assert.equal((await app.inject({ method: 'GET', url: '/api/public/settings' })).json().music, null);
 });

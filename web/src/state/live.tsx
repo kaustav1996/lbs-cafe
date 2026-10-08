@@ -12,6 +12,8 @@ export interface LiveSettings {
   takeawayEnabled: boolean;
   bookingEnabled: boolean;
   phone: string;
+  /** The background music (Admin, Settings, Music): where it is and which part of it plays. */
+  music: { url: string; start: number; end: number | null } | null;
 }
 
 interface LiveApi {
@@ -30,6 +32,7 @@ const FALLBACK_SETTINGS: LiveSettings = {
   takeawayEnabled: true,
   bookingEnabled: true,
   phone: SITE.phone,
+  music: null,
 };
 
 interface ApiOption { id: number; label: string; diet: Diet; price_paise: number }
@@ -69,7 +72,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       try {
         const [m, s] = await Promise.all([
           api<{ categories: ApiCategory[] }>('/api/public/menu'),
-          api<{ gstRate: number; hours: DayHours[]; orderingEnabled: boolean; takeawayEnabled: boolean; bookingEnabled: boolean; cafe?: { phone?: string } }>(
+          api<{ gstRate: number; hours: DayHours[]; orderingEnabled: boolean; takeawayEnabled: boolean; bookingEnabled: boolean; cafe?: { phone?: string }; music?: LiveSettings['music'] }>(
             '/api/public/settings',
           ),
         ]);
@@ -82,6 +85,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           takeawayEnabled: s.takeawayEnabled,
           bookingEnabled: s.bookingEnabled,
           phone: s.cafe?.phone || SITE.phone,
+          music: s.music ?? null,
         });
         setLive(true);
       } catch {

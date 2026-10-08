@@ -4,6 +4,7 @@ import { BrowserRouter, HashRouter, Route, Routes, useLocation, Link } from 'rea
 import { CartProvider } from './state/cart';
 import { LiveProvider } from './state/live';
 import { UiProvider } from './state/ui';
+import { MusicProvider } from './state/music';
 import { BottomBar, Footer, Nav, Toast } from './components/Chrome';
 import { Panels } from './components/Panels';
 import { OrderAlerts } from './components/OrderAlerts';
@@ -56,23 +57,25 @@ createRoot(document.getElementById('root')!).render(
           path="*"
           element={
             <LiveProvider>
-              <UiProvider>
-                <CartProvider>
-                  <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/menu" element={<Menu />} />
-                    <Route path="/order/:token" element={<OrderStatus />} />
-                    <Route path="/licences" element={<Licences />} />
-                    <Route path="/bill/:token" element={<Bill />} />
-                    <Route path="/card" element={<Card />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                  <BottomBar />
-                  <Panels />
-                  <Toast />
-                  <OrderAlerts />
-                </CartProvider>
-              </UiProvider>
+              <MusicProvider>
+                <UiProvider>
+                  <CartProvider>
+                    <Routes>
+                      <Route path="/" element={<Home />} />
+                      <Route path="/menu" element={<Menu />} />
+                      <Route path="/order/:token" element={<OrderStatus />} />
+                      <Route path="/licences" element={<Licences />} />
+                      <Route path="/bill/:token" element={<Bill />} />
+                      <Route path="/card" element={<Card />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                    <BottomBar />
+                    <Panels />
+                    <Toast />
+                    <OrderAlerts />
+                  </CartProvider>
+                </UiProvider>
+              </MusicProvider>
             </LiveProvider>
           }
         />

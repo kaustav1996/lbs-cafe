@@ -108,6 +108,7 @@ export function publicRoutes() {
       bookingEnabled: !!s.booking_enabled,
       cafe: s.cafe,
       licences: s.licences ?? [],
+      music: s.music?.file ? { url: `/files/${s.music.file.key}`, start: s.music.start ?? 0, end: s.music.end ?? null } : null,
     });
   });
 
