@@ -2739,3 +2739,321 @@ button.buy:hover {
   justify-self: center;
   min-height: 44px;
 }
+
+/* ---------- Brew Bandits ---------- */
+.bb,
+.bb-home,
+.bb-lobby,
+.bb-room {
+  display: grid;
+  gap: 14px;
+}
+.bb-rules {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 6px;
+}
+.bb-home-actions {
+  display: grid;
+  gap: 10px;
+}
+.bb-coach {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--lime);
+  box-shadow: 0 4px 0 var(--ink);
+}
+.bb-coach-step {
+  font-size: var(--t-sm);
+  font-weight: 800;
+}
+.bb-status {
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+.bb-status.is-mine {
+  background: var(--ink);
+  color: var(--lime);
+}
+.bb-others {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.bb-seat {
+  display: grid;
+  gap: 2px;
+  min-width: 132px;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+.bb-seat:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.bb-seat.is-turn {
+  box-shadow: 0 0 0 3px var(--cyan) inset;
+}
+.bb-seat.is-pickable {
+  background: var(--lime);
+  cursor: pointer;
+  animation: pick-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes pick-pulse {
+  to {
+    transform: translateY(-2px);
+  }
+}
+.bb-seat-name {
+  font-weight: 800;
+}
+.bb-seat-meta {
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.bb-cups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+}
+.bb-cup {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--ink);
+  border-radius: 8px;
+  background: #fff8e1;
+  font-size: 18px;
+}
+.bb-cups.is-mine .bb-cup {
+  width: 44px;
+  height: 44px;
+  font-size: 24px;
+}
+.bb-cup small {
+  position: absolute;
+  right: -4px;
+  bottom: -6px;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--ink);
+  color: var(--lime);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+.bb-cup.is-spoiled {
+  background: #ffe0e0;
+}
+.bb-cup i {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-style: normal;
+  font-size: 18px;
+  animation: raid 0.6s ease-in-out infinite alternate;
+}
+@keyframes raid {
+  to {
+    transform: rotate(-14deg) translateY(-2px);
+  }
+}
+.bb-nocup {
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.bb-pts {
+  font-size: var(--t-sm);
+}
+.bb-mine h3,
+.bb-hand h3 {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--t-md);
+  margin-bottom: 6px;
+}
+.bb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bb-actions .btn {
+  flex: 1 1 auto;
+  min-height: 48px;
+}
+.bb-hand-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+.bb-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 2px;
+  min-height: 112px;
+  padding: 18px 6px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--band) 0 12px, var(--paper) 12px);
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+}
+.bb-card.is-small {
+  min-height: 0;
+  padding: 14px 4px 6px;
+}
+.bb-card.is-selected {
+  transform: translateY(-6px);
+  box-shadow: 0 0 0 3px var(--lime), 0 6px 0 var(--ink);
+}
+.bb-card-icon {
+  font-size: 30px;
+  line-height: 1.1;
+}
+.bb-card-name {
+  font-weight: 800;
+  font-size: var(--t-sm);
+  line-height: 1.2;
+}
+.bb-card-tip {
+  font-size: 12.5px;
+  line-height: 1.25;
+  color: var(--muted);
+}
+.bb-hint {
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.bb-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.bb-panel h2,
+.bb-lobby h2,
+.bb-room h2 {
+  font-size: var(--t-xl);
+}
+.bb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bb-chip {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+.bb-chip.on {
+  background: var(--lime);
+}
+.bb-chip:disabled {
+  opacity: 0.4;
+}
+.bb-log {
+  margin: 0;
+  padding: 10px 12px 10px 28px;
+  border: 1.5px dashed var(--ink);
+  border-radius: var(--radius-sm);
+  font-size: var(--t-sm);
+  color: var(--muted);
+  display: grid;
+  gap: 2px;
+}
+.bb-log li:first-child {
+  color: var(--ink);
+  font-weight: 700;
+}
+.bb-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+  padding: 16px 12px calc(var(--bar-h) + var(--safe-b) + 16px);
+  background: rgb(0 0 0 / 0.45);
+}
+.bb-modal-box {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 440px);
+  padding: 18px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: 0 6px 0 var(--ink);
+}
+.bb-raider {
+  justify-self: center;
+  font-size: 54px;
+  animation: raider 0.5s ease-in-out infinite alternate;
+}
+@keyframes raider {
+  from {
+    transform: translateX(-14px) rotate(-10deg);
+  }
+  to {
+    transform: translateX(14px) rotate(10deg);
+  }
+}
+.bb-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 2px solid var(--ink);
+}
+.bb-seats li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 56px;
+  border-bottom: 1.5px dashed var(--ink);
+}
+.bb-error {
+  position: sticky;
+  top: calc(var(--topbar-h) + 8px);
+  z-index: 30;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: #ffe0e0;
+}
+.bb-footer {
+  margin-top: 4px;
+}

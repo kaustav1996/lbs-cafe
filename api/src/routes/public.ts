@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { sql } from '../db.js';
+import { runtime } from '../context.js';
 import { bus } from '../events.js';
 import { rateLimit, signTablePass, verifyTablePass } from '../auth.js';
 import { getInvoice, invoiceForOrder } from '../invoices.js';
@@ -176,6 +177,17 @@ export function publicRoutes() {
     const [t] = await sql<{ games_on: boolean }[]>`select games_on from dining_tables where label = ${c.req.param('label') ?? ''} and active`;
     if (!t) throw new HttpError(404, 'There’s no such table.', 'bad_table');
     return c.json({ on: t.games_on });
+  });
+
+  // The live game rooms, over a WebSocket. Only from a table whose games are open.
+  app.get('/games/live', async c => {
+    const table = (c.req.query('table') ?? '').slice(0, 10);
+    const [t] = await sql<{ games_on: boolean }[]>`select games_on from dining_tables where label = ${table} and active`;
+    if (!t?.games_on) return c.json({ error: 'games_closed', message: 'Games aren’t open for this table. Ask your server.' }, 403);
+    if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') return c.json({ error: 'upgrade', message: 'Open this with a WebSocket.' }, 426);
+    const open = runtime().openGames;
+    if (!open) return c.json({ error: 'unavailable', message: 'Game rooms aren’t available here.' }, 503);
+    return open(c.req.raw, table);
   });
 
   // The name LB's has for a number, so the first guest at a table can say "that's me" instead of typing it.

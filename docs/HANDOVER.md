@@ -69,6 +69,13 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   table calls, serving, invoices and payments, bookings; can't move orders to preparing or ready), Server and kitchen
   (both, for quiet days; migration 010) and Manager/Owner (everything). Reports, offers
   and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
+- **Brew Bandits** (9 Oct 2026): a multiplayer card game after the Malaysian game Nasi Lemak, with hemp coffee.
+  Rules in `api/src/games/brew.ts` (pure, tested in `test/brew.test.ts`, including bot-only games at 2 to 10
+  players); the deck grows with the room. Rooms live in the `Arcade` Durable Object (`api/src/games/arcade.ts`,
+  binding ARCADE, migration tag v2): create a room (2 to 10 seats), anyone at a table with games open joins
+  from the lobby, the host adds bots and starts; the room runs timers and bots and sends each phone its own view.
+  The phone uses `/api/public/games/live?table=` (refused unless that table's games are open). The web app imports
+  the same engine for the guided tutorial and practice against bots (`web/src/games/brew/`).
 - **Games** (9 Oct 2026, migration 013): a table's games open when it orders (or staff open them) and stay open until
   a server taps Close games (Settings, Tables); the next order opens them again. Settings has "Games open at every
   table", which opens them at every table now and at each new visit. Guests get a Games tab and a Play games
