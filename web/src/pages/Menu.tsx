@@ -107,7 +107,7 @@ export default function Menu() {
         const vis = entries.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
         if (vis[0]) setActive(vis[0].target.id);
       },
-      { rootMargin: '-90px 0px -60% 0px' },
+      { rootMargin: '-150px 0px -55% 0px' },
     );
     els.forEach(el => io.observe(el));
     return () => io.disconnect();
@@ -182,13 +182,18 @@ export default function Menu() {
                 key={c.id}
                 type="button"
                 data-cat={c.id}
-                className={`chip ${active === c.id ? 'on' : ''}`}
+                className={`chip chip-tape ${active === c.id ? 'on' : ''}`}
                 style={{ '--label': c.color } as CSSProperties}
                 onClick={() => jump(c.id)}
                 aria-current={active === c.id ? 'true' : undefined}
               >
-                <i aria-hidden="true" />
-                {c.name}
+                <span className="chip-label">
+                  <span className="chip-name">{c.name}</span>
+                  <span className="chip-window" aria-hidden="true">
+                    <i />
+                    <i />
+                  </span>
+                </span>
               </button>
             ))}
           </div>

@@ -1111,7 +1111,7 @@ mark {
 }
 .cat {
   padding-top: 28px;
-  scroll-margin-top: calc(var(--topbar-h) + 64px);
+  scroll-margin-top: calc(var(--topbar-h) + 96px);
 }
 .cat-all {
   display: flex;
@@ -2290,4 +2290,80 @@ button.buy:hover {
   text-align: center;
   font-size: var(--t-sm);
   color: var(--muted);
+}
+
+/* Section chips on the menu as tiny cassettes, tilted back; the one you're reading lifts forward and turns. */
+.catbar-row:has(.chip-tape) {
+  perspective: 500px;
+  padding-block: 12px 14px;
+  gap: 10px;
+}
+.chip-tape {
+  position: relative;
+  min-height: 52px;
+  padding: 4px 5px 7px;
+  border: 2px solid var(--ink);
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 5px 5px, #777 0 1.5px, transparent 2px),
+    radial-gradient(circle at calc(100% - 5px) 5px, #777 0 1.5px, transparent 2px),
+    linear-gradient(170deg, #2b2b2f, #151517);
+  box-shadow:
+    0 3px 0 #000,
+    0 6px 10px -4px rgb(0 0 0 / 0.45);
+  transform: rotateX(16deg);
+  transform-origin: 50% 100%;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.chip-tape .chip-label {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 3px 12px 4px;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--paper) 0 60%, var(--label) 60% 100%);
+}
+.chip-tape .chip-name {
+  font-size: var(--t-sm);
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.chip-tape .chip-window {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 1px 5px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: #1b1b1e;
+}
+.chip-tape .chip-window i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(var(--paper) 0 30deg, #9a9a9a 30deg 60deg);
+  border: 1px solid var(--paper);
+}
+.chip-tape.on {
+  background:
+    radial-gradient(circle at 5px 5px, #777 0 1.5px, transparent 2px),
+    radial-gradient(circle at calc(100% - 5px) 5px, #777 0 1.5px, transparent 2px),
+    linear-gradient(170deg, #2b2b2f, #151517);
+  transform: rotateX(0deg) translateY(-3px);
+  box-shadow:
+    0 0 0 3px var(--lime),
+    0 5px 0 #000,
+    0 10px 14px -4px rgb(0 0 0 / 0.5);
+}
+.chip-tape.on .chip-window i {
+  animation: deck-spin 1.6s linear infinite;
+}
+.chip-tape:focus-visible {
+  outline: 3px solid var(--cyan-ink);
+  outline-offset: 4px;
 }
