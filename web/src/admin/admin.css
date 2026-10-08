@@ -1727,3 +1727,28 @@ textarea.a-input {
   color: var(--a-lemon);
   border-color: #05191c;
 }
+
+/* Kitchen screen: bigger type, read from across the pass. */
+.a-kitchen {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.a-ticket .a-card-main {
+  cursor: default;
+}
+.a-ticket .a-card-main header b {
+  font-size: 22px;
+}
+.a-ticket .a-card-main ul {
+  font-size: 17px;
+  line-height: 1.5;
+}
+.a-ticket .a-card-actions .a-btn-primary {
+  flex: 1;
+  min-height: 48px;
+  font-size: 16px;
+}
+@media (max-width: 900px) {
+  .a-kitchen {
+    grid-template-columns: 1fr;
+  }
+}

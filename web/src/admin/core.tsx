@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, API_URL, ApiError, HAS_API } from '../lib/api';
 
-export type Role = 'owner' | 'manager' | 'staff';
+/** chef: kitchen screen only. staff: a server on the floor. manager and owner: everything. */
+export type Role = 'owner' | 'manager' | 'staff' | 'chef';
+export const ROLE_LABEL: Record<Role, string> = { chef: 'Chef', staff: 'Server', manager: 'Manager', owner: 'Owner' };
 export interface Me {
   id: number;
   name: string;
@@ -29,7 +31,7 @@ interface AuthApi {
 }
 
 const AuthCtx = createContext<AuthApi | null>(null);
-const RANK: Record<Role, number> = { staff: 1, manager: 2, owner: 3 };
+const RANK: Record<Role, number> = { chef: 0, staff: 1, manager: 2, owner: 3 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(readToken);

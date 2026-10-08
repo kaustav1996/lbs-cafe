@@ -1021,3 +1021,28 @@ test('hold: Confirm order sends it to the kitchen at once; confirming again chan
   assert.equal((await app.inject({ method: 'POST', url: '/api/public/orders/nope/confirm' })).statusCode, 404);
   await sql`update settings set value = '0'::jsonb where key = 'hold_seconds'`;
 });
+
+test('roles: a chef sees only the kitchen and moves orders up to ready; a server cannot open reports or customers', async () => {
+  await app.inject({ method: 'POST', url: '/api/admin/staff', headers: auth(), payload: { name: 'Chef', email: 'chef@lbscafe.test', password: 'chef-pass-1', role: 'chef' } });
+  const chef = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'chef@lbscafe.test', password: 'chef-pass-1' } })).json().token}` };
+  const o = (await app.inject({ method: 'POST', url: '/api/admin/orders', headers: auth(), payload: { source: 'counter', lines: [{ ...LATTE(), qty: 1 }] } })).json().order;
+
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/orders', headers: chef })).statusCode, 200);
+  for (const status of ['preparing', 'ready']) {
+    const r = await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o.id}`, headers: chef, payload: { status } });
+    assert.equal(r.json().order.status, status);
+  }
+  // Serving, notes, payments, bills, reports and guests are the floor's and the managers'.
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o.id}`, headers: chef, payload: { status: 'served' } })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o.id}`, headers: chef, payload: { note: 'hi' } })).statusCode, 403);
+  for (const [method, url] of [['POST', `/api/admin/orders/${o.id}/payments`], ['POST', '/api/admin/invoices'], ['GET', '/api/admin/reports/summary'], ['GET', '/api/admin/customers'], ['GET', '/api/admin/reservations'], ['POST', '/api/admin/orders']] as const)
+    assert.equal((await app.inject({ method, url, headers: chef, ...(method === 'POST' ? { payload: {} } : {}) })).statusCode, 403, `${method} ${url}`);
+  // Once served, the kitchen can't pull it back.
+  await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o.id}`, headers: auth(), payload: { status: 'served' } });
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o.id}`, headers: chef, payload: { status: 'preparing' } })).statusCode, 409);
+
+  const server = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } })).json().token}` };
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/reports/summary', headers: server })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/customers', headers: server })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/service-requests', headers: server })).statusCode, 200);
+});

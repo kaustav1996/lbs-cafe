@@ -64,6 +64,10 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   table; when an order turns ready every admin screen shows a banner (`admin/ReadyAlerts.tsx`) with a chime and Mark
   served / Picked up, and a system notification if the screen is in the background and "Turn on sound and alerts"
   was tapped (it asks for notification permission).
+- **Chef and server accounts** (8 Oct 2026, migration 009): Settings → Staff has roles Chef (kitchen screen only:
+  to make, preparing, ready; no prices, bills or guests), Server (the floor: orders with table or takeaway, new order,
+  table calls, invoices and payments, bookings) and Manager/Owner (everything, plus a Kitchen link). Reports, offers
+  and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
 - **Record player and music gear** (7 Oct 2026): 3D-tilted turntable in the home hero (`components/Gear.tsx`, Deck);
   line drawings mark the menu (turntable), orders and bills (cassette), LB's card (Walkman), booking (boombox).
 

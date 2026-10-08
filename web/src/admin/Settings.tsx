@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
-import { errText, useAuth, useOnEvent } from './core';
+import { errText, ROLE_LABEL, useAuth, useOnEvent, type Role } from './core';
 import { Modal, PageHead, Toggle, toast } from './ui';
 
 interface SettingsShape {
@@ -12,7 +12,7 @@ interface SettingsShape {
   cafe: { name: string; address: string; phone: string; email: string; gstin: string };
 }
 interface Table { id: number; label: string; seats: number; active: boolean; otp: string; sitting: number }
-interface Staff { id: number; name: string; email: string; role: 'owner' | 'manager' | 'staff'; active: boolean }
+interface Staff { id: number; name: string; email: string; role: Role; active: boolean }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined) ?? 'https://lbscafe.com';
@@ -588,13 +588,14 @@ function StaffCard() {
               <small>{s.email}</small>
             </span>
             {owner && s.id !== me?.id ? (
-              <select className="a-input a-input-xs" value={s.role} onChange={e => patch(s, { role: e.target.value }, `${s.name} is now ${e.target.value}`)} aria-label={`Role for ${s.name}`}>
-                <option value="staff">Staff</option>
+              <select className="a-input a-input-xs" value={s.role} onChange={e => patch(s, { role: e.target.value }, `${s.name} is now ${ROLE_LABEL[e.target.value as Role].toLowerCase()}`)} aria-label={`Role for ${s.name}`}>
+                <option value="chef">Chef (kitchen screen only)</option>
+                <option value="staff">Server (orders, billing, bookings)</option>
                 <option value="manager">Manager</option>
                 <option value="owner">Owner</option>
               </select>
             ) : (
-              <span className="a-tag">{s.role}</span>
+              <span className="a-tag">{ROLE_LABEL[s.role]}</span>
             )}
             {owner && s.id !== me?.id && (
               <button type="button" className="a-link" onClick={() => patch(s, { active: !s.active }, s.active ? `${s.name} can no longer sign in` : `${s.name} can sign in again`)}>
@@ -646,7 +647,8 @@ function StaffCard() {
             <label className="a-field">
               <span>Role</span>
               <select className="a-input" value={f.role} onChange={e => setF({ ...f, role: e.target.value as Staff['role'] })}>
-                <option value="staff">Staff</option>
+                <option value="chef">Chef (kitchen screen only)</option>
+                <option value="staff">Server (orders, billing, bookings)</option>
                 <option value="manager">Manager</option>
                 <option value="owner">Owner</option>
               </select>

@@ -4,7 +4,8 @@ import type { Context } from 'hono';
 import { runtime } from './context.js';
 import { sql } from './db.js';
 
-export type Role = 'owner' | 'manager' | 'staff';
+/** chef: kitchen screen only. staff: a server on the floor. manager and owner: everything. */
+export type Role = 'owner' | 'manager' | 'staff' | 'chef';
 export interface StaffClaims {
   sub: number;
   name: string;
@@ -79,7 +80,8 @@ export const requireStaff = createMiddleware<AppEnv>(async (c, next) => {
   await next();
 });
 
-const RANK: Record<Role, number> = { staff: 1, manager: 2, owner: 3 };
+const RANK: Record<Role, number> = { chef: 0, staff: 1, manager: 2, owner: 3 };
+export const isManager = (role: Role) => RANK[role] >= RANK.manager;
 export function atLeast(role: Role) {
   return createMiddleware<AppEnv>(async (c, next) => {
     const s = c.get('staff');

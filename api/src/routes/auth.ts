@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { sql } from '../db.js';
 import { rateLimit, requireStaff, signStaff, verifyToken, type AppEnv } from '../auth.js';
+import type { Role } from '../auth.js';
 import { checkPassword, hashPassword } from '../password.js';
 import { HttpError } from '../orders.js';
 import { runtime } from '../context.js';
@@ -11,7 +12,7 @@ export function authRoutes() {
 
   app.post('/login', rateLimit('login', 10, 10 * 60_000), async c => {
     const b = z.object({ email: z.string().email(), password: z.string().min(1).max(200) }).parse(await c.req.json());
-    const [s] = await sql<{ id: number; name: string; email: string; role: 'owner' | 'manager' | 'staff'; active: boolean; password_hash: string }[]>`
+    const [s] = await sql<{ id: number; name: string; email: string; role: Role; active: boolean; password_hash: string }[]>`
       select id, name, email, role, active, password_hash from staff where email = ${b.email.toLowerCase()}`;
     const ok = s && s.active && (await checkPassword(b.password, s.password_hash));
     if (!ok) throw new HttpError(401, 'That email and password don’t match. Check both and try again.', 'bad_login');

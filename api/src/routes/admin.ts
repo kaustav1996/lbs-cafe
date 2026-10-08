@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { sql } from '../db.js';
 import { bus } from '../events.js';
-import { atLeast, requireStaff, type AppEnv } from '../auth.js';
+import { atLeast, isManager, requireStaff, type AppEnv } from '../auth.js';
 import { hashPassword } from '../password.js';
 import { runtime } from '../context.js';
 import { checkUpload, FileRef } from '../files.js';
@@ -16,6 +16,16 @@ const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const LineIn = z.object({ itemId: z.number().int().positive(), optionId: z.number().int().positive(), qty: z.number().int().min(1).max(99) });
 const Method = z.enum(['cash', 'upi', 'card', 'other']);
 const OPEN_STATUSES = ['new', 'preparing', 'ready', 'served'];
+const CHEF_ROUTES: [string, RegExp][] = [
+  ['GET', /^\/orders$/],
+  ['GET', /^\/orders\/\d+$/],
+  ['PATCH', /^\/orders\/\d+$/],
+  ['GET', /^\/menus?(\/live|\/\d+)?$/],
+  ['PATCH', /^\/items\/\d+$/],
+  ['GET', /^\/settings$/],
+];
+/** Where a chef can move an order: back and forth in the kitchen, up to ready. Serving is the floor's job. */
+const KITCHEN_STATUSES = ['new', 'preparing', 'ready'];
 
 /** Kolkata calendar days -> [start, end) instants. */
 export function dayRange(from: string, to: string) {
@@ -40,6 +50,14 @@ const r2 = (paise: number) => (paise / 100).toFixed(2);
 export function adminRoutes() {
   const app = new Hono<AppEnv>();
   app.use('*', requireStaff);
+  // A chef's account reaches the kitchen screen and the sold-out switches, nothing else (no bills, guests or reports).
+  app.use('*', async (c, next) => {
+    if (c.get('staff').role !== 'chef') return next();
+    const path = c.req.path.replace(/^\/api\/admin/, '');
+    const ok = CHEF_ROUTES.some(([method, re]) => method === c.req.method && re.test(path));
+    if (!ok) throw new HttpError(403, 'Kitchen accounts can only see and move orders. Ask a manager.', 'forbidden');
+    await next();
+  });
 
   // ---------- Orders ----------
   app.get('/orders', async c => {
@@ -112,8 +130,11 @@ export function adminRoutes() {
         table: z.string().trim().max(10).nullable().optional(),
       })
       .parse(await c.req.json());
-    if ((b.status === 'cancelled' || b.discountPaise !== undefined) && c.get('staff').role === 'staff')
+    const role = c.get('staff').role;
+    if ((b.status === 'cancelled' || b.discountPaise !== undefined) && !isManager(role))
       throw new HttpError(403, 'Only a manager can cancel an order or give a discount.', 'forbidden');
+    if (role === 'chef' && (Object.keys(b).some(k => k !== 'status') || !KITCHEN_STATUSES.includes(b.status ?? '')))
+      throw new HttpError(403, 'The kitchen can move orders to preparing or ready. A server marks them served.', 'forbidden');
     const freed = await sql.begin(async tx => {
       const [{ table_label: label } = { table_label: null }] = await tx<{ table_label: string | null }[]>`select table_label from orders where id = ${id}`;
       const wasBusy = await lockTable(tx, label);
@@ -121,6 +142,8 @@ export function adminRoutes() {
         select id, status, table_label, invoice_id from orders where id = ${id} for update`;
       if (!o) throw new HttpError(404, 'Order not found.', 'not_found');
       refuseHeld(o.status);
+      if (role === 'chef' && !KITCHEN_STATUSES.includes(o.status))
+        throw new HttpError(409, 'This order has left the kitchen. Ask a server to change it.', 'not_in_kitchen');
       // On a paid bill only forward status moves are allowed; an order on any bill can't change table.
       if (b.status === 'cancelled' || b.discountPaise !== undefined) await refuseInvoiced(tx, id, 'edit');
       if (b.discountPaise !== undefined && o.invoice_id) {
@@ -507,7 +530,7 @@ export function adminRoutes() {
     const b = ItemIn.partial().parse(await c.req.json());
     // Staff can mark things sold out; everything else needs a manager.
     const onlyAvailability = Object.keys(b).every(k => k === 'available');
-    if (!onlyAvailability && c.get('staff').role === 'staff') throw new HttpError(403, 'Only a manager can edit menu items.', 'forbidden');
+    if (!onlyAvailability && !isManager(c.get('staff').role)) throw new HttpError(403, 'Only a manager can edit menu items.', 'forbidden');
     await sql.begin(async tx => {
       const [it] = await tx`
         update items set
@@ -590,7 +613,7 @@ export function adminRoutes() {
   });
 
   // ---------- Reports ----------
-  app.get('/reports/summary', async c => {
+  app.get('/reports/summary', atLeast('manager'), async c => {
     const q = z.object({ from: Day, to: Day }).parse(c.req.query());
     const { start, end } = dayRange(q.from, q.to);
     const [totals] = await sql`
@@ -631,7 +654,7 @@ export function adminRoutes() {
     return c.json({ range: q, totals: { ...totals, cancelled }, byMethod, bySource, daily, hourly, topItems, discounts });
   });
 
-  app.get('/reports/gst', async c => {
+  app.get('/reports/gst', atLeast('manager'), async c => {
     const q = z.object({ from: Day, to: Day, format: z.enum(['json', 'csv']).default('json') }).parse(c.req.query());
     const { start, end } = dayRange(q.from, q.to);
     const rows = await sql`
@@ -653,7 +676,7 @@ export function adminRoutes() {
   });
 
   /** Reconciliation: one row per transaction (a card swipe or UPI transfer can pay several orders on one bill). */
-  app.get('/reports/payments', async c => {
+  app.get('/reports/payments', atLeast('manager'), async c => {
     const q = z
       .object({ from: Day, to: Day, method: Method.optional(), search: z.string().trim().max(60).optional(), format: z.enum(['json', 'csv']).default('json') })
       .parse(c.req.query());
@@ -687,7 +710,7 @@ export function adminRoutes() {
   });
 
   // ---------- Customers ----------
-  app.get('/customers', async c => {
+  app.get('/customers', atLeast('manager'), async c => {
     const q = z.object({ search: z.string().trim().max(40).optional(), format: z.enum(['json', 'csv']).default('json') }).parse(c.req.query());
     const s = q.search ? `%${q.search}%` : null;
     const rows = await sql`
@@ -840,7 +863,7 @@ export function adminRoutes() {
   }));
   app.post('/staff', atLeast('owner'), async c => {
     const b = z
-      .object({ name: z.string().trim().min(1).max(60), email: z.string().email(), password: z.string().min(8).max(100), role: z.enum(['owner', 'manager', 'staff']) })
+      .object({ name: z.string().trim().min(1).max(60), email: z.string().email(), password: z.string().min(8).max(100), role: z.enum(['owner', 'manager', 'staff', 'chef']) })
       .parse(await c.req.json());
     const hash = await hashPassword(b.password);
     const [s] = await sql`insert into staff (name, email, password_hash, role) values (${b.name}, ${b.email.toLowerCase()}, ${hash}, ${b.role})
@@ -850,7 +873,7 @@ export function adminRoutes() {
   });
   app.patch('/staff/:id', atLeast('owner'), async c => {
     const id = Number(c.req.param('id'));
-    const b = z.object({ role: z.enum(['owner', 'manager', 'staff']).optional(), active: z.boolean().optional(), password: z.string().min(8).optional() }).parse(await c.req.json());
+    const b = z.object({ role: z.enum(['owner', 'manager', 'staff', 'chef']).optional(), active: z.boolean().optional(), password: z.string().min(8).optional() }).parse(await c.req.json());
     if (id === c.get('staff').sub && (b.active === false || (b.role && b.role !== 'owner')))
       throw new HttpError(409, 'You can’t switch off or demote your own account.', 'self');
     const hash = b.password ? await hashPassword(b.password) : null;
