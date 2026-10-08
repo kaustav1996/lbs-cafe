@@ -47,7 +47,7 @@ export default function Menu() {
   const [active, setActive] = useState(MENU[0]?.id ?? '');
   const barRef = useRef<HTMLDivElement>(null);
   const [closed, setClosed] = useState<Set<string>>(() => new Set(readClosed()));
-  const searching = !!q.trim() || vegOnly; // a search shows every match, closed or not
+  const searching = !!q.trim(); // a search shows every match, closed or not; Veg only keeps sections foldable
   const isOpen = (id: string) => searching || !closed.has(id);
   const saveClosed = (next: Set<string>) => {
     setClosed(next);

@@ -70,7 +70,7 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   (both, for quiet days; migration 010) and Manager/Owner (everything). Reports, offers
   and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
 - **Guest menu sections fold** (8 Oct 2026): tap a section heading to close or open it, or Close all sections. The
-  phone remembers closed sections; a search or Veg only shows every match, and tapping a section chip opens it.
+  phone remembers closed sections; a search shows every match (Veg only keeps sections foldable), and tapping a section chip opens it.
 - **Record player and music gear** (7 Oct 2026): 3D-tilted turntable in the home hero (`components/Gear.tsx`, Deck);
   line drawings mark the menu (turntable), orders and bills (cassette), LB's card (Walkman), booking (boombox).
 
