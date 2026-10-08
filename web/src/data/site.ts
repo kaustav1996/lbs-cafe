@@ -16,8 +16,8 @@ export const SITE = {
   email: 'lbsfrequency@gmail.com',
   mapsUrl:
     'https://www.google.com/maps/search/?api=1&query=' +
-    // The address exactly as Google Maps lists the cafe, so directions land on the right pin.
-    encodeURIComponent('Bidhan Nagar, 29 BJ, BJ Block, Sector 2, Kolkata, Bidhannagar, West Bengal 700091'),
+    // Just the name, as the cafe asked: Google Maps finds the LB's listing from it.
+    encodeURIComponent("LB's"),
   // Leave blank to hide. Fill in once confirmed.
   instagram: '',
   facebook: '',
