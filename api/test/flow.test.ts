@@ -1045,4 +1045,14 @@ test('roles: a chef sees only the kitchen and moves orders up to ready; a server
   assert.equal((await app.inject({ method: 'GET', url: '/api/admin/reports/summary', headers: server })).statusCode, 403);
   assert.equal((await app.inject({ method: 'GET', url: '/api/admin/customers', headers: server })).statusCode, 403);
   assert.equal((await app.inject({ method: 'GET', url: '/api/admin/service-requests', headers: server })).statusCode, 200);
+
+  // A server serves and bills but leaves preparing and ready to the kitchen; 'server and kitchen' does both.
+  const o2 = (await app.inject({ method: 'POST', url: '/api/admin/orders', headers: server, payload: { source: 'counter', lines: [{ ...LATTE(), qty: 1 }] } })).json().order;
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o2.id}`, headers: server, payload: { status: 'preparing' } })).statusCode, 403);
+  await app.inject({ method: 'POST', url: '/api/admin/staff', headers: auth(), payload: { name: 'Both', email: 'both@lbscafe.test', password: 'both-pass-1', role: 'server_kitchen' } });
+  const both = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'both@lbscafe.test', password: 'both-pass-1' } })).json().token}` };
+  for (const status of ['preparing', 'ready', 'served'])
+    assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o2.id}`, headers: both, payload: { status } })).json().order.status, status);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/reports/summary', headers: both })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/orders/${o2.id}`, headers: server, payload: { status: 'completed' } })).statusCode, 200);
 });

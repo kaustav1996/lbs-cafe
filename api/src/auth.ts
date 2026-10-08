@@ -4,8 +4,11 @@ import type { Context } from 'hono';
 import { runtime } from './context.js';
 import { sql } from './db.js';
 
-/** chef: kitchen screen only. staff: a server on the floor. manager and owner: everything. */
-export type Role = 'owner' | 'manager' | 'staff' | 'chef';
+/**
+ * chef: kitchen screen only. staff: a server (serves, bills; doesn't move orders through the kitchen).
+ * server_kitchen: both, for quiet days. manager and owner: everything.
+ */
+export type Role = 'owner' | 'manager' | 'staff' | 'server_kitchen' | 'chef';
 export interface StaffClaims {
   sub: number;
   name: string;
@@ -80,7 +83,9 @@ export const requireStaff = createMiddleware<AppEnv>(async (c, next) => {
   await next();
 });
 
-const RANK: Record<Role, number> = { chef: 0, staff: 1, manager: 2, owner: 3 };
+const RANK: Record<Role, number> = { chef: 0, staff: 1, server_kitchen: 1, manager: 2, owner: 3 };
+/** Who may move orders to preparing and ready. */
+export const cooks = (role: Role) => role !== 'staff';
 export const isManager = (role: Role) => RANK[role] >= RANK.manager;
 export function atLeast(role: Role) {
   return createMiddleware<AppEnv>(async (c, next) => {

@@ -1935,3 +1935,13 @@ textarea.a-input {
     padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 }
+.a-with-kitchen {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  color: var(--a-muted);
+  font-weight: 650;
+  font-size: 14px;
+}

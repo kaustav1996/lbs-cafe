@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { sql } from '../db.js';
 import { bus } from '../events.js';
-import { atLeast, isManager, requireStaff, type AppEnv } from '../auth.js';
+import { atLeast, cooks, isManager, requireStaff, type AppEnv } from '../auth.js';
 import { hashPassword } from '../password.js';
 import { runtime } from '../context.js';
 import { checkUpload, FileRef } from '../files.js';
@@ -133,6 +133,8 @@ export function adminRoutes() {
     const role = c.get('staff').role;
     if ((b.status === 'cancelled' || b.discountPaise !== undefined) && !isManager(role))
       throw new HttpError(403, 'Only a manager can cancel an order or give a discount.', 'forbidden');
+    if (b.status && KITCHEN_STATUSES.includes(b.status) && !cooks(role))
+      throw new HttpError(403, 'Only the kitchen moves orders to preparing or ready. The owner can give you the Server and kitchen role.', 'forbidden');
     if (role === 'chef' && (Object.keys(b).some(k => k !== 'status') || !KITCHEN_STATUSES.includes(b.status ?? '')))
       throw new HttpError(403, 'The kitchen can move orders to preparing or ready. A server marks them served.', 'forbidden');
     const freed = await sql.begin(async tx => {
@@ -863,7 +865,7 @@ export function adminRoutes() {
   }));
   app.post('/staff', atLeast('owner'), async c => {
     const b = z
-      .object({ name: z.string().trim().min(1).max(60), email: z.string().email(), password: z.string().min(8).max(100), role: z.enum(['owner', 'manager', 'staff', 'chef']) })
+      .object({ name: z.string().trim().min(1).max(60), email: z.string().email(), password: z.string().min(8).max(100), role: z.enum(['owner', 'manager', 'staff', 'server_kitchen', 'chef']) })
       .parse(await c.req.json());
     const hash = await hashPassword(b.password);
     const [s] = await sql`insert into staff (name, email, password_hash, role) values (${b.name}, ${b.email.toLowerCase()}, ${hash}, ${b.role})
@@ -873,7 +875,7 @@ export function adminRoutes() {
   });
   app.patch('/staff/:id', atLeast('owner'), async c => {
     const id = Number(c.req.param('id'));
-    const b = z.object({ role: z.enum(['owner', 'manager', 'staff', 'chef']).optional(), active: z.boolean().optional(), password: z.string().min(8).optional() }).parse(await c.req.json());
+    const b = z.object({ role: z.enum(['owner', 'manager', 'staff', 'server_kitchen', 'chef']).optional(), active: z.boolean().optional(), password: z.string().min(8).optional() }).parse(await c.req.json());
     if (id === c.get('staff').sub && (b.active === false || (b.role && b.role !== 'owner')))
       throw new HttpError(409, 'You can’t switch off or demote your own account.', 'self');
     const hash = b.password ? await hashPassword(b.password) : null;

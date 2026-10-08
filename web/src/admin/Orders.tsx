@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ago, errText, rs, timeIST, todayIST, useAuth, useOnEvent, useTick } from './core';
+import { ago, cooks, errText, rs, timeIST, todayIST, useAuth, useOnEvent, useTick } from './core';
 import { BoardTabs, DietDot, Empty, Modal, PageHead, toast } from './ui';
 import { ItemPicker, useAdminMenu, type PickedLine } from './picker';
 import { InvoiceModal, METHODS, needsReference } from './Invoice';
@@ -182,7 +182,10 @@ export default function Orders() {
 }
 
 function OrderCard({ o, onOpen, onMove, onInvoice }: { o: AOrder; onOpen: () => void; onMove: (to: AOrder['status']) => void; onInvoice: () => void }) {
-  const next = NEXT[o.status];
+  const { me } = useAuth();
+  // Servers leave preparing and ready to the kitchen; they take over once it's ready.
+  const kitchenStep = o.status === 'new' || o.status === 'preparing';
+  const next = kitchenStep && !cooks(me?.role) ? undefined : NEXT[o.status];
   const due = o.total_paise - o.paid_paise;
   const late = o.status === 'new' && Date.now() - new Date(o.created_at).getTime() > 5 * 60000;
   return (
@@ -209,6 +212,7 @@ function OrderCard({ o, onOpen, onMove, onInvoice }: { o: AOrder; onOpen: () => 
         </footer>
       </button>
       <div className="a-card-actions">
+        {kitchenStep && !next && <span className="a-with-kitchen">With the kitchen</span>}
         {next && (
           <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={() => onMove(next.to)}>
             {o.source === 'takeaway' && next.to === 'served' ? 'Picked up' : next.label}

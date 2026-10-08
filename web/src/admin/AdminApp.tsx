@@ -90,15 +90,16 @@ function Login() {
   );
 }
 
-const FLOOR: Role[] = ['staff', 'manager', 'owner'];
+const FLOOR: Role[] = ['staff', 'server_kitchen', 'manager', 'owner'];
+const COOKS: Role[] = ['server_kitchen', 'manager', 'owner'];
 const MANAGERS: Role[] = ['manager', 'owner'];
 const ALL: Role[] = ['chef', ...FLOOR];
 
-/** Who sees what: a chef gets the kitchen; servers get the floor and the kitchen; managers and owners get everything. */
+/** Who sees what: a chef gets the kitchen; servers get the floor; 'server and kitchen' gets both; managers and owners everything. */
 const NAV: { to: string; label: string; end?: boolean; icon: string; roles: Role[] }[] = [
   { to: '/admin', label: 'Kitchen', end: true, icon: 'M6 13h12v7H6zM8 13V9a4 4 0 0 1 8 0v4M12 3v2', roles: ['chef'] },
   { to: '/admin', label: 'Orders', end: true, icon: 'M4 6h16M4 12h16M4 18h10', roles: FLOOR },
-  { to: '/admin/kitchen', label: 'Kitchen', icon: 'M6 13h12v7H6zM8 13V9a4 4 0 0 1 8 0v4M12 3v2', roles: FLOOR },
+  { to: '/admin/kitchen', label: 'Kitchen', icon: 'M6 13h12v7H6zM8 13V9a4 4 0 0 1 8 0v4M12 3v2', roles: COOKS },
   { to: '/admin/pos', label: 'New order', icon: 'M12 5v14M5 12h14', roles: FLOOR },
   { to: '/admin/bookings', label: 'Bookings', icon: 'M7 3v3M17 3v3M4 8h16M5 5h14v15H5z', roles: FLOOR },
   { to: '/admin/menu', label: 'Menu', icon: 'M6 4h12v16H6zM9 8h6M9 12h6M9 16h3', roles: ALL },

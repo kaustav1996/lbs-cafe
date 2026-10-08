@@ -11,6 +11,16 @@ import { useLive } from '../state/live';
 import { inr } from '../lib/format';
 import { Turntable } from '../components/Gear';
 
+// Sections a guest closed on this phone (per-viewer convenience; the menu works without it).
+const CLOSED_KEY = 'lbs.menu.closed';
+function readClosed(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]') as string[];
+  } catch {
+    return [];
+  }
+}
+
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
 
 function filterMenu(MENU: MenuCategory[], q: string, vegOnly: boolean): MenuCategory[] {
@@ -36,6 +46,30 @@ export default function Menu() {
   const cats = useMemo(() => filterMenu(MENU, q, vegOnly), [MENU, q, vegOnly]);
   const [active, setActive] = useState(MENU[0]?.id ?? '');
   const barRef = useRef<HTMLDivElement>(null);
+  const [closed, setClosed] = useState<Set<string>>(() => new Set(readClosed()));
+  const searching = !!q.trim() || vegOnly; // a search shows every match, closed or not
+  const isOpen = (id: string) => searching || !closed.has(id);
+  const saveClosed = (next: Set<string>) => {
+    setClosed(next);
+    try {
+      localStorage.setItem(CLOSED_KEY, JSON.stringify([...next]));
+    } catch {
+      /* fine: it just won't be remembered */
+    }
+  };
+  const toggle = (id: string) => {
+    const next = new Set(closed);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    saveClosed(next);
+  };
+  const open1 = (id: string) => {
+    if (!closed.has(id)) return;
+    const next = new Set(closed);
+    next.delete(id);
+    saveClosed(next);
+  };
+  const allClosed = cats.length > 0 && cats.every(c => closed.has(c.id));
 
   // QR codes on tables point at /menu?table=7
   useEffect(() => {
@@ -50,6 +84,7 @@ export default function Menu() {
 
   useEffect(() => {
     const id = loc.hash.replace('#', '');
+    if (id) open1(id);
     if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
     else window.scrollTo(0, 0);
   }, [loc.hash]);
@@ -81,6 +116,7 @@ export default function Menu() {
   }, [active]);
 
   const jump = (id: string) => {
+    open1(id);
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -150,18 +186,32 @@ export default function Menu() {
       )}
 
       <div className="wrap narrow menu-body">
+        {cats.length > 1 && !searching && (
+          <p className="cat-all">
+            <button type="button" className="linkish" onClick={() => saveClosed(allClosed ? new Set() : new Set(cats.map(c => c.id)))}>
+              {allClosed ? 'Open all sections' : 'Close all sections'}
+            </button>
+          </p>
+        )}
         {cats.map(c => (
-          <section key={c.id} id={c.id} className="cat" style={{ '--label': c.color } as CSSProperties} aria-labelledby={`${c.id}-h`}>
-            <div className="cat-head">
-              <Vinyl color={c.color} className="cat-disc" />
-              <div>
-                <h2 id={`${c.id}-h`}>{c.name}</h2>
-                <p className="muted num">
-                  {c.items.length} {c.items.length === 1 ? 'item' : 'items'}, {inr(c.min)} to {inr(c.max)}
-                </p>
-              </div>
-            </div>
-            <ul className="tracks">
+          <section key={c.id} id={c.id} className={`cat ${isOpen(c.id) ? '' : 'is-closed'}`} style={{ '--label': c.color } as CSSProperties} aria-labelledby={`${c.id}-h`}>
+            <h2 id={`${c.id}-h`} className="cat-h">
+              <button type="button" className="cat-head" aria-expanded={isOpen(c.id)} aria-controls={`${c.id}-list`} onClick={() => !searching && toggle(c.id)}>
+                <Vinyl color={c.color} className="cat-disc" />
+                <span className="cat-text">
+                  <span className="cat-name">{c.name}</span>
+                  <span className="cat-meta muted num">
+                    {c.items.length} {c.items.length === 1 ? 'item' : 'items'}, {inr(c.min)} to {inr(c.max)}
+                  </span>
+                </span>
+                {!searching && (
+                  <svg className="cat-chev" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            </h2>
+            <ul className="tracks" id={`${c.id}-list`} hidden={!isOpen(c.id)}>
               {c.items.map(i => (
                 <Track key={i.id} item={i} />
               ))}

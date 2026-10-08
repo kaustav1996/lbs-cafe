@@ -590,7 +590,8 @@ function StaffCard() {
             {owner && s.id !== me?.id ? (
               <select className="a-input a-input-xs" value={s.role} onChange={e => patch(s, { role: e.target.value }, `${s.name} is now ${ROLE_LABEL[e.target.value as Role].toLowerCase()}`)} aria-label={`Role for ${s.name}`}>
                 <option value="chef">Chef (kitchen screen only)</option>
-                <option value="staff">Server (orders, billing, bookings)</option>
+                <option value="staff">Server (serves, bills, bookings)</option>
+                <option value="server_kitchen">Server and kitchen (both, for quiet days)</option>
                 <option value="manager">Manager</option>
                 <option value="owner">Owner</option>
               </select>
@@ -648,7 +649,8 @@ function StaffCard() {
               <span>Role</span>
               <select className="a-input" value={f.role} onChange={e => setF({ ...f, role: e.target.value as Staff['role'] })}>
                 <option value="chef">Chef (kitchen screen only)</option>
-                <option value="staff">Server (orders, billing, bookings)</option>
+                <option value="staff">Server (serves, bills, bookings)</option>
+                <option value="server_kitchen">Server and kitchen (both, for quiet days)</option>
                 <option value="manager">Manager</option>
                 <option value="owner">Owner</option>
               </select>

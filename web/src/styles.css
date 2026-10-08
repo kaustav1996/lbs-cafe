@@ -1113,21 +1113,72 @@ mark {
   padding-top: 28px;
   scroll-margin-top: calc(var(--topbar-h) + 64px);
 }
+.cat-all {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+.cat-all .linkish {
+  min-height: 44px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cat-h {
+  margin: 0;
+  font-size: inherit;
+}
 .cat-head {
   display: flex;
   align-items: center;
   gap: 14px;
+  width: 100%;
+  min-height: 60px;
   margin-bottom: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cat-head:focus-visible {
+  outline: 3px solid var(--cyan-ink);
+  outline-offset: 4px;
+  border-radius: 6px;
 }
 .cat-disc {
   width: 48px;
   flex: none;
 }
-.cat-head h2 {
-  font-size: var(--t-xl);
+.cat-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
 }
-.cat-head p {
+.cat-name {
+  font-size: var(--t-xl);
+  font-weight: 800;
+  line-height: 1.2;
+}
+.cat-meta {
   font-size: var(--t-sm);
+}
+.cat-chev {
+  flex: none;
+  transform: rotate(180deg);
+}
+.cat.is-closed .cat-chev {
+  transform: none;
+}
+.cat.is-closed {
+  padding-top: 12px;
+}
+.cat.is-closed .cat-head {
+  margin-bottom: 0;
+  padding-bottom: 12px;
+  border-bottom: 1.5px dashed var(--ink);
 }
 .tracks {
   list-style: none;

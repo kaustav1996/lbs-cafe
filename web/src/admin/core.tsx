@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, API_URL, ApiError, HAS_API } from '../lib/api';
 
-/** chef: kitchen screen only. staff: a server on the floor. manager and owner: everything. */
-export type Role = 'owner' | 'manager' | 'staff' | 'chef';
-export const ROLE_LABEL: Record<Role, string> = { chef: 'Chef', staff: 'Server', manager: 'Manager', owner: 'Owner' };
+/** chef: kitchen only. staff: a server (no kitchen moves). server_kitchen: both. manager and owner: everything. */
+export type Role = 'owner' | 'manager' | 'staff' | 'server_kitchen' | 'chef';
+export const ROLE_LABEL: Record<Role, string> = { chef: 'Chef', staff: 'Server', server_kitchen: 'Server and kitchen', manager: 'Manager', owner: 'Owner' };
+/** Who may move orders to preparing and ready. */
+export const cooks = (role: Role | undefined) => !!role && role !== 'staff';
 export interface Me {
   id: number;
   name: string;
@@ -31,7 +33,7 @@ interface AuthApi {
 }
 
 const AuthCtx = createContext<AuthApi | null>(null);
-const RANK: Record<Role, number> = { chef: 0, staff: 1, manager: 2, owner: 3 };
+const RANK: Record<Role, number> = { chef: 0, staff: 1, server_kitchen: 1, manager: 2, owner: 3 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(readToken);
