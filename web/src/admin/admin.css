@@ -1953,3 +1953,10 @@ textarea.a-input {
 .a-call > b {
   white-space: nowrap;
 }
+.a-tag.ok {
+  border-color: var(--a-good);
+  color: var(--a-good);
+}
+.a-claim-line {
+  margin: 0 0 6px;
+}

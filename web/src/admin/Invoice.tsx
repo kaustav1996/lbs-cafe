@@ -31,6 +31,10 @@ export interface Invoice {
   payments: { at: string; method: string; amount: number; reference: string | null; staff?: string | null }[];
   discount: { kind: 'none' | 'reward' | 'welcome' | 'offer' | 'manual'; manualNote: string | null; locked: boolean };
   card: { id: number; name: string | null; phone: string; stamps: number } | null;
+  /** Claimed by the guest after payment, with the number checked by a code. */
+  claim: { at: string; phone: string } | null;
+  /** The name and number given at the table; whether that number was checked on this bill, and ever. */
+  guest: { name: string | null; phone: string; verifiedHere: boolean; verifiedEver: boolean } | null;
 }
 
 export const METHODS = [
@@ -236,7 +240,30 @@ function CardAndDiscount({ inv, onChange }: { inv: Invoice; onChange: (i: Invoic
   };
   return (
     <div className="a-card-box">
-      <span className="a-label">LB’s card</span>
+      <span className="a-label">Guest and LB’s card</span>
+      <p className="a-claim-line">
+        Mobile at the table:{' '}
+        {inv.guest ? (
+          <>
+            <b>{inv.guest.phone}</b>
+            {inv.guest.name ? ` (${inv.guest.name})` : ''}{' '}
+            <span className={`a-tag ${inv.guest.verifiedHere ? 'ok' : ''}`}>{inv.guest.verifiedHere ? 'Verified on this bill' : 'Not verified'}</span>
+            {!inv.guest.verifiedHere && inv.guest.verifiedEver && <small className="a-muted"> Verified on an earlier visit.</small>}
+          </>
+        ) : (
+          <span className="a-muted">none given</span>
+        )}
+      </p>
+      <p className="a-claim-line">
+        Card claimed:{' '}
+        {inv.claim ? (
+          <>
+            <span className="a-tag ok">Yes</span> by <b>{inv.claim.phone}</b>, {new Date(inv.claim.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}
+          </>
+        ) : (
+          <span className="a-tag">{inv.status === 'paid' ? 'Not yet' : 'After payment'}</span>
+        )}
+      </p>
       {inv.card ? (
         <p className="a-card-holder">
           <b>{inv.card.name || inv.card.phone}</b> <small className="a-muted">{inv.card.name ? inv.card.phone : ''}</small>

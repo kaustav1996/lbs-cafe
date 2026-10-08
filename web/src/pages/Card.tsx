@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Footer, Nav } from '../components/Chrome';
 import { api, ApiError, HAS_API } from '../lib/api';
 import { getCardToken, setCardToken } from '../lib/card';
@@ -21,11 +21,11 @@ interface CardView {
 
 const until = (d: string) => new Date(`${d}T12:00:00+05:30`).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' });
 
-/** LB's card: sign in with a WhatsApp code, collect a stamp per visit, the 5th visit is half price. */
+/**
+ * LB's card: a stamp per visit, the 5th visit half price. A card starts from a paid bill (claimed there with a
+ * code to the guest's number), so this page only shows a card this phone has claimed.
+ */
 export default function Card() {
-  const [params] = useSearchParams();
-  const billToken = params.get('bill');
-  const nav = useNavigate();
   const [token, setToken] = useState(getCardToken());
   const [card, setCard] = useState<CardView | null>(null);
   const [error, setError] = useState('');
@@ -46,20 +46,6 @@ export default function Card() {
     void load();
   }, [load]);
 
-  const signedIn = async (t: string) => {
-    setCardToken(t);
-    setToken(t);
-    // Came here from a bill: put that bill on the card and go back to it.
-    if (billToken) {
-      try {
-        await api(`/api/public/card/invoices/${encodeURIComponent(billToken)}`, { method: 'POST', token: t });
-      } catch {
-        /* the bill page shows why */
-      }
-      nav(`/bill/${billToken}`);
-    }
-  };
-
   return (
     <div className="page">
       <Nav />
@@ -70,111 +56,22 @@ export default function Card() {
           <p className="status-meta">A stamp for every visit. Your 5th visit is half price.</p>
         </header>
         {error && <p className="error">{error}</p>}
-        {!token && <SignIn onSignedIn={signedIn} />}
+        {!token && (
+          <section className="card-box">
+            <p>
+              <b>Your card starts with a paid bill.</b> After you pay, open your bill (Get the bill on your order page, or ask your server for the
+              link) and tap Claim my LB’s card. We send a code to your number to check it’s yours, every time you claim a stamp.
+            </p>
+            <Link to="/menu" className="btn btn-ink">
+              See the menu
+            </Link>
+          </section>
+        )}
         {token && !card && !error && <Spinner>Loading your card…</Spinner>}
         {card && <CardFace card={card} token={token!} onChange={load} onGone={() => (setCardToken(null), setToken(null), setCard(null))} />}
       </main>
       <Footer />
     </div>
-  );
-}
-
-function SignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
-  const [phone, setPhone] = useState('');
-  const [name, setName] = useState('');
-  const [optIn, setOptIn] = useState(false);
-  const [code, setCode] = useState('');
-  const [sent, setSent] = useState(false);
-  const [off, setOff] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const send = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (phone.replace(/\D/g, '').length < 10) return setError('Add your 10-digit mobile number.');
-    if (!HAS_API) return setOff('Card sign-in is coming soon. Ask your server to add today’s bill to your LB’s card.');
-    setBusy(true);
-    try {
-      await api('/api/public/card/code', { method: 'POST', json: { phone, name: name || undefined, optIn } });
-      setSent(true);
-      setTimeout(() => document.getElementById('card-code')?.focus(), 0);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'card_off') setOff(err.message);
-      else setError(err instanceof ApiError ? err.message : 'Couldn’t send the code. Try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-  const verify = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setBusy(true);
-    try {
-      const r = await api<{ token: string }>('/api/public/card/verify', { method: 'POST', json: { phone, code: code.trim() } });
-      onSignedIn(r.token);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Couldn’t check the code. Try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (off)
-    return (
-      <section className="card-box">
-        <p>{off}</p>
-        <Link to="/menu" className="btn btn-ink">
-          See the menu
-        </Link>
-      </section>
-    );
-  return (
-    <section className="card-box">
-      {!sent ? (
-        <form className="card-form" onSubmit={send}>
-          <div className="field">
-            <label htmlFor="card-phone">Mobile</label>
-            <input id="card-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="card-name">Name (optional)</label>
-            <input id="card-name" autoComplete="name" value={name} onChange={e => setName(e.target.value)} />
-          </div>
-          <label className="check">
-            <input type="checkbox" checked={optIn} onChange={e => setOptIn(e.target.checked)} />
-            Send me offers and reminders on WhatsApp
-          </label>
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
-          <button className="btn btn-ink" disabled={busy}>
-            {busy ? 'Sending…' : 'Send me a code on WhatsApp'}
-          </button>
-        </form>
-      ) : (
-        <form className="card-form" onSubmit={verify}>
-          <p>We sent a 6-digit code to {phone} on WhatsApp.</p>
-          <div className="field">
-            <label htmlFor="card-code">Code</label>
-            <input id="card-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} />
-          </div>
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
-          <button className="btn btn-ink" disabled={busy || code.length !== 6}>
-            {busy ? 'Checking…' : 'Open my card'}
-          </button>
-          <button type="button" className="linkish" onClick={() => (setSent(false), setCode(''))}>
-            Use a different number
-          </button>
-        </form>
-      )}
-    </section>
   );
 }
 

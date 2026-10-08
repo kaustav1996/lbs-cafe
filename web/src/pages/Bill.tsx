@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Footer, Nav } from '../components/Chrome';
 import { api, ApiError, paiseToRupees } from '../lib/api';
 import { inr } from '../lib/format';
-import { getCardToken } from '../lib/card';
+import { ClaimCard } from '../components/ClaimCard';
 import { Cassette, Spinner } from '../components/Gear';
 
 interface GuestInvoice {
@@ -29,23 +29,6 @@ export default function Bill() {
   const { token = '' } = useParams();
   const [inv, setInv] = useState<GuestInvoice | null>(null);
   const [error, setError] = useState('');
-  const [cardMsg, setCardMsg] = useState('');
-  const [adding, setAdding] = useState(false);
-  const cardToken = getCardToken();
-  const addToCard = async () => {
-    setAdding(true);
-    setCardMsg('');
-    try {
-      const r = await api<{ invoice: GuestInvoice }>(`/api/public/card/invoices/${encodeURIComponent(token)}`, { method: 'POST', token: cardToken });
-      setInv(r.invoice);
-      setCardMsg('Added to your LB’s card. The stamp lands when the bill is paid.');
-    } catch (e) {
-      setCardMsg(e instanceof ApiError ? e.message : 'Couldn’t add it. Ask your server.');
-    } finally {
-      setAdding(false);
-    }
-  };
-
   useEffect(() => {
     document.title = "Your bill | LB's";
     let stop = false;
@@ -152,20 +135,7 @@ export default function Bill() {
               </dl>
             </section>
 
-            <section className="card-box no-print" aria-label="LB’s card">
-              {inv.card ? (
-                <p>This bill is on an LB’s card.</p>
-              ) : cardToken ? (
-                <button type="button" className="btn btn-line" onClick={addToCard} disabled={adding}>
-                  Add to my LB’s card
-                </button>
-              ) : (
-                <p>
-                  Collect a stamp for this visit: <Link to={`/card?bill=${encodeURIComponent(token)}`}>open LB’s card</Link>, or give your server your number.
-                </p>
-              )}
-              {cardMsg && <p className="status-meta">{cardMsg}</p>}
-            </section>
+            <ClaimCard token={token} paid={inv.status === 'paid'} onClaimed={() => setInv({ ...inv, card: { linked: true } })} />
 
             <div className="status-actions no-print">
               <button type="button" className="btn btn-ink" onClick={() => window.print()}>

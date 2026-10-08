@@ -30,10 +30,10 @@ export function TapeFlip({ cats }: { cats: MenuCategory[] }) {
       const hidden = parity(turns + 1);
       setFaces(f => (hidden === 0 ? [target, f[1]] : [f[0], target]));
       // Let the back face take its new section before it turns into view.
-      requestAnimationFrame(() => {
+      setTimeout(() => {
         setTurns(t => t + dir);
         setIndex(target);
-      });
+      }, 30);
       setTimeout(() => (busy.current = false), FLIP_MS);
       return true;
     },

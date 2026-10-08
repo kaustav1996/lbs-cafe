@@ -727,9 +727,9 @@ export function adminRoutes() {
       order by c.last_seen_at desc limit 500`;
     if (q.format === 'csv') {
       return c.body(csv([
-        ['Name', 'Phone', 'Email', 'Orders', 'Bookings', 'Paid visits', 'Spent (₹)', 'Stamps', 'Rewards used', 'Welcome used', 'WhatsApp opt-in', 'Last visit', 'First seen', 'Last seen'],
+        ['Name', 'Phone', 'Number verified', 'Email', 'Orders', 'Bookings', 'Paid visits', 'Spent (₹)', 'Stamps', 'Rewards used', 'Welcome used', 'WhatsApp opt-in', 'Last visit', 'First seen', 'Last seen'],
         ...rows.map(r => [
-          r.name, r.phone, r.email, r.orders, r.bookings, r.visits, r2(Number(r.spent_paise)), r.stamps, r.rewards,
+          r.name, r.phone, r.verified_at ? 'Yes' : 'No', r.email, r.orders, r.bookings, r.visits, r2(Number(r.spent_paise)), r.stamps, r.rewards,
           r.welcome_used_at ? r.welcome_used_at.toISOString().slice(0, 10) : '', r.opted_in ? 'Yes' : 'No',
           r.last_visit_at ? r.last_visit_at.toISOString().slice(0, 10) : '', r.created_at.toISOString().slice(0, 10), r.last_seen_at.toISOString().slice(0, 10),
         ]),

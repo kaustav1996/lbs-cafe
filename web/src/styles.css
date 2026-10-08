@@ -326,7 +326,8 @@ mark {
   bottom: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   height: calc(var(--bar-h) + var(--safe-b));
   padding-bottom: var(--safe-b);
   background: var(--ink);
@@ -2366,4 +2367,33 @@ button.buy:hover {
 .chip-tape:focus-visible {
   outline: 3px solid var(--cyan-ink);
   outline-offset: 4px;
+}
+.card-box.claim .form {
+  width: 100%;
+}
+.claim-resend {
+  justify-self: center;
+  min-height: 44px;
+  margin-top: 6px;
+}
+.its-me {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-sm);
+}
+.its-me p {
+  font-size: var(--t-lg);
+}
+.its-me-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.its-me-actions .btn {
+  min-height: 44px;
+}
+.its-me-done .linkish {
+  min-height: 44px;
 }

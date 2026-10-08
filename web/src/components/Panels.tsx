@@ -62,6 +62,24 @@ export function CartDrawer() {
   const [askCode, setAskCode] = useState(false);
   const [code, setCode] = useState('');
   const [asked, setAsked] = useState(false);
+  // The first guest gives their number first; if LB's knows it, they confirm the name instead of typing it.
+  const [known, setKnown] = useState<{ phone: string; name: string | null } | null>(null);
+  const [itsMe, setItsMe] = useState(false);
+  const phoneDigits = cart.phone.replace(/\D/g, '');
+  useEffect(() => {
+    if (!askCode || cart.mode !== 'table' || phoneDigits.length < 10 || known?.phone === phoneDigits) return;
+    let stop = false;
+    api<{ name: string | null }>(`/api/public/tables/${encodeURIComponent(cart.table.trim())}/guest?phone=${encodeURIComponent(phoneDigits)}`)
+      .then(r => !stop && (setKnown({ phone: phoneDigits, name: r.name }), setItsMe(false)))
+      .catch(() => !stop && setKnown({ phone: phoneDigits, name: null }));
+    return () => {
+      stop = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askCode, phoneDigits]);
+  const lookedUp = known?.phone === phoneDigits;
+  // Said "that's me": the order goes without a name and LB's uses the one it has for the number.
+  const nameForCode = itsMe && known?.name ? known.name : cart.name.trim();
   const canOrderOnline = HAS_API && live && settings.orderingEnabled;
   const last = recentOrders()[0];
 
@@ -130,7 +148,7 @@ export function CartDrawer() {
       const table = cart.table.trim();
       const r = await api<{ pass: string }>(`/api/public/tables/${encodeURIComponent(table)}/verify`, {
         method: 'POST',
-        json: { code: code.trim(), name: cart.name.trim() || undefined, phone: cart.phone.trim() || undefined },
+        json: { code: code.trim(), name: nameForCode || undefined, phone: cart.phone.trim() || undefined },
       });
       setTablePass(table, r.pass);
       setBusy(false);
@@ -146,18 +164,18 @@ export function CartDrawer() {
   /** First at the table: send name and number with a request, and the servers get an alert with the code. */
   const askServer = async () => {
     setError('');
-    if (!cart.name.trim()) {
-      setError('Add your name, then ask for the code.');
-      return document.getElementById('code-name')?.focus();
-    }
-    if (cart.phone.replace(/\D/g, '').length < 10) {
+    if (phoneDigits.length < 10) {
       setError('Add a 10-digit mobile number, then ask for the code.');
       return document.getElementById('code-phone')?.focus();
+    }
+    if (!nameForCode) {
+      setError('Add your name, then ask for the code.');
+      return document.getElementById('code-name')?.focus();
     }
     setBusy(true);
     try {
       const table = cart.table.trim();
-      await api(`/api/public/tables/${encodeURIComponent(table)}/code-request`, { method: 'POST', json: { name: cart.name.trim(), phone: cart.phone.trim() } });
+      await api(`/api/public/tables/${encodeURIComponent(table)}/code-request`, { method: 'POST', json: { name: nameForCode, phone: cart.phone.trim() } });
       setAsked(true);
       setTimeout(() => document.getElementById('table-code')?.focus(), 0);
     } catch (err) {
@@ -259,25 +277,55 @@ export function CartDrawer() {
             <form className="table-code" onSubmit={checkCode}>
               <p className="table-code-title">Table {cart.table.trim()} needs its code</p>
               <p className="hint">
-                First at the table? Add your name and number and ask a server for the code. Joining friends who’ve already ordered? Just enter the code.
+                First at the table? Add your number and name, then ask a server for the code. Joining friends who’ve already ordered? Just enter the code.
               </p>
-              <div className="field-row">
+              <div className="field">
+                <label htmlFor="code-phone">Mobile</label>
+                <input
+                  id="code-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={cart.phone}
+                  onChange={e => cart.dispatch({ type: 'contact', phone: e.target.value })}
+                />
+              </div>
+              {lookedUp && known?.name && !itsMe && (
+                <div className="its-me">
+                  <p>
+                    Are you <b>{known.name}</b>?
+                  </p>
+                  <div className="its-me-actions">
+                    <button
+                      type="button"
+                      className="btn btn-ink btn-sm"
+                      onClick={() => {
+                        setItsMe(true);
+                        cart.dispatch({ type: 'contact', name: '' });
+                      }}
+                    >
+                      Yes, that’s me
+                    </button>
+                    <button type="button" className="btn btn-line btn-sm" onClick={() => (setKnown({ phone: phoneDigits, name: null }), setTimeout(() => document.getElementById('code-name')?.focus(), 0))}>
+                      No, change the name
+                    </button>
+                  </div>
+                </div>
+              )}
+              {lookedUp && itsMe && known?.name && (
+                <p className="its-me-done">
+                  Ordering as <b>{known.name}</b>.{' '}
+                  <button type="button" className="linkish" onClick={() => (setItsMe(false), setKnown({ phone: phoneDigits, name: null }))}>
+                    Change
+                  </button>
+                </p>
+              )}
+              {lookedUp && !known?.name && (
                 <div className="field">
                   <label htmlFor="code-name">Name</label>
                   <input id="code-name" autoComplete="name" value={cart.name} onChange={e => cart.dispatch({ type: 'contact', name: e.target.value })} />
                 </div>
-                <div className="field">
-                  <label htmlFor="code-phone">Mobile</label>
-                  <input
-                    id="code-phone"
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    value={cart.phone}
-                    onChange={e => cart.dispatch({ type: 'contact', phone: e.target.value })}
-                  />
-                </div>
-              </div>
+              )}
               <button type="button" className="btn btn-line btn-block" onClick={askServer} disabled={busy || asked}>
                 {asked ? 'Asked. A server is bringing the code' : 'Ask a server for the code'}
               </button>

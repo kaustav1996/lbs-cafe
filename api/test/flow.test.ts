@@ -894,65 +894,89 @@ test('card: the welcome offer stops at the limit and a place is released when a 
   await setLoyalty({ welcome_limit: 420 });
 });
 
-test('card: sign in with a WhatsApp code, see the card, add a bill, opt out, delete my details', async () => {
-  const phone = '+919800000010';
-  const ask = await app.inject({ method: 'POST', url: '/api/public/card/code', payload: { phone: '98000 00010', name: 'Mitra', optIn: true } });
-  assert.equal(ask.statusCode, 204, ask.body);
-  // Nothing is saved for the number until the code is entered.
-  assert.equal((await sql`select 1 from customers where phone = ${phone}`).length, 0);
-  const code = messenger.lastCode(phone)!;
-  assert.match(code, /^\d{6}$/);
-  const wrong = await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code: code === '000000' ? '111111' : '000000' } });
-  assert.equal(wrong.json().error, 'bad_code');
-  const ok = await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code } });
-  assert.equal(ok.statusCode, 200, ok.body);
-  const token = ok.json().token;
-  const bearer = { authorization: `Bearer ${token}` };
-  // A card token is never a staff login.
-  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/orders', headers: bearer })).statusCode, 401);
+/** A takeaway order with the guest's name and number, paid in cash. Returns the bill. */
+const paidBill = async (phone: string, name: string) => {
+  const o = await app.inject({ method: 'POST', url: '/api/admin/orders', headers: auth(), payload: { source: 'takeaway', name, phone, lines: [{ ...LATTE(), qty: 1 }] } });
+  assert.equal(o.statusCode, 201, o.body);
+  const inv = await invoiceFor(o.json().order.id);
+  return (await payInv(inv.id, { method: 'cash' })).json().invoice;
+};
+const claim = (token: string, path = '', payload?: object, ip = '198.51.100.30') =>
+  app.inject({ method: payload ? 'POST' : 'GET', url: `/api/public/card/claim/${token}${path}`, headers: { 'cf-connecting-ip': ip }, payload });
 
+test('card: only a paid bill can be claimed, with a code to the number every time; the number can be changed', async () => {
+  // No more signing up from the card page.
+  assert.equal((await app.inject({ method: 'POST', url: '/api/public/card/code', payload: { phone: '9800000010' } })).statusCode, 404);
+
+  // Not before the bill is paid.
+  const o = await app.inject({ method: 'POST', url: '/api/admin/orders', headers: auth(), payload: { source: 'takeaway', name: 'Mitra', phone: '9800000010', lines: [{ ...LATTE(), qty: 1 }] } });
+  const unpaid = await invoiceFor(o.json().order.id);
+  assert.equal((await claim(unpaid.token)).json().state, 'unpaid');
+  assert.equal((await claim(unpaid.token, '/code', { phone: '9800000010' })).json().error, 'unpaid');
+
+  // Paid: the claim box offers the number given at the table.
+  const paid = (await payInv(unpaid.id, { method: 'cash' })).json().invoice;
+  const box = (await claim(paid.token)).json();
+  assert.deepEqual(box, { state: 'open', name: 'Mitra', phone: '+919800000010' });
+  assert.equal((await claim(paid.token, '/code', { phone: '9800000010' })).statusCode, 204);
+  const phone = '+919800000010';
+  assert.equal((await sql`select verified_at from customers where phone = ${phone}`)[0].verified_at, null, 'not verified until the code is entered');
+  const code = messenger.lastCode(phone)!;
+  assert.equal((await claim(paid.token, '/verify', { phone, code: code === '000000' ? '111111' : '000000' })).json().error, 'bad_code');
+  const ok = await claim(paid.token, '/verify', { phone, code, optIn: true });
+  assert.equal(ok.statusCode, 200, ok.body);
+  const bearer = { authorization: `Bearer ${ok.json().token}` };
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/orders', headers: bearer })).statusCode, 401, 'a card is never a staff login');
   let mine = (await app.inject({ method: 'GET', url: '/api/public/card', headers: bearer })).json();
   assert.equal(mine.name, 'Mitra');
-  assert.equal(mine.stamps, 0);
-  assert.equal(mine.optedIn, true);
-  assert.equal(mine.welcome.percent, 20);
-
-  // Add a bill from the guest's copy.
-  const v = await visit(null, 2, false);
-  const added = await app.inject({ method: 'POST', url: `/api/public/card/invoices/${v.token}`, headers: bearer });
-  assert.equal(added.statusCode, 200, added.body);
-  assert.equal(added.json().invoice.discount.kind, 'welcome');
-  assert.deepEqual(added.json().invoice.card, { linked: true });
-  // Someone else can't take it over.
-  await app.inject({ method: 'POST', url: '/api/public/card/code', payload: { phone: '9800000011' } });
-  const other = (await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone: '+919800000011', code: messenger.lastCode('+919800000011') } })).json().token;
-  const steal = await app.inject({ method: 'POST', url: `/api/public/card/invoices/${v.token}`, headers: { authorization: `Bearer ${other}` } });
-  assert.equal(steal.json().error, 'linked');
-  await payInv(v.id, { method: 'cash' });
-  mine = (await app.inject({ method: 'GET', url: '/api/public/card', headers: bearer })).json();
   assert.equal(mine.stamps, 1);
-  assert.equal(mine.welcome, null);
+  assert.equal(mine.optedIn, true);
 
-  assert.equal((await app.inject({ method: 'PATCH', url: '/api/public/card', headers: bearer, payload: { optIn: false } })).json().optedIn, false);
+  // Staff see it on the bill: number given at the table, checked on this bill, card claimed.
+  const staffView = (await app.inject({ method: 'GET', url: `/api/admin/invoices/${paid.id}`, headers: auth() })).json().invoice;
+  assert.equal(staffView.claim.phone, phone);
+  assert.equal(staffView.guest.phone, phone);
+  assert.equal(staffView.guest.verifiedHere, true);
+  // Claimed once only.
+  assert.equal((await claim(paid.token)).json().state, 'claimed');
+  assert.equal((await claim(paid.token, '/code', { phone })).json().error, 'claimed');
+
+  // Next visit: the number needs a fresh code again, and the guest can switch to another number.
+  await nextDay();
+  const again = await paidBill('9800000010', 'Mitra S');
+  const before = (await app.inject({ method: 'GET', url: `/api/admin/invoices/${again.id}`, headers: auth() })).json().invoice;
+  assert.equal(before.guest.verifiedHere, false);
+  assert.equal(before.guest.verifiedEver, true);
+  assert.equal((await claim(again.token, '/verify', { phone, code })).json().error, 'code_expired', 'last visit’s code is gone');
+  const other = '+919800000013';
+  assert.equal((await claim(again.token, '/code', { phone: '98000 00013' }, '198.51.100.31')).statusCode, 204);
+  const second = await claim(again.token, '/verify', { phone: other, code: messenger.lastCode(other), name: 'Mitra S' }, '198.51.100.31');
+  assert.equal(second.statusCode, 200, second.body);
+  assert.equal((await app.inject({ method: 'GET', url: `/api/admin/invoices/${again.id}`, headers: auth() })).json().invoice.claim.phone, other);
+
+  // One customer per number, with the latest name.
+  assert.equal((await sql`select count(*)::int as n from customers where phone = ${phone}`)[0].n, 1);
+  assert.equal((await sql`select name from customers where phone = ${phone}`)[0].name, 'Mitra S');
+  // At a table, the number brings back the first name.
+  assert.equal((await app.inject({ method: 'GET', url: `/api/public/tables/1/guest?phone=9800000010` })).json().name, 'Mitra');
+
+  // Delete my details still works.
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/public/card', headers: bearer })).statusCode, 204);
   assert.equal((await sql`select 1 from customers where phone = ${phone}`).length, 0);
-  assert.equal((await sql`select 1 from orders where customer_phone = ${phone}`).length, 0);
   assert.equal((await app.inject({ method: 'GET', url: '/api/public/card', headers: bearer })).statusCode, 401);
-  // The paid bill keeps its amounts.
-  assert.equal((await app.inject({ method: 'GET', url: `/api/admin/invoices/${v.id}`, headers: auth() })).json().invoice.status, 'paid');
 });
 
-test('card: codes expire, and too many wrong tries need a new code', async () => {
-  await app.inject({ method: 'POST', url: '/api/public/card/code', payload: { phone: '9800000012' } });
+test('card: claim codes expire, and too many wrong tries need a new code', async () => {
   const phone = '+919800000012';
-  for (let i = 0; i < 5; i++) await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code: '999999' } });
-  const locked = await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code: messenger.lastCode(phone) } });
-  assert.equal(locked.json().error, 'code_locked');
+  const bill = await paidBill('9800000012', 'Tara');
+  const ip = '198.51.100.32';
+  await claim(bill.token, '/code', { phone }, ip);
+  for (let i = 0; i < 5; i++) await claim(bill.token, '/verify', { phone, code: '999999' }, ip);
+  assert.equal((await claim(bill.token, '/verify', { phone, code: messenger.lastCode(phone) }, ip)).json().error, 'code_locked');
   await sql`delete from customer_codes where phone = ${phone}`;
-  await app.inject({ method: 'POST', url: '/api/public/card/code', headers: { 'cf-connecting-ip': '198.51.100.20' }, payload: { phone: '9800000012' } });
+  await claim(bill.token, '/code', { phone }, '198.51.100.33');
   await sql`update customer_codes set expires_at = now() - interval '1 minute' where phone = ${phone}`;
-  const expired = await app.inject({ method: 'POST', url: '/api/public/card/verify', payload: { phone, code: messenger.lastCode(phone) } });
-  assert.equal(expired.json().error, 'code_expired');
+  assert.equal((await claim(bill.token, '/verify', { phone, code: messenger.lastCode(phone) }, '198.51.100.33')).json().error, 'code_expired');
 });
 
 test('card: owner can correct stamps; the customers list shows the card', async () => {

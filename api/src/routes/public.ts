@@ -171,6 +171,18 @@ export function publicRoutes() {
     c.json({ lines: await withdrawOrder(c.req.param('token') ?? '') }),
   );
 
+  // The name LB's has for a number, so the first guest at a table can say "that's me" instead of typing it.
+  // Only the first name, only for a real table, and rate limited, so it can't be used to look people up.
+  app.get('/tables/:label/guest', rateLimit('guest-name', 10, 10 * 60_000), async c => {
+    const label = c.req.param('label') ?? '';
+    const phone = normalisePhone(c.req.query('phone'));
+    const [t] = await sql`select 1 from dining_tables where label = ${label} and active`;
+    if (!t) throw new HttpError(400, `There's no table "${label}". Check the number on your table's QR stand.`, 'bad_table');
+    if (!phone) return c.json({ name: null });
+    const [cust] = await sql<{ name: string | null }[]>`select name from customers where phone = ${phone}`;
+    return c.json({ name: cust?.name?.trim().split(/\s+/)[0] || null });
+  });
+
   // Ask the servers for this table's code. Needs the guest's name and mobile number; the servers see both.
   app.post('/tables/:label/code-request', rateLimit('code-request', 5, 10 * 60_000, c => (c.req.param('label') ?? '').slice(0, 10)), async c => {
     const label = c.req.param('label') ?? '';

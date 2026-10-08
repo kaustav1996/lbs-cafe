@@ -169,6 +169,11 @@ export async function createOrder(input: CreateOrderInput) {
       if (!t) throw new HttpError(400, `There's no table "${label}". Check the number on your table's QR stand.`, 'bad_table');
       sitting = t.sitting;
     }
+    // A number with no name (the guest said "that's me" to the name LB's has): use that name.
+    if (!input.name?.trim() && normalisePhone(input.phone)) {
+      const [known] = await tx<{ name: string | null }[]>`select name from customers where phone = ${normalisePhone(input.phone)}`;
+      if (known?.name) input = { ...input, name: known.name };
+    }
     const lines = await priceLines(tx, input.lines, fromStaff);
     const subtotal = lines.reduce((a, l) => a + l.line_paise, 0);
     const rate = Number(settings.gst_rate ?? 0.18);

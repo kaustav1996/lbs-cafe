@@ -16,6 +16,8 @@ interface Customer {
   stamps: number;
   rewards: number;
   opted_in: boolean;
+  /** The number was checked with a code at least once (when claiming LB's card). */
+  verified_at: string | null;
   welcome_used_at: string | null;
   last_visit_at: string | null;
 }
@@ -80,6 +82,7 @@ export default function Customers() {
                   <td>{c.name || <span className="a-muted">No name</span>}</td>
                   <td>
                     <a href={`tel:${c.phone}`}>{c.phone}</a>
+                    {c.verified_at ? <span className="a-tag ok">Verified</span> : <span className="a-tag">Not verified</span>}
                   </td>
                   <td className="r num">{c.orders}</td>
                   <td className="r num">{c.bookings}</td>

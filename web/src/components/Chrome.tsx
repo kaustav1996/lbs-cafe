@@ -6,6 +6,7 @@ import { useLive } from '../state/live';
 import { asset, useUi } from '../state/ui';
 import { openState } from '../lib/format';
 import { useMusic } from '../state/music';
+import { useHasCard } from '../lib/card';
 
 export function Checker({ className = '' }: { className?: string }) {
   return <div className={`checker ${className}`} aria-hidden="true" />;
@@ -30,6 +31,7 @@ export function OpenStamp() {
 
 /** The slim top bar. On phones the bottom bar carries the actions; wider screens get links here too. */
 export function Nav(_props: { tone?: string } = {}) {
+  const hasCard = useHasCard();
   const { count } = useCart();
   const { open } = useUi();
   const go = useSectionLink();
@@ -50,7 +52,7 @@ export function Nav(_props: { tone?: string } = {}) {
             <button type="button" className="linkish" onClick={() => go('visit')}>
               Visit
             </button>
-            <NavLink to="/card">LB’s card</NavLink>
+            {hasCard && <NavLink to="/card">LB’s card</NavLink>}
           </nav>
           <div className="topbar-end">
             <MusicButton />
@@ -125,6 +127,7 @@ export function Icon({ name }: { name: keyof typeof ICONS }) {
  * when no table is set, and LB's card. Hidden on wide screens, where the top bar has these.
  */
 export function BottomBar() {
+  const hasCard = useHasCard();
   const { count, mode, table } = useCart();
   const { open, panel } = useUi();
   const atTable = mode === 'table' && !!table.trim();
@@ -152,10 +155,13 @@ export function BottomBar() {
           Book
         </button>
       )}
-      <NavLink to="/card" className="tab">
-        <Icon name="card" />
-        Card
-      </NavLink>
+      {/* LB's card starts from a paid bill, so the tab appears once this phone has claimed one. */}
+      {hasCard && (
+        <NavLink to="/card" className="tab">
+          <Icon name="card" />
+          Card
+        </NavLink>
+      )}
     </nav>
   );
 }
@@ -170,6 +176,7 @@ export function Toast() {
 }
 
 export function Footer() {
+  const hasCard = useHasCard();
   const go = useSectionLink();
   const { open } = useUi();
   return (
@@ -208,7 +215,7 @@ export function Footer() {
               <button type="button" className="linkish" onClick={() => go('visit')}>
                 Opening hours
               </button>
-              <Link to="/card">LB’s card</Link>
+              {hasCard && <Link to="/card">LB’s card</Link>}
               {SITE.instagram && (
                 <a href={SITE.instagram} target="_blank" rel="noreferrer">
                   Instagram

@@ -211,14 +211,16 @@ interface InvoiceRow {
   customer_id: number | null;
   discount_kind: string;
   manual_note: string | null;
+  card_claimed_at: Date | null;
+  card_claimed_phone: string | null;
 }
 
 /** The bill as shown to staff (with who took each payment) or to the guest (without). */
 export async function getInvoice(by: { id: number } | { token: string }, view: 'staff' | 'guest') {
   const [inv] =
     'id' in by
-      ? await sql<InvoiceRow[]>`select id, number, token, source, table_label, status, created_at, paid_at, customer_id, discount_kind, manual_note from invoices where id = ${by.id}`
-      : await sql<InvoiceRow[]>`select id, number, token, source, table_label, status, created_at, paid_at, customer_id, discount_kind, manual_note from invoices where token = ${by.token}`;
+      ? await sql<InvoiceRow[]>`select id, number, token, source, table_label, status, created_at, paid_at, customer_id, discount_kind, manual_note, card_claimed_at, card_claimed_phone from invoices where id = ${by.id}`
+      : await sql<InvoiceRow[]>`select id, number, token, source, table_label, status, created_at, paid_at, customer_id, discount_kind, manual_note, card_claimed_at, card_claimed_phone from invoices where token = ${by.token}`;
   if (!inv) return null;
   const s = await getSettings();
   const orders = await sql<{ id: number; number: number; gst_rate: string; subtotal_paise: number; discount_paise: number; discount_note: string | null; taxable_paise: number; cgst_paise: number; sgst_paise: number; round_off_paise: number; total_paise: number; paid_paise: number }[]>`
@@ -238,6 +240,13 @@ export async function getInvoice(by: { id: number } | { token: string }, view: '
     group by p.txn_group, p.method order by min(p.created_at)`;
   const [customer] = inv.customer_id
     ? await sql<{ id: number; name: string | null; phone: string; stamps: number }[]>`select id, name, phone, stamps from customers where id = ${inv.customer_id}`
+    : [];
+  // The name and number given at the table (the latest one on the bill's orders).
+  const [guest] = ids.length
+    ? await sql<{ name: string | null; phone: string | null; verified: boolean }[]>`
+        select o.customer_name as name, o.customer_phone as phone,
+               coalesce((select verified_at is not null from customers c where c.phone = o.customer_phone), false) as verified
+        from orders o where o.id = any(${ids}) and o.customer_phone is not null order by o.created_at desc limit 1`
     : [];
   const frozen = orders.some(o => o.paid_paise > 0);
   const sum = (k: keyof (typeof orders)[number]) => orders.reduce((a, o) => a + Number(o[k]), 0);
@@ -272,6 +281,16 @@ export async function getInvoice(by: { id: number } | { token: string }, view: '
     discount: { kind: inv.discount_kind, manualNote: inv.manual_note, locked: inv.status === 'paid' || frozen },
     // Guests see only whether it's on a card; staff see who.
     card: customer ? (view === 'staff' ? { id: customer.id, name: customer.name, phone: customer.phone, stamps: customer.stamps } : { linked: true }) : null,
+    // LB's card is claimed by the guest after payment, with the number checked by a code.
+    claim: inv.card_claimed_at ? { at: inv.card_claimed_at, ...(view === 'staff' ? { phone: inv.card_claimed_phone } : {}) } : null,
+    // Staff: the number given at the table, whether it was checked on this bill, and whether it ever has been.
+    ...(view === 'staff'
+      ? {
+          guest: guest
+            ? { name: guest.name, phone: guest.phone, verifiedHere: !!inv.card_claimed_phone && inv.card_claimed_phone === guest.phone, verifiedEver: guest.verified }
+            : null,
+        }
+      : {}),
     payments: payments.map(p => ({ at: p.at, method: p.method, amount: p.amount, reference: p.reference, ...(view === 'staff' ? { staff: p.staff } : {}) })),
   };
 }

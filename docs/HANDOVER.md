@@ -69,6 +69,16 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   table calls, serving, invoices and payments, bookings; can't move orders to preparing or ready), Server and kitchen
   (both, for quiet days; migration 010) and Manager/Owner (everything). Reports, offers
   and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
+- **LB's card is claimed from a paid bill** (9 Oct 2026, migration 012): no sign-up from the card page any more. The
+  guest's bill (/bill/<token>) shows Claim my LB's card once it's paid: the number given at the table (editable)
+  gets a 6-digit code, every claim, even for a number checked before; the stamp lands on that number's card.
+  Needs a sender (WhatsApp Cloud API, part 2) in production; until then the box says claiming opens soon and staff
+  add bills to cards by phone as before (which is also how the 5th-visit reward and welcome offer reach a bill
+  before payment). Card links and the Card tab only show once the phone holds a card. Staff see on each bill the
+  number given at the table, whether it was verified on that bill (or ever), and whether the card was claimed;
+  Customers shows Verified / Not verified. One customer per number; the latest name wins. At a table the first
+  guest types their number first; a known number shows "Are you <first name>?" (`GET /tables/:label/guest`,
+  rate limited, first name only).
 - **Asking for the table code** (9 Oct 2026, migration 011): the first guest at a table gives a name and mobile
   number, and Ask a server for the code alerts servers and managers ("Table 3 (Rahul) wants the table code") with
   the code shown on the orders board. Once the table has ordered this sitting, friends join with just the code.

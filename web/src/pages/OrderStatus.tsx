@@ -266,7 +266,7 @@ export default function OrderStatus() {
                   <dd className="num">{inr(paiseToRupees(order.totals.total))}</dd>
                 </div>
               </dl>
-              <p className="status-meta">{order.paymentStatus === 'paid' ? 'Paid. Thank you.' : 'Pay at the counter or with your server.'}</p>
+              <p className="status-meta">{order.paymentStatus === 'paid' ? 'Paid. Thank you. Get the bill to claim a stamp on LB’s card.' : 'Pay at the counter or with your server.'}</p>
             </section>
 
             {order.status !== 'held' && (

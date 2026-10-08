@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import type { MenuCategory, MenuItem } from '../data/types';
 import { Footer, Nav } from '../components/Chrome';
@@ -86,6 +86,9 @@ export default function Menu() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
+  // Landing on a section (#id): jump to it once the sections have folded and the live menu has loaded, since
+  // both move it. Keeps lining it up for two seconds, unless the guest starts scrolling first.
+  const landing = useRef<{ id: string; until: number } | null>(null);
   useEffect(() => {
     const id = loc.hash.replace('#', '');
     // From the cassette on the home page: that section open, the rest folded.
@@ -93,11 +96,29 @@ export default function Menu() {
     if (only) {
       saveClosed(new Set(MENU.map(c => c.id).filter(c => c !== only)));
       setJustOpened(only);
-    }
-    else if (id) open1(id);
-    if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
-    else window.scrollTo(0, 0);
+    } else if (id) open1(id);
+    if (id) {
+      landing.current = { id, until: Date.now() + 2000 };
+      requestAnimationFrame(() => landing.current && document.getElementById(id)?.scrollIntoView({ block: 'start' }));
+    } else window.scrollTo(0, 0);
   }, [loc.hash]);
+  useLayoutEffect(() => {
+    const l = landing.current;
+    if (!l) return;
+    if (Date.now() > l.until) landing.current = null;
+    else document.getElementById(l.id)?.scrollIntoView({ block: 'start' });
+  }, [closed, cats]);
+  useEffect(() => {
+    const stop = () => (landing.current = null);
+    window.addEventListener('wheel', stop, { passive: true });
+    window.addEventListener('touchstart', stop, { passive: true });
+    window.addEventListener('keydown', stop);
+    return () => {
+      window.removeEventListener('wheel', stop);
+      window.removeEventListener('touchstart', stop);
+      window.removeEventListener('keydown', stop);
+    };
+  }, []);
 
   // Highlight the section being read.
   useEffect(() => {
@@ -143,9 +164,9 @@ export default function Menu() {
             Prices in rupees. {Math.round(settings.gstRate * 100)}% GST is added to the bill. Tell us about allergies before you order.
           </p>
         </div>
-        <Link to="/card" className="card-banner">
-          <b>Collect stamps</b> with LB’s card. Your 5th visit is half price.
-        </Link>
+        <p className="card-banner">
+          <b>Collect stamps</b> with LB’s card: pay your bill, then claim a stamp from it. Your 5th visit is half price.
+        </p>
         <div className="menu-tools">
           <label className="search" htmlFor="menu-search">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
