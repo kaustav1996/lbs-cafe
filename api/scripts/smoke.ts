@@ -56,7 +56,8 @@ assert.equal(wrong.status, 409, wrong.text);
 assert.equal(wrong.json().error, 'item_gone');
 ok('order pricing runs (mismatched item refused, nothing saved)');
 
-const noCode = await call('/api/public/tables/1/verify', { method: 'POST', json: { code: 'smoke' } });
+// With a name and number (nothing is stored by a code check), so it gets as far as the code itself.
+const noCode = await call('/api/public/tables/1/verify', { method: 'POST', json: { code: 'smoke', name: 'Smoke test', phone: '9000000000' } });
 assert.equal(noCode.status, 400, noCode.text);
 assert.equal(noCode.json().error, 'bad_code');
 ok('table codes are checked (a wrong code for table 1 is refused)');
