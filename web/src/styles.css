@@ -2735,3 +2735,7 @@ button.buy:hover {
   background: var(--lime);
   font-weight: 700;
 }
+.table-code-have {
+  justify-self: center;
+  min-height: 44px;
+}

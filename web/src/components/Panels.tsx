@@ -62,6 +62,9 @@ export function CartDrawer() {
   const [askCode, setAskCode] = useState(false);
   const [code, setCode] = useState('');
   const [asked, setAsked] = useState(false);
+  // The code box shows once they've asked a server, or say they already have the code (friends joining).
+  const [haveCode, setHaveCode] = useState(false);
+  const showCode = asked || haveCode;
   // The first guest gives their number first; if LB's knows it, they confirm the name instead of typing it.
   const [known, setKnown] = useState<{ phone: string; name: string | null } | null>(null);
   const [itsMe, setItsMe] = useState(false);
@@ -274,10 +277,10 @@ export function CartDrawer() {
             </p>
           )}
           {askCode && cart.mode === 'table' ? (
-            <form className="table-code" onSubmit={checkCode}>
+            <form className="table-code" onSubmit={e => (showCode ? checkCode(e) : (e.preventDefault(), void askServer()))}>
               <p className="table-code-title">Table {cart.table.trim()} needs its code</p>
               <p className="hint">
-                First at the table? Add your number and name, then ask a server for the code. Joining friends who’ve already ordered? Just enter the code.
+                First at the table? Add your number and name, then ask a server for the code. Joining friends who’ve already ordered? Tap Already have the code.
               </p>
               <div className="field">
                 <label htmlFor="code-phone">Mobile</label>
@@ -306,7 +309,11 @@ export function CartDrawer() {
                     >
                       Yes, that’s me
                     </button>
-                    <button type="button" className="btn btn-line btn-sm" onClick={() => (setKnown({ phone: phoneDigits, name: null }), setTimeout(() => document.getElementById('code-name')?.focus(), 0))}>
+                    <button
+                      type="button"
+                      className="btn btn-line btn-sm"
+                      onClick={() => (setKnown({ phone: phoneDigits, name: null }), setTimeout(() => document.getElementById('code-name')?.focus(), 0))}
+                    >
                       No, change the name
                     </button>
                   </div>
@@ -326,23 +333,36 @@ export function CartDrawer() {
                   <input id="code-name" autoComplete="name" value={cart.name} onChange={e => cart.dispatch({ type: 'contact', name: e.target.value })} />
                 </div>
               )}
-              <button type="button" className="btn btn-line btn-block" onClick={askServer} disabled={busy || asked}>
+              <button type="button" className={`btn btn-block ${showCode ? 'btn-line' : 'btn-ink btn-lg'}`} onClick={askServer} disabled={busy || asked}>
                 {asked ? 'Asked. A server is bringing the code' : 'Ask a server for the code'}
               </button>
-              <label htmlFor="table-code">Code</label>
-              <input
-                id="table-code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]*"
-                maxLength={4}
-                placeholder="4 digits"
-                value={code}
-                onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              />
-              <button type="submit" className="btn btn-ink btn-lg btn-block" disabled={busy}>
-                {busy ? 'Sending…' : 'Check code and send'}
-              </button>
+              {!showCode && (
+                <button
+                  type="button"
+                  className="linkish table-code-have"
+                  onClick={() => (setHaveCode(true), setError(''), setTimeout(() => document.getElementById('table-code')?.focus(), 0))}
+                >
+                  Already have the code? Enter it
+                </button>
+              )}
+              {showCode && (
+                <>
+                  <label htmlFor="table-code">Code</label>
+                  <input
+                    id="table-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    placeholder="4 digits"
+                    value={code}
+                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  />
+                  <button type="submit" className="btn btn-ink btn-lg btn-block" disabled={busy}>
+                    {busy ? 'Sending…' : 'Check code and send'}
+                  </button>
+                </>
+              )}
             </form>
           ) : (
             <button type="button" className="btn btn-ink btn-lg btn-block" onClick={() => send()} disabled={busy}>
@@ -394,6 +414,7 @@ export function CartDrawer() {
               cart.dispatch({ type: 'table', table: e.target.value });
               setAskCode(false);
               setAsked(false);
+              setHaveCode(false);
             }}
           />
         </div>
