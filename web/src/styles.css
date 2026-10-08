@@ -1148,9 +1148,60 @@ mark {
   outline-offset: 4px;
   border-radius: 6px;
 }
-.cat-disc {
-  width: 48px;
+/* Each section is a record in its sleeve. Opening it slides the record out and rolls it to the right; closing
+   rolls it back in. The art keeps one width so the heading never jumps. */
+.cat-art {
+  position: relative;
   flex: none;
+  width: 92px;
+  height: 56px;
+}
+.cat-sleeve {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 7px, rgb(0 0 0 / 0.55) 7px 8.5px, transparent 8.5px),
+    radial-gradient(circle at 50% 50%, transparent 0 21px, rgb(0 0 0 / 0.18) 21px 22px, transparent 22px),
+    var(--label);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.cat-art .cat-disc {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 48px;
+  transform: translateX(36px) rotate(150deg);
+  transition: transform 0.7s cubic-bezier(0.25, 0.8, 0.3, 1);
+}
+.cat.is-closed .cat-art .cat-disc {
+  transform: translateX(0) rotate(0deg);
+  transition-duration: 0.45s;
+}
+/* A mark on the label so you can see it roll. */
+.cat-art .vinyl-label::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  width: 2px;
+  height: 26%;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+.tracks-in {
+  animation: tracks-in 0.4s ease-out 0.25s both;
+}
+@keyframes tracks-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
 }
 .cat-text {
   display: grid;

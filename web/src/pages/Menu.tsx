@@ -57,10 +57,14 @@ export default function Menu() {
       /* fine: it just won't be remembered */
     }
   };
+  // The section just opened by a tap: its dishes drop in after the record rolls out of its sleeve.
+  const [justOpened, setJustOpened] = useState<string | null>(null);
   const toggle = (id: string) => {
     const next = new Set(closed);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    if (next.has(id)) {
+      next.delete(id);
+      setJustOpened(id);
+    } else next.add(id);
     saveClosed(next);
   };
   const open1 = (id: string) => {
@@ -197,7 +201,10 @@ export default function Menu() {
           <section key={c.id} id={c.id} className={`cat ${isOpen(c.id) ? '' : 'is-closed'}`} style={{ '--label': c.color } as CSSProperties} aria-labelledby={`${c.id}-h`}>
             <h2 id={`${c.id}-h`} className="cat-h">
               <button type="button" className="cat-head" aria-expanded={isOpen(c.id)} aria-controls={`${c.id}-list`} onClick={() => !searching && toggle(c.id)}>
-                <Vinyl color={c.color} className="cat-disc" />
+                <span className="cat-art" aria-hidden="true">
+                  <Vinyl color={c.color} className="cat-disc" />
+                  <span className="cat-sleeve" />
+                </span>
                 <span className="cat-text">
                   <span className="cat-name">{c.name}</span>
                   <span className="cat-meta muted num">
@@ -211,7 +218,12 @@ export default function Menu() {
                 )}
               </button>
             </h2>
-            <ul className="tracks" id={`${c.id}-list`} hidden={!isOpen(c.id)}>
+            <ul
+              className={`tracks ${justOpened === c.id ? 'tracks-in' : ''}`}
+              id={`${c.id}-list`}
+              hidden={!isOpen(c.id)}
+              onAnimationEnd={() => setJustOpened(o => (o === c.id ? null : o))}
+            >
               {c.items.map(i => (
                 <Track key={i.id} item={i} />
               ))}
