@@ -171,6 +171,13 @@ export function publicRoutes() {
     c.json({ lines: await withdrawOrder(c.req.param('token') ?? '') }),
   );
 
+  // Whether a table's games are open. Nothing secret: the games are for whoever is at the table.
+  app.get('/tables/:label/games', async c => {
+    const [t] = await sql<{ games_on: boolean }[]>`select games_on from dining_tables where label = ${c.req.param('label') ?? ''} and active`;
+    if (!t) throw new HttpError(404, 'There’s no such table.', 'bad_table');
+    return c.json({ on: t.games_on });
+  });
+
   // The name LB's has for a number, so the first guest at a table can say "that's me" instead of typing it.
   // Only the first name, only for a real table, and rate limited, so it can't be used to look people up.
   app.get('/tables/:label/guest', rateLimit('guest-name', 10, 10 * 60_000), async c => {

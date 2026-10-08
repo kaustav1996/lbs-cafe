@@ -39,7 +39,9 @@ export async function lockTable(tx: Tx, label: string | null | undefined): Promi
 /** New sitting and a fresh code. Returns the table id so the caller can publish table.updated after commit. */
 export async function newSitting(tx: Tx, label: string): Promise<number | null> {
   const [t] = await tx<{ id: number }[]>`
-    update dining_tables set sitting = sitting + 1, otp = lpad(floor(random() * 10000)::int::text, 4, '0')
+    update dining_tables set sitting = sitting + 1, otp = lpad(floor(random() * 10000)::int::text, 4, '0'),
+      -- With games on by default, each new visit starts with them open.
+      games_on = games_on or coalesce((select value = 'true'::jsonb from settings where key = 'games_default'), false)
     where label = ${label} returning id`;
   return t?.id ?? null;
 }
@@ -183,6 +185,8 @@ export async function createOrder(input: CreateOrderInput) {
     const held = holdSeconds > 0;
     // The customer record is made when the order reaches the kitchen, so a withdrawn order leaves no trace.
     const customerId = held ? null : await upsertCustomer(tx, input.phone, input.name);
+    // Ordering at a table opens its games, and they stay open until a server closes them.
+    if (input.source === 'table') await tx`update dining_tables set games_on = true where label = ${(input.table ?? '').trim()} and not games_on`;
     const token = randomBytes(12).toString('base64url');
     const [o] = await tx<{ id: number; number: number | null; token: string; hold_until: Date | null }[]>`
       insert into orders (token, number, status, hold_until, sitting, source, table_label, customer_id, customer_name, customer_phone, note, gst_rate,

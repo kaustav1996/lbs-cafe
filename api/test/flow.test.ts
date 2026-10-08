@@ -1168,3 +1168,26 @@ test('table codes: the first guest gives a name and number and asks the servers;
   const second = await app.inject({ method: 'POST', url: '/api/public/orders', headers: ip, payload: { mode: 'table', table: label, pass: friend.json().pass, lines: [{ ...LATTE(), qty: 2 }] } });
   assert.equal(second.statusCode, 201, second.body);
 });
+
+test('games: a table order opens them, staff close or open them, and the default opens every table', async () => {
+  await app.inject({ method: 'POST', url: '/api/admin/tables', headers: auth(), payload: { label: '21', seats: 4 } });
+  const t = (await app.inject({ method: 'GET', url: '/api/admin/tables', headers: auth() })).json().tables.find((x: any) => x.label === '21');
+  const games = async () => (await app.inject({ method: 'GET', url: '/api/public/tables/21/games' })).json().on;
+  assert.equal(await games(), false);
+  // A staff order at the table opens them, and they stay open.
+  await app.inject({ method: 'POST', url: '/api/admin/orders', headers: auth(), payload: { source: 'table', table: '21', lines: [{ ...LATTE(), qty: 1 }] } });
+  assert.equal(await games(), true);
+  // A server closes them (the refresh), and can open them again without an order.
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', headers: { 'cf-connecting-ip': '203.0.113.90' }, payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } });
+  const server = { authorization: `Bearer ${login.json().token}` };
+  assert.equal((await app.inject({ method: 'POST', url: `/api/admin/tables/${t.id}/games`, headers: server, payload: { on: false } })).statusCode, 200);
+  assert.equal(await games(), false);
+  await app.inject({ method: 'POST', url: `/api/admin/tables/${t.id}/games`, headers: server, payload: { on: true } });
+  assert.equal(await games(), true);
+  await app.inject({ method: 'POST', url: `/api/admin/tables/${t.id}/games`, headers: server, payload: { on: false } });
+  // Games on by default: every table opens now (managers only).
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/settings', headers: server, payload: { games_default: true } })).statusCode, 403);
+  await app.inject({ method: 'PUT', url: '/api/admin/settings', headers: auth(), payload: { games_default: true } });
+  assert.equal(await games(), true);
+  await app.inject({ method: 'PUT', url: '/api/admin/settings', headers: auth(), payload: { games_default: false } });
+});

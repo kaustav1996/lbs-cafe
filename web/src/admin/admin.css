@@ -1960,3 +1960,7 @@ textarea.a-input {
 .a-claim-line {
   margin: 0 0 6px;
 }
+.a-btn.a-btn-on {
+  border-color: var(--a-lemon);
+  color: var(--a-lemon);
+}

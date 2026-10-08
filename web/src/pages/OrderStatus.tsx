@@ -9,6 +9,7 @@ import { useLive } from '../state/live';
 import { forgetOrder, rememberOrder } from '../lib/orders';
 import { Cassette, Spinner } from '../components/Gear';
 import { YourOrders } from '../components/OrderAlerts';
+import { useGames } from '../state/games';
 import { headline, noteStatus, onOrderUpdate, STEPS, watchOrder, type PublicOrder } from '../lib/orderWatch';
 
 export default function OrderStatus() {
@@ -25,6 +26,9 @@ export default function OrderStatus() {
   const [changing, setChanging] = useState(false);
   const [changeError, setChangeError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  // Ordering at a table opens its games: check as soon as the order is in.
+  const games = useGames();
+  const gamesRefresh = games.refresh;
   const [billing, setBilling] = useState(false);
   const getBill = async () => {
     setBilling(true);
@@ -58,6 +62,10 @@ export default function OrderStatus() {
       stop = true;
     };
   }, [token, reloadKey]);
+
+  useEffect(() => {
+    if (order?.number) gamesRefresh();
+  }, [order?.number, gamesRefresh]);
 
   // Live updates: the order watcher checks every few seconds and pops up a notice when the status moves.
   useEffect(() => {
@@ -221,6 +229,14 @@ export default function OrderStatus() {
                   </li>
                 ))}
               </ol>
+            )}
+            {games.on && order.source === 'table' && (
+              <div className="games-banner">
+                <span>Games are open for table {order.table}.</span>
+                <Link to="/games" className="btn btn-ink btn-sm">
+                  Play games
+                </Link>
+              </div>
             )}
             {order.status !== 'cancelled' && !finished && <p className="status-live">This page updates by itself as your order moves along.</p>}
 

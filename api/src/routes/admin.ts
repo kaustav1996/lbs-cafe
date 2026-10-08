@@ -765,6 +765,8 @@ export function adminRoutes() {
         ordering_enabled: z.boolean().optional(),
         takeaway_enabled: z.boolean().optional(),
         booking_enabled: z.boolean().optional(),
+        // Games on for every table: switching it on opens games at every table now.
+        games_default: z.boolean().optional(),
         hold_seconds: z.number().int().min(0).max(300).optional(),
         loyalty: z
           .object({
@@ -827,6 +829,7 @@ export function adminRoutes() {
                   on conflict (key) do update set value = excluded.value`;
       }
     }
+    if (b.games_default) await sql`update dining_tables set games_on = true where active`;
     if (b.licences) {
       const kept = new Set(b.licences.map(l => l.file?.key).filter(Boolean));
       for (const l of before) if (l.file?.key && !kept.has(l.file.key)) await runtime().files?.delete(l.file.key).catch(() => {});
@@ -914,6 +917,15 @@ export function adminRoutes() {
     publishTable(id);
     const [row] = await sql`select * from dining_tables where id = ${id}`;
     return c.json({ table: row });
+  });
+
+  // Open or close games for a table. Any server can: closing is the 'refresh' when a group leaves.
+  app.post('/tables/:id/games', async c => {
+    const { on } = z.object({ on: z.boolean() }).parse(await c.req.json());
+    const [t] = await sql<{ id: number }[]>`update dining_tables set games_on = ${on} where id = ${Number(c.req.param('id'))} returning id`;
+    if (!t) throw new HttpError(404, 'Table not found.', 'not_found');
+    publishTable(t.id);
+    return c.json({ table: (await sql`select * from dining_tables where id = ${t.id}`)[0] });
   });
 
   app.patch('/tables/:id', atLeast('manager'), async c => {

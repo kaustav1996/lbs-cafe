@@ -10,9 +10,10 @@ interface SettingsShape {
   ordering_enabled: boolean;
   takeaway_enabled: boolean;
   booking_enabled: boolean;
+  games_default?: boolean;
   cafe: { name: string; address: string; phone: string; email: string; gstin: string };
 }
-interface Table { id: number; label: string; seats: number; active: boolean; otp: string; sitting: number }
+interface Table { id: number; label: string; seats: number; active: boolean; otp: string; sitting: number; games_on: boolean }
 interface Staff { id: number; name: string; email: string; role: Role; active: boolean }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -67,6 +68,12 @@ function OrderingSettings() {
         <Toggle id="set-ordering" checked={s.ordering_enabled} onChange={v => !readOnly && save({ ordering_enabled: v }, v ? 'QR ordering is on' : 'QR ordering paused')} label="QR table ordering" />
         <Toggle id="set-takeaway" checked={s.takeaway_enabled} onChange={v => !readOnly && save({ takeaway_enabled: v }, v ? 'Takeaway is on' : 'Takeaway paused')} label="Online takeaway orders" />
         <Toggle id="set-booking" checked={s.booking_enabled} onChange={v => !readOnly && save({ booking_enabled: v }, v ? 'Bookings are on' : 'Bookings paused')} label="Online table bookings" />
+        <Toggle
+          id="set-games"
+          checked={!!s.games_default}
+          onChange={v => !readOnly && save({ games_default: v }, v ? 'Games are open at every table' : 'Games now open when a table orders')}
+          label="Games open at every table (otherwise when a table orders)"
+        />
       </section>
 
       <section className="a-card-panel">
@@ -413,6 +420,21 @@ function TablesCard() {
               {t.active && (
                 <button type="button" className="a-btn a-btn-sm" onClick={() => void newCode(t)}>
                   New code
+                </button>
+              )}
+              {/* Any server: closing games is the refresh when a group leaves; they open again with the next order. */}
+              {t.active && (
+                <button
+                  type="button"
+                  className={`a-btn a-btn-sm ${t.games_on ? 'a-btn-on' : ''}`}
+                  aria-pressed={t.games_on}
+                  onClick={() =>
+                    void call<{ table: Table }>(`/api/admin/tables/${t.id}/games`, { method: 'POST', json: { on: !t.games_on } })
+                      .then(r => (setTables(ts => ts.map(x => (x.id === t.id ? r.table : x))), toast(r.table.games_on ? `Games open at table ${t.label}` : `Games closed at table ${t.label}`)))
+                      .catch(e => toast(errText(e), 'bad'))
+                  }
+                >
+                  {t.games_on ? 'Close games' : 'Open games'}
                 </button>
               )}
               {manager && (

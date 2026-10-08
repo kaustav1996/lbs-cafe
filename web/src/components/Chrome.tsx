@@ -7,6 +7,7 @@ import { asset, useUi } from '../state/ui';
 import { openState } from '../lib/format';
 import { useMusic } from '../state/music';
 import { useHasCard } from '../lib/card';
+import { useGames } from '../state/games';
 
 export function Checker({ className = '' }: { className?: string }) {
   return <div className={`checker ${className}`} aria-hidden="true" />;
@@ -32,6 +33,7 @@ export function OpenStamp() {
 /** The slim top bar. On phones the bottom bar carries the actions; wider screens get links here too. */
 export function Nav(_props: { tone?: string } = {}) {
   const hasCard = useHasCard();
+  const games = useGames();
   const { count } = useCart();
   const { open } = useUi();
   const go = useSectionLink();
@@ -52,6 +54,7 @@ export function Nav(_props: { tone?: string } = {}) {
             <button type="button" className="linkish" onClick={() => go('visit')}>
               Visit
             </button>
+            {games.on && <NavLink to="/games">Games</NavLink>}
             {hasCard && <NavLink to="/card">LB’s card</NavLink>}
           </nav>
           <div className="topbar-end">
@@ -112,6 +115,7 @@ const ICONS = {
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Zm4 4h4',
   calendar: 'M7 3v3M17 3v3M4 8h16M5 5h14v15H5z',
   card: 'M4 6h16v12H4zM8 10h.01M12 10h.01M16 10h.01M8 14h8',
+  games: 'M7 8h10a4 4 0 0 1 4 4v2a3 3 0 0 1-5.4 1.8L14.5 14h-5l-1.1 1.8A3 3 0 0 1 3 14v-2a4 4 0 0 1 4-4ZM8 10v3M6.5 11.5h3M15 11h.01M17 13h.01',
 } as const;
 
 export function Icon({ name }: { name: keyof typeof ICONS }) {
@@ -128,6 +132,7 @@ export function Icon({ name }: { name: keyof typeof ICONS }) {
  */
 export function BottomBar() {
   const hasCard = useHasCard();
+  const games = useGames();
   const { count, mode, table } = useCart();
   const { open, panel } = useUi();
   const atTable = mode === 'table' && !!table.trim();
@@ -154,6 +159,12 @@ export function BottomBar() {
           <Icon name="calendar" />
           Book
         </button>
+      )}
+      {games.on && (
+        <NavLink to="/games" className="tab">
+          <Icon name="games" />
+          Games
+        </NavLink>
       )}
       {/* LB's card starts from a paid bill, so the tab appears once this phone has claimed one. */}
       {hasCard && (

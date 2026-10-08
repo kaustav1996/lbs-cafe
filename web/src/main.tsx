@@ -5,6 +5,7 @@ import { CartProvider } from './state/cart';
 import { LiveProvider } from './state/live';
 import { UiProvider } from './state/ui';
 import { MusicProvider } from './state/music';
+import { GamesProvider } from './state/games';
 import { BottomBar, Footer, Nav, Toast } from './components/Chrome';
 import { Panels } from './components/Panels';
 import { OrderAlerts } from './components/OrderAlerts';
@@ -14,6 +15,9 @@ import OrderStatus from './pages/OrderStatus';
 import Licences from './pages/Licences';
 import Bill from './pages/Bill';
 import Card from './pages/Card';
+
+// Games load only when someone opens them.
+const Games = lazy(() => import('./pages/Games'));
 
 // Staff screens load separately so guests never download them.
 const Admin = lazy(() => import('./admin/AdminApp'));
@@ -60,6 +64,7 @@ createRoot(document.getElementById('root')!).render(
               <MusicProvider>
                 <UiProvider>
                   <CartProvider>
+                  <GamesProvider>
                     <Routes>
                       <Route path="/" element={<Home />} />
                       <Route path="/menu" element={<Menu />} />
@@ -67,12 +72,21 @@ createRoot(document.getElementById('root')!).render(
                       <Route path="/licences" element={<Licences />} />
                       <Route path="/bill/:token" element={<Bill />} />
                       <Route path="/card" element={<Card />} />
+                    <Route
+                      path="/games/:game?"
+                      element={
+                        <Suspense fallback={<div className="page" />}>
+                          <Games />
+                        </Suspense>
+                      }
+                    />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                     <BottomBar />
                     <Panels />
                     <Toast />
                     <OrderAlerts />
+                  </GamesProvider>
                   </CartProvider>
                 </UiProvider>
               </MusicProvider>
