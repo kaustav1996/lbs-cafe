@@ -66,10 +66,12 @@ const hook = await call('/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_tok
 assert.equal(hook.status, 403, hook.text);
 ok('WhatsApp webhook is up and refuses a wrong verify token');
 
-// Until WhatsApp is set up, card sign-in says it's coming soon (and sends nothing).
-const cardCode = await call('/api/public/card/code', { method: 'POST', json: { phone: '9000000000' } });
-assert.ok([204, 503].includes(cardCode.status), cardCode.text);
-ok(cardCode.status === 503 ? 'LB’s card sign-in answers "coming soon" (WhatsApp not set up)' : 'LB’s card sign-in sends codes');
+// LB's card starts from a paid bill: no sign-up route, and the claim route answers for an unknown bill.
+const signUp = await call('/api/public/card/code', { method: 'POST', json: { phone: '9000000000' } });
+assert.equal(signUp.status, 404, signUp.text);
+const claimNone = await call('/api/public/card/claim/smoke-no-such-bill');
+assert.equal(claimNone.json().error, 'not_found', claimNone.text);
+ok('LB’s card has no sign-up; claims start from a bill');
 
 if (EMAIL && PASSWORD) {
   const login = await call('/api/auth/login', { method: 'POST', json: { email: EMAIL, password: PASSWORD } });
