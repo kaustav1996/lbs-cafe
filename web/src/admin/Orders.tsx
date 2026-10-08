@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ago, errText, rs, timeIST, todayIST, useAuth, useOnEvent, useTick } from './core';
-import { DietDot, Empty, Modal, PageHead, toast } from './ui';
+import { BoardTabs, DietDot, Empty, Modal, PageHead, toast } from './ui';
 import { ItemPicker, useAdminMenu, type PickedLine } from './picker';
 import { InvoiceModal, METHODS, needsReference } from './Invoice';
 
@@ -46,11 +46,11 @@ const NEXT: Record<string, { to: AOrder['status']; label: string } | undefined> 
   ready: { to: 'served', label: 'Mark served' },
 };
 
-const COLUMNS: { key: string; title: string; match: (o: AOrder) => boolean }[] = [
-  { key: 'new', title: 'New', match: o => o.status === 'new' },
-  { key: 'preparing', title: 'Preparing', match: o => o.status === 'preparing' },
-  { key: 'ready', title: 'Ready', match: o => o.status === 'ready' },
-  { key: 'settle', title: 'Served, to settle', match: o => o.status === 'served' || o.status === 'completed' },
+const COLUMNS: { key: string; title: string; short: string; match: (o: AOrder) => boolean }[] = [
+  { key: 'new', title: 'New', short: 'New', match: o => o.status === 'new' },
+  { key: 'preparing', title: 'Preparing', short: 'Preparing', match: o => o.status === 'preparing' },
+  { key: 'ready', title: 'Ready', short: 'Ready', match: o => o.status === 'ready' },
+  { key: 'settle', title: 'Served, to settle', short: 'To settle', match: o => o.status === 'served' || o.status === 'completed' },
 ];
 
 export const where = (o: Pick<AOrder, 'source' | 'table_label' | 'customer_name'>) =>
@@ -64,6 +64,7 @@ export default function Orders() {
   const [day, setDay] = useState(todayIST());
   const [openId, setOpenId] = useState<number | null>(null);
   const [billFor, setBillFor] = useState<number | null>(null);
+  const [tab, setTab] = useState('new');
   const [error, setError] = useState('');
   useTick(30000);
 
@@ -143,12 +144,15 @@ export default function Orders() {
       {error && <p className="a-error">{error}</p>}
       {!orders && !error && <p className="a-muted">Loading orders…</p>}
 
+      {orders && view === 'open' && orders.length > 0 && (
+        <BoardTabs tabs={COLUMNS.map(c => ({ key: c.key, title: c.short, count: orders.filter(c.match).length }))} value={tab} onChange={setTab} />
+      )}
       {orders && view === 'open' && (
         <div className="a-board">
           {COLUMNS.map(col => {
             const list = orders.filter(col.match);
             return (
-              <section key={col.key} className={`a-col a-col-${col.key}`} aria-label={col.title}>
+              <section key={col.key} className={`a-col a-col-${col.key} ${tab === col.key ? 'is-current' : ''}`} aria-label={col.title}>
                 <h2>
                   {col.title} <span>{list.length}</span>
                 </h2>

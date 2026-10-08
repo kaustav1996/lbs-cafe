@@ -81,3 +81,20 @@ export function DietDot({ diet }: { diet: string }) {
   if (diet !== 'veg' && diet !== 'nonveg') return null;
   return <i className={`a-diet ${diet}`} title={diet === 'veg' ? 'Veg' : 'Non-veg'} aria-label={diet === 'veg' ? 'Veg' : 'Non-veg'} />;
 }
+
+/**
+ * On phones the order boards show one column at a time; these tabs pick it and show how many orders each holds.
+ * Hidden on wider screens, where every column is visible.
+ */
+export function BoardTabs({ tabs, value, onChange }: { tabs: { key: string; title: string; count: number }[]; value: string; onChange: (key: string) => void }) {
+  return (
+    <div className="a-board-tabs" role="tablist" aria-label="Order columns" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+      {tabs.map(t => (
+        <button key={t.key} type="button" role="tab" aria-selected={value === t.key} className={value === t.key ? 'on' : ''} onClick={() => onChange(t.key)}>
+          <span>{t.title}</span>
+          <b>{t.count}</b>
+        </button>
+      ))}
+    </div>
+  );
+}

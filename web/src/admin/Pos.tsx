@@ -25,6 +25,15 @@ export default function Pos() {
   const [payNow, setPayNow] = useState<'' | 'upi' | 'cash' | 'card'>('');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
+  // Phones: the Review order bar shows while the order itself is off screen.
+  const [ticketInView, setTicketInView] = useState(false);
+  useEffect(() => {
+    const el = document.getElementById('pos-ticket');
+    if (!el || !('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver(([e]) => setTicketInView(e.isIntersecting), { threshold: 0.15 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   useEffect(() => {
     call<{ tables: Table[] }>('/api/admin/tables').then(r => setTables(r.tables.filter(t => t.active))).catch(() => {});
@@ -98,7 +107,7 @@ export default function Pos() {
       {error && <p className="a-error">{error}</p>}
       <div className="a-pos-grid">
         <section aria-label="Menu">{menu ? <ItemPicker menu={menu} onPick={add} /> : <p className="a-muted">Loading menu…</p>}</section>
-        <aside className="a-ticket" aria-label="Order">
+        <aside className="a-ticket" aria-label="Order" id="pos-ticket">
           <div className="a-seg a-seg-full">
             {(['table', 'takeaway', 'counter'] as const).map(s => (
               <button key={s} type="button" className={source === s ? 'on' : ''} onClick={() => setSource(s)}>
@@ -180,6 +189,14 @@ export default function Pos() {
           </button>
         </aside>
       </div>
+      {lines.length > 0 && !ticketInView && (
+        <button type="button" className="a-pos-jump" onClick={() => document.getElementById('pos-ticket')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+          <span>
+            Review order ({lines.reduce((a, l) => a + l.qty, 0)})
+          </span>
+          <b className="num">{rs(t.total)}</b>
+        </button>
+      )}
     </div>
   );
 }

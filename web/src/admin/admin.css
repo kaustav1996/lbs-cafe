@@ -183,55 +183,6 @@
   min-width: 0;
   padding: 22px clamp(16px, 2.4vw, 32px) 60px;
 }
-@media (max-width: 900px) {
-  .a-shell {
-    grid-template-columns: 1fr;
-  }
-  .a-side {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    height: auto;
-    flex-direction: row;
-    align-items: center;
-    padding: 8px 10px;
-    gap: 10px;
-    border-right: 0;
-    border-bottom: 1px solid var(--a-line);
-    overflow-x: auto;
-  }
-  .a-side-head .a-brand {
-    display: none;
-  }
-  .a-nav {
-    display: flex;
-    gap: 4px;
-  }
-  .a-nav a {
-    padding: 8px 10px;
-    white-space: nowrap;
-  }
-  .a-nav a svg {
-    display: none;
-  }
-  .a-side-foot {
-    margin: 0 0 0 auto;
-    display: flex;
-    align-items: center;
-    padding: 0;
-  }
-  .a-me,
-  .a-side-foot .a-link {
-    display: none;
-  }
-  .a-sound {
-    white-space: nowrap;
-  }
-  .a-conn {
-    white-space: nowrap;
-  }
-}
-
 /* Page furniture */
 .a-page {
   display: grid;
@@ -1732,23 +1683,255 @@ textarea.a-input {
 .a-kitchen {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.a-ticket .a-card-main {
+.a-kds .a-card-main {
   cursor: default;
 }
-.a-ticket .a-card-main header b {
+.a-kds .a-card-main header b {
   font-size: 22px;
 }
-.a-ticket .a-card-main ul {
+.a-kds .a-card-main ul {
   font-size: 17px;
   line-height: 1.5;
 }
-.a-ticket .a-card-actions .a-btn-primary {
+.a-kds .a-card-actions .a-btn-primary {
   flex: 1;
   min-height: 48px;
   font-size: 16px;
 }
+
+/* ---------- Phones (kept last so these win) ---------- */
+.a-narrow {
+  display: none;
+}
+.a-board-tabs {
+  display: none;
+}
+/* Phones: a slim top bar (logo, live, sound, sign out) and the screens as a tab bar at the bottom, in thumb reach. */
 @media (max-width: 900px) {
+  .admin-body {
+    --a-top-h: 56px;
+    --a-nav-h: calc(62px + env(safe-area-inset-bottom));
+  }
+  .a-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    align-content: start;
+  }
+  .a-side {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    height: var(--a-top-h);
+    flex-direction: row;
+    align-items: center;
+    padding: 0 12px;
+    gap: 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--a-line);
+  }
+  .a-side-head {
+    padding: 0;
+  }
+  .a-side-head img {
+    width: 32px;
+  }
+  .a-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    gap: 0;
+    height: var(--a-nav-h);
+    padding: 0 4px env(safe-area-inset-bottom);
+    background: var(--a-panel);
+    border-top: 1px solid var(--a-line);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .a-nav a {
+    position: relative;
+    flex: 1 0 68px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 4px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+  .a-nav a.active {
+    color: var(--a-lemon);
+    background: transparent;
+  }
+  .a-nav a.active svg {
+    background: var(--a-lemon);
+    color: var(--a-bg);
+    border-radius: 999px;
+    padding: 2px 12px;
+    box-sizing: content-box;
+  }
+  .a-nav .a-badge {
+    position: absolute;
+    top: 4px;
+    right: 10px;
+    margin: 0;
+  }
+  .a-side-foot {
+    margin: 0 0 0 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+  }
+  .a-me {
+    display: none;
+  }
+  .a-wide {
+    display: none;
+  }
+  .a-narrow {
+    display: inline;
+  }
+  .a-sound,
+  .a-side-foot .a-link {
+    min-height: 40px;
+    white-space: nowrap;
+  }
+  .a-conn {
+    white-space: nowrap;
+    font-size: 13px;
+  }
+  .a-main {
+    padding: 16px 12px calc(var(--a-nav-h) + 24px);
+  }
+  .a-toasts {
+    left: 12px;
+    right: 12px;
+    bottom: calc(var(--a-nav-h) + 12px);
+    max-width: none;
+  }
+  .a-ready {
+    top: calc(var(--a-top-h) + 8px);
+  }
+
+  /* Order boards: one column at a time, picked with the tabs. */
+  .a-board-tabs {
+    display: grid;
+    position: sticky;
+    top: var(--a-top-h);
+    z-index: 25;
+    gap: 4px;
+    margin: 0 -12px;
+    padding: 8px 12px;
+    background: var(--a-bg);
+  }
+  .a-board,
   .a-kitchen {
     grid-template-columns: 1fr;
+  }
+  .a-board .a-col:not(.is-current) {
+    display: none;
+  }
+  .a-board .a-col {
+    background: transparent;
+    border: 0;
+    padding: 0;
+  }
+  .a-board .a-col h2 {
+    display: none;
+  }
+}
+@media (max-width: 420px) {
+  .a-conn {
+    font-size: 0;
+    gap: 0;
+  }
+}
+.a-board-tabs button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 6px 4px;
+  border: 1px solid var(--a-line);
+  border-radius: 12px;
+  background: var(--a-panel);
+  color: var(--a-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.a-board-tabs button b {
+  font-size: 18px;
+  color: var(--a-ink);
+}
+.a-board-tabs button.on {
+  background: var(--a-lemon);
+  border-color: var(--a-lemon);
+  color: #05191c;
+}
+.a-board-tabs button.on b {
+  color: #05191c;
+}
+
+/* New order on phones: the dish list scrolls with the page, and a bar jumps to the order. */
+.a-pos-jump {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .a-pick-grid {
+    max-height: none;
+    overflow: visible;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .a-ticket {
+    position: static;
+    scroll-margin-top: calc(var(--a-top-h, 0px) + 12px);
+  }
+  .a-pos-jump {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(var(--a-nav-h, 0px) + 10px);
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 52px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--a-lemon);
+    color: #05191c;
+    font: inherit;
+    font-weight: 800;
+    font-size: 16px;
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.45);
+    cursor: pointer;
+  }
+  .a-pos {
+    padding-bottom: 72px;
+  }
+}
+
+/* Modals become full-height sheets on phones. */
+@media (max-width: 640px) {
+  .a-scrim {
+    padding: 0;
+    place-items: end stretch;
+  }
+  .a-modal,
+  .a-modal.wide {
+    width: 100%;
+    max-height: 94dvh;
+    border-radius: 16px 16px 0 0;
+  }
+  .a-modal-foot {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 }

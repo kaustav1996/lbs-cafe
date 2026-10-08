@@ -156,7 +156,8 @@ function Shell() {
         </nav>
         <div className="a-side-foot">
           <button type="button" className={`a-sound ${soundOn ? 'on' : ''}`} onClick={() => setSoundOn(!soundOn)}>
-            {soundOn ? 'Sound and alerts on' : 'Turn on sound and alerts'}
+            <span className="a-wide">{soundOn ? 'Sound and alerts on' : 'Turn on sound and alerts'}</span>
+            <span className="a-narrow">{soundOn ? 'Sound on' : 'Turn on sound'}</span>
           </button>
           <p className={`a-conn ${connected ? 'ok' : ''}`}>
             <i aria-hidden="true" />
