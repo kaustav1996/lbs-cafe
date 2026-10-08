@@ -55,7 +55,7 @@ The test suite wipes the database it points at. Only run it against a throwaway 
   the same `alter table ... enable row level security` in its migration.
 - Roles: `chef` < `staff` (shown as Server) < `manager` < `owner`. A chef gets the Kitchen screen and Menu only;
   the API allows a chef just the routes in `CHEF_ROUTES` (`api/src/routes/admin.ts`) and status moves up to ready.
-  Servers get orders, new order, billing, bookings and settings (read-only); reports, offers and customers need
+  Servers get orders, the kitchen screen, new order, billing, bookings and settings (read-only); reports, offers and customers need
   manager. Discounts, cancelling orders, menu edits and settings changes need manager. Chefs and servers may only
   toggle `available` (sold out) on items. Screens per role are in `NAV` (`web/src/admin/AdminApp.tsx`).
 - Migrations are append-only: add `003_*.sql`, never edit an applied one.

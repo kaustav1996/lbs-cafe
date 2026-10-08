@@ -1752,7 +1752,7 @@ textarea.a-input {
   }
   .a-nav a {
     position: relative;
-    flex: 1 0 68px;
+    flex: 1 0 58px;
     flex-direction: column;
     justify-content: center;
     gap: 3px;
