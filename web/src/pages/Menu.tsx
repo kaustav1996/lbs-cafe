@@ -256,7 +256,7 @@ export default function Menu() {
   );
 }
 
-function Track({ item }: { item: MenuItem }) {
+export function Track({ item }: { item: MenuItem }) {
   const cart = useCart();
   const paired = item.options.length > 1;
   const soldOut = item.available === false;

@@ -2102,3 +2102,205 @@ button.buy:hover {
   border-radius: 50%;
   animation: deck-spin 0.8s linear infinite;
 }
+
+/* ---------- Home: the menu as a flipping cassette ---------- */
+.tapeflip {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.tape-stage {
+  perspective: 1100px;
+  padding: 14px 0 10px;
+}
+.tape {
+  display: block;
+  width: min(100%, 440px);
+  aspect-ratio: 1.6;
+  margin-inline: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.tape:focus-visible {
+  outline: 3px solid var(--cyan-ink);
+  outline-offset: 8px;
+  border-radius: 16px;
+}
+.tape-body {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.tape-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 4%;
+  padding: 5.5% 5% 0;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 3.2% 5%, #6b6b6b 0 3px, transparent 3.5px),
+    radial-gradient(circle at 96.8% 5%, #6b6b6b 0 3px, transparent 3.5px),
+    radial-gradient(circle at 3.2% 95%, #6b6b6b 0 3px, transparent 3.5px),
+    radial-gradient(circle at 96.8% 95%, #6b6b6b 0 3px, transparent 3.5px),
+    linear-gradient(160deg, #2a2a2e, #141416);
+  box-shadow: 0 18px 30px -16px rgb(0 0 0 / 0.5);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(9px);
+  overflow: hidden;
+}
+.tape-face-b {
+  transform: rotateX(180deg) translateZ(9px);
+}
+.tape-edge {
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  height: 18px;
+  background: repeating-linear-gradient(90deg, #232326 0 6px, #2e2e32 6px 8px);
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+}
+.tape-edge-top {
+  top: -9px;
+  transform: rotateX(90deg);
+}
+.tape-edge-bottom {
+  bottom: -9px;
+  transform: rotateX(90deg);
+}
+.tape-label {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  align-content: start;
+  gap: 2px;
+  padding: 3.5% 5% 4%;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--paper) 0 62%, var(--label) 62% 100%);
+  min-height: 0;
+}
+.tape-side {
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--muted);
+}
+.tape-name {
+  font-size: clamp(1.35rem, 1rem + 2.4vw, 2rem);
+  font-weight: 800;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tape-meta {
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.tape-window {
+  align-self: end;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 62%;
+  height: clamp(34px, 9vw, 46px);
+  padding: 0 4%;
+  margin-top: 4px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #1b1b1e;
+}
+.tape-reel {
+  position: relative;
+  z-index: 1;
+  height: 78%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #1b1b1e 0 22%, transparent 23%),
+    repeating-conic-gradient(var(--paper) 0 20deg, #d9d9d9 20deg 60deg);
+  border: 2px solid var(--paper);
+}
+.tape-ribbon {
+  flex: 1;
+  height: 46%;
+  margin: 0 -6px;
+  background: #4a3426;
+  border-radius: 4px;
+}
+.tapeflip.is-open .tape-reel {
+  animation: deck-spin 2.4s linear infinite;
+}
+.tape-foot {
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: 58%;
+  padding: 1.6% 0 2.2%;
+  background: #0f0f11;
+  border: 2px solid var(--ink);
+  border-bottom: 0;
+  clip-path: polygon(7% 0, 93% 0, 100% 100%, 0 100%);
+  color: #cfcfcf;
+  font-size: var(--t-sm);
+  font-weight: 700;
+}
+.tape-controls {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 440px);
+  margin-inline: auto;
+}
+.tape-step {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.tape-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.tape-hint {
+  text-align: center;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.tape-dishes {
+  margin-top: 6px;
+}
+.tape-dishes .cat-disc {
+  animation: record-out 0.75s cubic-bezier(0.25, 0.8, 0.3, 1) both;
+}
+@keyframes record-out {
+  from {
+    transform: translateX(0) rotate(0deg);
+  }
+}
+.tape-dishes .tracks {
+  animation: tracks-in 0.4s ease-out 0.3s both;
+}
+.tape-dishes .btn {
+  margin-top: 16px;
+}

@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SITE } from '../data/site';
 import { Footer, Nav } from '../components/Chrome';
-import { Vinyl } from '../components/Vinyl';
+import { TapeFlip } from '../components/TapeFlip';
 import { Deck } from '../components/Gear';
 import { asset, useUi } from '../state/ui';
 import { useLive } from '../state/live';
@@ -102,26 +102,12 @@ export default function Home() {
 
         <section className="wrap narrow sections" aria-labelledby="sections-title">
           <div className="section-head">
-            <h2 id="sections-title">Pick a record</h2>
+            <h2 id="sections-title">Pick a tape</h2>
             <p className="muted">
               {MENU.length} sections, {totalItems} dishes and drinks, from {inr(cheapest)}.
             </p>
           </div>
-          <ul className="receipt">
-            {MENU.map(c => (
-              <li key={c.id}>
-                <Link to={{ pathname: '/menu', hash: c.id }} className="receipt-row">
-                  <Vinyl color={c.color} className="row-disc" />
-                  <span className="row-text">
-                    <span className="row-name">{c.name}</span>
-                    <span className="row-meta num">
-                      {c.items.length} {c.items.length === 1 ? 'item' : 'items'}, {inr(c.min)} to {inr(c.max)}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <TapeFlip cats={MENU} />
           <Link to="/menu" className="btn btn-ink btn-block">
             Open the whole menu
           </Link>
