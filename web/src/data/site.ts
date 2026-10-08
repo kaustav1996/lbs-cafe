@@ -7,9 +7,9 @@ export const SITE = {
   short: "LB's",
   domain: 'lbscafe.com',
   address: {
-    line1: '29 BJ, BJ Block, Sector 2',
+    line1: 'LB’s, 29 BJ, BJ Block, Sector 2',
     city: 'Salt Lake, Kolkata 700091',
-    full: '29 BJ, BJ Block, Sector 2, Bidhannagar, Kolkata, West Bengal 700091',
+    full: 'LB’s, 29 BJ, BJ Block, Sector 2, Bidhannagar, Kolkata, West Bengal 700091',
   },
   phone: '+91 98754 31882',
   phoneHref: 'tel:+919875431882',
