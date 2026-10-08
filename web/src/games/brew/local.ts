@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { botMove, newGame, play, tick, view, type Game, type GameView, type Move } from './engine';
+import { actorOf, botMove, newGame, play, tick, view, type Game, type GameView, type Move } from './engine';
+import { savedName } from './online';
+export { actorOf };
 
 const BOT_MS = 1100;
 export const ME = 'me';
-
-/** Who the game is waiting on. */
-export function actorOf(g: Game): string | null {
-  if (g.phase !== 'playing') return null;
-  if (g.pending) return g.pending.kind === 'bandit' ? g.pending.target : g.pending.to;
-  return g.players[g.turn].id;
-}
 
 /**
  * A game on this phone against bots (practice, and the tutorial). `setup` can change the fresh game (the
@@ -17,15 +12,18 @@ export function actorOf(g: Game): string | null {
  */
 export function useLocalGame(bots: string[], opts: { setup?: (g: Game) => void; paused?: boolean; onMove?: (g: Game, by: string, m: Move) => void } = {}) {
   const make = useCallback(() => {
-    const g = newGame([{ id: ME, name: 'You', table: null, bot: false }, ...bots.map((n, i) => ({ id: `b${i}`, name: n, table: null, bot: true }))], Date.now());
+    const g = newGame([{ id: ME, name: savedName() || 'Barista', table: null, bot: false }, ...bots.map((n, i) => ({ id: `b${i}`, name: n, table: null, bot: true }))], Date.now());
     opts.setup?.(g);
     return g;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bots.join('|')]);
   const game = useRef<Game>(make());
-  const [v, setV] = useState<GameView>(() => view(game.current, ME));
+  // A copy each time: the engine changes its arrays in place, and the screen needs to see new ones.
+  const snap = () => structuredClone(view(game.current, ME));
+  const [v, setV] = useState<GameView>(snap);
   const [error, setError] = useState('');
-  const refresh = useCallback(() => setV(view(game.current, ME)), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refresh = useCallback(() => setV(snap()), []);
   const paused = useRef(!!opts.paused);
   paused.current = !!opts.paused;
   const onMove = useRef(opts.onMove);

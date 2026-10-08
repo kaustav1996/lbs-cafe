@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { botMove, MAX_PLAYERS, MIN_PLAYERS, newGame, nextDeadline, play, tick, view, type Game, type Move } from './brew.js';
+import { actorOf, botMove, MAX_PLAYERS, MIN_PLAYERS, newGame, nextDeadline, play, tick, view, type Game, type Move } from './brew.js';
 
 /**
  * The game rooms, for every table at once (a cafe has a handful of games going at a time). Phones hold a
@@ -208,10 +208,7 @@ export class Arcade extends DurableObject {
   }
   /** Who the game is waiting on. */
   private actor(r: Room): string | null {
-    const g = r.g;
-    if (!g || g.phase !== 'playing') return null;
-    if (g.pending) return g.pending.kind === 'bandit' ? g.pending.target : g.pending.to;
-    return g.players[g.turn].id;
+    return r.g ? actorOf(r.g) : null;
   }
 
   async alarm() {

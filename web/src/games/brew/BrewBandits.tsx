@@ -16,19 +16,21 @@ export default function BrewBandits() {
   if (screen === 'online') return <Online onLeave={() => setScreen('home')} />;
   return (
     <div className="bb-home">
-      <p className="lede">Race the others to brew hemp coffee. One of each of five ingredients makes a cup worth 1 or 2 points; first to 5 wins.</p>
+      <p className="lede">Race the others to brew hemp coffee. One of each of five ingredients makes a face-down cup worth 1 or 2 points; first to 5 wins. Our take on the Malaysian card game Nasi Lemak.</p>
       <ul className="bb-rules">
         <li>
-          <b>🍋 Bandit:</b> raid a rival’s cup so it scores nothing.
+          <b>Your turn:</b> draw 2 cards, then up to 3 actions: brew, trade, or play a trick card.
         </li>
         <li>
-          <b>🩴 Chappal:</b> chase a Bandit off your cup. <b>📰 Newspaper:</b> shoo it onto someone else’s.
+          <b>Bandit</b> raids a cup so it scores nothing. <b>Chappal</b> chases it off; <b>Newspaper</b> shoos it onto someone else’s.
         </li>
         <li>
-          <b>🔧 Jugaad:</b> brew with any three ingredients (two actions). <b>✨ Masala:</b> counts as any ingredient.
+          <b>Havaldar</b> searches a hand and takes 2. <b>Chor</b> steals from everyone. <b>Kirana</b> makes everyone hand over an ingredient.{' '}
+          <b>Mandi</b> keeps the ingredients from the top 3 cards.
         </li>
         <li>
-          <b>🦹 Chor</b> steals a card, <b>🌧️ Monsoon</b> makes everyone pass two cards left, and you can trade with anyone.
+          <b>Jugaad</b> brews with any 3 (two actions). <b>Masala</b> is wild. A <b>Kauwa</b> lands on whoever brews and blocks brewing until it’s fed
+          and sent on; <b>Sheru</b> catches it.
         </li>
       </ul>
       <div className="bb-home-actions">

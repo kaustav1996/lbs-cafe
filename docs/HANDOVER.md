@@ -69,7 +69,12 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   table calls, serving, invoices and payments, bookings; can't move orders to preparing or ready), Server and kitchen
   (both, for quiet days; migration 010) and Manager/Owner (everything). Reports, offers
   and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
-- **Brew Bandits** (9 Oct 2026): a multiplayer card game after the Malaysian game Nasi Lemak, with hemp coffee.
+- **Brew Bandits** (9 Oct 2026): a multiplayer card game after the Malaysian game Nasi Lemak (rules from Faculty of
+  Fun's almanacs), with hemp coffee. Cards: 5 ingredients, Masala (wild, Rendang), Bandit/Chappal/Newspaper
+  (Fly/Swatter/Fan), Havaldar (Officer), Chor (Thief), Kirana (Supplier), Mandi (Wholesaler), Jugaad (Mak Cik,
+  2 actions), Kauwa/Sheru (Crow/Si Oyen), plus LB's Monsoon. 7-card hands, draw 2 a turn, 3 actions, first to
+  5 points or most points when the cups run out. Card art is SVG in `web/src/games/brew/art.tsx`; the Bandit is
+  the Lemon Bandits logo.
   Rules in `api/src/games/brew.ts` (pure, tested in `test/brew.test.ts`, including bot-only games at 2 to 10
   players); the deck grows with the room. Rooms live in the `Arcade` Durable Object (`api/src/games/arcade.ts`,
   binding ARCADE, migration tag v2): create a room (2 to 10 seats), anyone at a table with games open joins

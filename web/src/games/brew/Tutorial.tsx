@@ -26,25 +26,27 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    say: 'You’re a barista at LB’s. Brew hemp coffee faster than the others: one Espresso shot, Hemp milk, Gur, Elaichi and Hemp seeds make a cup. First to 5 points wins.',
+    say: 'You’re a barista at LB’s. Brew hemp coffee faster than the others: one Espresso shot, Hemp milk, Gur, Elaichi and Hemp seeds make a cup. First to 5 points wins. Each turn you draw 2 cards from the deck, then take up to 3 actions.',
     setup: g => {
       g.turn = 0;
       g.actionsLeft = 3;
       const me = g.players[0];
       me.hand = [];
       for (const p of g.players) p.cups = [];
-      deal(g, ME, ['espresso', 'milk', 'gur', 'elaichi', 'seeds', 'chappal', 'bandit']);
+      deal(g, ME, ['espresso', 'milk', 'gur', 'elaichi', 'seeds', 'gur', 'chappal', 'bandit']);
       cup(g, 'b0', 2);
       cup(g, 'b1', 1);
     },
   },
   {
-    say: 'You hold all five ingredients. Tap Brew a cup. Each turn you get three actions: a brew, a trade or a trick card is one each.',
+    say: 'You hold all five ingredients. Tap Brew a cup. A brew, a trade or a trick card is one action each.',
     allow: ['brew'],
     done: g => g.players[0].cups.length === 1,
   },
   {
-    say: 'Your cup is face down to everyone else: worth 1 or 2 points, and only you know which. Next, someone gets cheeky…',
+    say: 'Your cup is face down to everyone else: worth 1 or 2 points, and only you know which. But the smell brought a Kauwa (crow) to your stall: you can’t brew again until it’s gone. Tap a Gur card, then Feed the Kauwa and send it on, then tap a player.',
+    allow: ['feed'],
+    done: g => !g.crows.some(c => c.holder === ME),
   },
   {
     say: 'Chai Bot sent a Bandit to raid your cup! A raided cup scores nothing. You have a Chappal: tap Chase it off.',
@@ -57,15 +59,15 @@ const STEPS: Step[] = [
     done: g => !g.pending && !g.players[0].cups[0].bandit,
   },
   {
-    say: 'Your turn to make trouble. Tap the Bandit card in your hand, then tap a player at the top to raid their cup.',
+    say: 'Your turn to make trouble. Tap the Bandit card, then Raid a cup, then tap a player at the top.',
     allow: ['bandit'],
     done: g => g.players.slice(1).some(p => p.cups.some(c => c.bandit)),
     after: g => {
-      g.pending = null; // Chai Bot has nothing to fight back with.
+      g.pending = null; // they have nothing to fight back with
     },
   },
   {
-    say: 'Another Bandit has crept onto your cup. This time use the Newspaper: tap it, then tap a player whose cup is still clean to shoo the Bandit onto it.',
+    say: 'Another Bandit crept onto your cup. This time use the Newspaper: tap it, then Shoo the Bandit on, then a player whose cup is still clean.',
     setup: g => {
       g.actionsLeft = 3;
       g.players[0].cups[0].bandit = true;
@@ -78,7 +80,18 @@ const STEPS: Step[] = [
     },
   },
   {
-    say: 'Short an ingredient? Jugaad brews with any three different ones, but it takes two actions: the card and the brew. Masala is wild and stands in for any ingredient. Tap the Jugaad card.',
+    say: 'The Havaldar (police) searches someone’s cards and you keep any two. Tap the Havaldar card, Search a player, tap a player, then pick two of their cards.',
+    setup: g => {
+      g.actionsLeft = 3;
+      deal(g, ME, ['havaldar']);
+      deal(g, 'b0', ['masala', 'espresso']);
+      deal(g, 'b1', ['masala', 'espresso']);
+    },
+    allow: ['havaldar', 'havaldar-take'],
+    done: g => g.pending === null && g.log.some(l => l.includes('Havaldar took')),
+  },
+  {
+    say: 'Short an ingredient? Jugaad brews with any three different ones, but it takes two actions: the card and the brew. Masala is wild and stands in for any ingredient. Tap the Jugaad card, then Brew with Jugaad.',
     setup: g => {
       g.actionsLeft = 3;
       deal(g, ME, ['jugaad', 'espresso', 'gur', 'masala']);
@@ -87,12 +100,12 @@ const STEPS: Step[] = [
     done: g => g.players[0].cups.length === 2,
   },
   {
-    say: 'You can also Trade with anyone (offer cards, ask for ingredients), steal a card with Chor, or call Monsoon so everyone passes two cards left. You’re out of actions now: tap End turn.',
+    say: 'More tricks: Chor steals a card from everyone, Kirana makes everyone hand over one ingredient you name, Mandi turns up the top 3 and you keep the ingredients, Sheru (the street dog) catches a Kauwa and keeps what it carried, Monsoon passes 2 cards left. You can also trade ingredients, Masala, Chappals and Newspapers. Tap End turn.',
     allow: ['end'],
     done: g => g.turn !== 0,
   },
   {
-    say: 'That’s it! Keep going until someone has 5 points of clean cups. You can hold 8 cards at the end of a turn, and each turn has 75 seconds. Have fun!',
+    say: 'That’s it! First to 5 points of clean cups wins, or the most points when the cups run out. Have fun!',
   },
 ];
 
