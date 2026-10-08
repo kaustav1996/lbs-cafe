@@ -61,6 +61,7 @@ export function CartDrawer() {
   // Set when the API wants this table's code (first order of a sitting, or the code changed).
   const [askCode, setAskCode] = useState(false);
   const [code, setCode] = useState('');
+  const [asked, setAsked] = useState(false);
   const canOrderOnline = HAS_API && live && settings.orderingEnabled;
   const last = recentOrders()[0];
 
@@ -78,7 +79,11 @@ export function CartDrawer() {
     }
     if (!HAS_API) return setPreviewSent(true);
     if (!canOrderOnline) {
-      setError(settings.orderingEnabled ? 'Ordering is offline right now. Please order with your server.' : 'Online ordering is paused. Please order with your server.');
+      setError(
+        settings.orderingEnabled
+          ? 'Ordering is offline right now. Please order with your server.'
+          : 'Online ordering is paused. Please order with your server.',
+      );
       return;
     }
     const missing = cart.lines.find(l => !l.dbOptionId || !l.dbItemId);
@@ -90,7 +95,7 @@ export function CartDrawer() {
         json: {
           mode: cart.mode,
           table: cart.mode === 'table' ? cart.table : undefined,
-          pass: cart.mode === 'table' ? pass ?? getTablePass(cart.table) : undefined,
+          pass: cart.mode === 'table' ? (pass ?? getTablePass(cart.table)) : undefined,
           name: cart.name || undefined,
           phone: cart.phone || undefined,
           note: cart.note || undefined,
@@ -123,12 +128,40 @@ export function CartDrawer() {
     setBusy(true);
     try {
       const table = cart.table.trim();
-      const r = await api<{ pass: string }>(`/api/public/tables/${encodeURIComponent(table)}/verify`, { method: 'POST', json: { code: code.trim() } });
+      const r = await api<{ pass: string }>(`/api/public/tables/${encodeURIComponent(table)}/verify`, {
+        method: 'POST',
+        json: { code: code.trim(), name: cart.name.trim() || undefined, phone: cart.phone.trim() || undefined },
+      });
       setTablePass(table, r.pass);
       setBusy(false);
       await send(r.pass);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Couldn’t check the code. Try again.');
+      if (err instanceof ApiError && err.code === 'need_contact') document.getElementById('code-name')?.focus();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** First at the table: send name and number with a request, and the servers get an alert with the code. */
+  const askServer = async () => {
+    setError('');
+    if (!cart.name.trim()) {
+      setError('Add your name, then ask for the code.');
+      return document.getElementById('code-name')?.focus();
+    }
+    if (cart.phone.replace(/\D/g, '').length < 10) {
+      setError('Add a 10-digit mobile number, then ask for the code.');
+      return document.getElementById('code-phone')?.focus();
+    }
+    setBusy(true);
+    try {
+      const table = cart.table.trim();
+      await api(`/api/public/tables/${encodeURIComponent(table)}/code-request`, { method: 'POST', json: { name: cart.name.trim(), phone: cart.phone.trim() } });
+      setAsked(true);
+      setTimeout(() => document.getElementById('table-code')?.focus(), 0);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Couldn’t reach the servers. Wave at us instead.');
     } finally {
       setBusy(false);
     }
@@ -195,18 +228,23 @@ export function CartDrawer() {
       footer={
         <>
           <dl className="totals">
-            <div>
-              <dt>Subtotal</dt>
-              <dd className="num">{inr(cart.subtotal)}</dd>
-            </div>
-            <div>
-              <dt>CGST ({pct(cart.gstRate)})</dt>
-              <dd className="num">{inr(cart.cgst)}</dd>
-            </div>
-            <div>
-              <dt>SGST ({pct(cart.gstRate)})</dt>
-              <dd className="num">{inr(cart.sgst)}</dd>
-            </div>
+            {/* While asking for the table code, only the total, so the code step fits on a phone. */}
+            {!(askCode && cart.mode === 'table') && (
+              <>
+                <div>
+                  <dt>Subtotal</dt>
+                  <dd className="num">{inr(cart.subtotal)}</dd>
+                </div>
+                <div>
+                  <dt>CGST ({pct(cart.gstRate)})</dt>
+                  <dd className="num">{inr(cart.cgst)}</dd>
+                </div>
+                <div>
+                  <dt>SGST ({pct(cart.gstRate)})</dt>
+                  <dd className="num">{inr(cart.sgst)}</dd>
+                </div>
+              </>
+            )}
             <div className="totals-grand">
               <dt>Total</dt>
               <dd className="num">{inr(cart.total)}</dd>
@@ -219,7 +257,31 @@ export function CartDrawer() {
           )}
           {askCode && cart.mode === 'table' ? (
             <form className="table-code" onSubmit={checkCode}>
-              <label htmlFor="table-code">Ask your server for table {cart.table.trim()}’s code</label>
+              <p className="table-code-title">Table {cart.table.trim()} needs its code</p>
+              <p className="hint">
+                First at the table? Add your name and number and ask a server for the code. Joining friends who’ve already ordered? Just enter the code.
+              </p>
+              <div className="field-row">
+                <div className="field">
+                  <label htmlFor="code-name">Name</label>
+                  <input id="code-name" autoComplete="name" value={cart.name} onChange={e => cart.dispatch({ type: 'contact', name: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label htmlFor="code-phone">Mobile</label>
+                  <input
+                    id="code-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={cart.phone}
+                    onChange={e => cart.dispatch({ type: 'contact', phone: e.target.value })}
+                  />
+                </div>
+              </div>
+              <button type="button" className="btn btn-line btn-block" onClick={askServer} disabled={busy || asked}>
+                {asked ? 'Asked. A server is bringing the code' : 'Ask a server for the code'}
+              </button>
+              <label htmlFor="table-code">Code</label>
               <input
                 id="table-code"
                 inputMode="numeric"
@@ -283,6 +345,7 @@ export function CartDrawer() {
             onChange={e => {
               cart.dispatch({ type: 'table', table: e.target.value });
               setAskCode(false);
+              setAsked(false);
             }}
           />
         </div>

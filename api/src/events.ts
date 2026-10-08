@@ -4,7 +4,7 @@ import { runtime } from './context.js';
 export type CafeEvent =
   | { type: 'order.created'; orderId: number; number: number; source: string; table: string | null }
   | { type: 'order.updated'; orderId: number; number: number; status: string; source: string; table: string | null }
-  | { type: 'service.created'; id: number; table: string; kind: string }
+  | { type: 'service.created'; id: number; table: string; kind: string; name?: string | null }
   | { type: 'service.updated'; id: number }
   | { type: 'reservation.created'; id: number; ref: string }
   | { type: 'reservation.updated'; id: number }

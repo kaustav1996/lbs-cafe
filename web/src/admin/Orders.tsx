@@ -36,8 +36,11 @@ export interface AOrder {
 interface ServiceRequest {
   id: number;
   table_label: string;
-  kind: 'water' | 'bill' | 'server';
+  kind: 'water' | 'bill' | 'server' | 'code';
   created_at: string;
+  /** Code requests: who asked, and the table's code to read out. */
+  guest_name?: string | null;
+  otp?: string | null;
 }
 
 const NEXT: Record<string, { to: AOrder['status']; label: string } | undefined> = {
@@ -131,7 +134,19 @@ export default function Orders() {
           {requests.map(r => (
             <div key={r.id} className="a-call">
               <b>Table {r.table_label}</b>
-              <span>{r.kind === 'bill' ? 'wants the bill' : r.kind === 'water' ? 'wants water' : 'wants a server'}</span>
+              <span>
+                {r.kind === 'code' ? (
+                  <>
+                    {r.guest_name ? `${r.guest_name} wants` : 'wants'} the table code: <b className="a-call-code">{r.otp}</b>
+                  </>
+                ) : r.kind === 'bill' ? (
+                  'wants the bill'
+                ) : r.kind === 'water' ? (
+                  'wants water'
+                ) : (
+                  'wants a server'
+                )}
+              </span>
               <small>{ago(r.created_at)}</small>
               <button type="button" className="a-btn a-btn-sm" onClick={() => handled(r)}>
                 Done

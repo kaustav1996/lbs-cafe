@@ -69,6 +69,12 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   table calls, serving, invoices and payments, bookings; can't move orders to preparing or ready), Server and kitchen
   (both, for quiet days; migration 010) and Manager/Owner (everything). Reports, offers
   and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
+- **Asking for the table code** (9 Oct 2026, migration 011): the first guest at a table gives a name and mobile
+  number, and Ask a server for the code alerts servers and managers ("Table 3 (Rahul) wants the table code") with
+  the code shown on the orders board. Once the table has ordered this sitting, friends join with just the code.
+  The API enforces it (`need_contact` on `/tables/:label/verify`).
+- **Home cassette** (9 Oct 2026): "Pick a tape" is one 3D cassette; scroll or swipe on it flips sections, tap opens
+  the menu at that section with the others folded (`components/TapeFlip.tsx`).
 - **Music** (9 Oct 2026): Admin → Settings → Music takes one MP3/M4A (up to 95 MB, streamed to R2 under `music/`,
   served from `/files/` with byte ranges, which iPhones need) and a start and loop-back time (default 2:24 to
   1:11:44). The home record player's On/Off, every cassette/Walkman/boombox/turntable drawing and a top-bar button

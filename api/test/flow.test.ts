@@ -110,7 +110,7 @@ const find = (name: string, label = '') => {
 /** The table's current code, read straight from the database, and a pass made with it (what a guest's phone holds). */
 const codeFor = async (label: string) => (await sql<{ otp: string }[]>`select otp from dining_tables where label = ${label}`)[0].otp;
 const passFor = async (label: string) => {
-  const r = await app.inject({ method: 'POST', url: `/api/public/tables/${label}/verify`, payload: { code: await codeFor(label) } });
+  const r = await app.inject({ method: 'POST', url: `/api/public/tables/${label}/verify`, payload: { code: await codeFor(label), name: 'Guest', phone: '9800000001' } });
   assert.equal(r.statusCode, 200, r.body);
   return r.json().pass as string;
 };
@@ -343,7 +343,7 @@ test('table codes: an order needs the table\'s code; wrong codes and other table
 
   const real = await codeFor('7');
   const wrongCode = real === '0000' ? '1111' : '0000';
-  const wrong = await app.inject({ method: 'POST', url: '/api/public/tables/7/verify', payload: { code: wrongCode } });
+  const wrong = await app.inject({ method: 'POST', url: '/api/public/tables/7/verify', payload: { code: wrongCode, name: 'Guest', phone: '9800000001' } });
   assert.equal(wrong.statusCode, 400);
   assert.match(wrong.json().message, /doesn't match table 7/);
 
@@ -394,7 +394,7 @@ test('table codes: any staff member sees the codes and can reset one', async () 
 
 test('table codes: wrong guesses are limited per table, not for the whole room', async () => {
   const guess = (label: string) =>
-    app.inject({ method: 'POST', url: `/api/public/tables/${label}/verify`, headers: { 'cf-connecting-ip': '198.51.100.7' }, payload: { code: 'zzzz' } });
+    app.inject({ method: 'POST', url: `/api/public/tables/${label}/verify`, headers: { 'cf-connecting-ip': '198.51.100.7' }, payload: { code: 'zzzz', name: 'Guest', phone: '9800000001' } });
   for (let i = 0; i < 5; i++) assert.equal((await guess('9')).statusCode, 400);
   assert.equal((await guess('9')).statusCode, 429);
   assert.equal((await guess('10')).statusCode, 400); // same Wi-Fi, another table: not locked out
@@ -1113,4 +1113,34 @@ test('music: a manager uploads an MP3, sets start and end, and it streams in ran
   assert.equal((await app.inject({ method: 'GET', url: `/files/${first}` })).statusCode, 404);
   await app.inject({ method: 'DELETE', url: '/api/admin/music', headers: auth() });
   assert.equal((await app.inject({ method: 'GET', url: '/api/public/settings' })).json().music, null);
+});
+
+test('table codes: the first guest gives a name and number and asks the servers; friends join with just the code', async () => {
+  const label = '20';
+  await app.inject({ method: 'POST', url: '/api/admin/tables', headers: auth(), payload: { label, seats: 4 } });
+  const ip = { 'cf-connecting-ip': '203.0.113.77' };
+  const before = events.length;
+  // No name or number at an empty table: refused, even with the right code.
+  const bare = await app.inject({ method: 'POST', url: `/api/public/tables/${label}/verify`, headers: ip, payload: { code: await codeFor(label) } });
+  assert.equal(bare.json().error, 'need_contact');
+  // Asking for the code needs a number too, and tells the servers which table and who.
+  assert.equal((await app.inject({ method: 'POST', url: `/api/public/tables/${label}/code-request`, headers: ip, payload: { name: 'Rahul', phone: '12' } })).statusCode, 400);
+  const ask = await app.inject({ method: 'POST', url: `/api/public/tables/${label}/code-request`, headers: ip, payload: { name: 'Rahul', phone: '9831000011' } });
+  assert.equal(ask.statusCode, 201);
+  assert.ok(events.slice(before).some(e => e.type === 'service.created' && e.table === label && e.kind === 'code' && e.name === 'Rahul'));
+  assert.equal((await app.inject({ method: 'POST', url: `/api/public/tables/${label}/code-request`, headers: ip, payload: { name: 'Rahul', phone: '9831000011' } })).json().duplicate, true);
+  const calls = (await app.inject({ method: 'GET', url: '/api/admin/service-requests', headers: auth() })).json().requests;
+  const call = calls.find((r: any) => r.table_label === label && r.kind === 'code');
+  assert.equal(call.otp, await codeFor(label));
+  assert.equal(call.guest_name, 'Rahul');
+
+  // The first guest orders with name, number and code.
+  const pass = (await app.inject({ method: 'POST', url: `/api/public/tables/${label}/verify`, headers: ip, payload: { code: call.otp, name: 'Rahul', phone: '9831000011' } })).json().pass;
+  const first = await app.inject({ method: 'POST', url: '/api/public/orders', headers: ip, payload: { mode: 'table', table: label, pass, name: 'Rahul', phone: '9831000011', lines: [{ ...LATTE(), qty: 1 }] } });
+  assert.equal(first.statusCode, 201, first.body);
+  // A friend at the same table now only needs the code.
+  const friend = await app.inject({ method: 'POST', url: `/api/public/tables/${label}/verify`, headers: ip, payload: { code: call.otp } });
+  assert.equal(friend.statusCode, 200, friend.body);
+  const second = await app.inject({ method: 'POST', url: '/api/public/orders', headers: ip, payload: { mode: 'table', table: label, pass: friend.json().pass, lines: [{ ...LATTE(), qty: 2 }] } });
+  assert.equal(second.statusCode, 201, second.body);
 });

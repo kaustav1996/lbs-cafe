@@ -118,12 +118,21 @@ export function publicRoutes() {
     return b?.mode === 'table' && typeof b.table === 'string' ? `t${b.table.trim().slice(0, 10)}` : '';
   };
 
+  // The first guest at a table gives a name and mobile number before using the code; friends joining a table
+  // that has already ordered only need the code.
   app.post('/tables/:label/verify', rateLimit('table-code', 5, 10 * 60_000, c => (c.req.param('label') ?? '').slice(0, 10)), async c => {
     const label = c.req.param('label');
-    const { code } = z.object({ code: z.string().trim().max(10) }).parse(await c.req.json());
+    const b = z
+      .object({ code: z.string().trim().max(10), name: z.string().trim().max(60).optional(), phone: z.string().trim().max(20).optional() })
+      .parse(await c.req.json());
     const [t] = await sql<{ otp: string; sitting: number }[]>`select otp, sitting from dining_tables where label = ${label} and active`;
     if (!t) throw new HttpError(400, `There's no table "${label}". Check the number on your table's QR stand.`, 'bad_table');
-    if (code !== t.otp) throw new HttpError(400, `That code doesn't match table ${label}. Check it with your server.`, 'bad_code');
+    if (!b.name || !normalisePhone(b.phone)) {
+      const [started] = await sql`select 1 from orders where table_label = ${label} and sitting = ${t.sitting} and status <> 'cancelled' limit 1`;
+      if (!started)
+        throw new HttpError(400, `You're the first at table ${label}. Add your name and a 10-digit mobile number, then the code.`, 'need_contact');
+    }
+    if (b.code !== t.otp) throw new HttpError(400, `That code doesn't match table ${label}. Check it with your server.`, 'bad_code');
     return c.json({ pass: await signTablePass({ table: label, sitting: t.sitting }) });
   });
 
@@ -161,6 +170,16 @@ export function publicRoutes() {
   app.post('/orders/:token/withdraw', rateLimit('withdraw', 20, 10 * 60_000), async c =>
     c.json({ lines: await withdrawOrder(c.req.param('token') ?? '') }),
   );
+
+  // Ask the servers for this table's code. Needs the guest's name and mobile number; the servers see both.
+  app.post('/tables/:label/code-request', rateLimit('code-request', 5, 10 * 60_000, c => (c.req.param('label') ?? '').slice(0, 10)), async c => {
+    const label = c.req.param('label') ?? '';
+    const b = z.object({ name: z.string().trim().min(1).max(60), phone: z.string().trim().max(20) }).parse(await c.req.json().catch(() => ({})));
+    const phone = normalisePhone(b.phone);
+    if (!phone) throw new HttpError(400, 'Add a 10-digit mobile number, then ask for the code.', 'no_phone');
+    const r = await callServer(label, 'code', { name: b.name, phone });
+    return c.json(r, r.duplicate ? 200 : 201);
+  });
 
   app.post('/service-requests', rateLimit('service', 10, 5 * 60_000), async c => {
     const body = z.object({ table: z.string().trim().min(1).max(10), kind: z.enum(['water', 'bill', 'server']) }).parse(await c.req.json());
@@ -232,13 +251,15 @@ export function publicRoutes() {
 }
 
 /** A waiter call from a table. One open request of each kind per table is enough. */
-async function callServer(table: string, kind: 'water' | 'bill' | 'server') {
+async function callServer(table: string, kind: 'water' | 'bill' | 'server' | 'code', guest?: { name: string; phone: string }) {
   const [t] = await sql`select 1 from dining_tables where label = ${table} and active`;
   if (!t) throw new HttpError(400, `There's no table "${table}".`, 'bad_table');
   const [existing] = await sql<{ id: number }[]>`
     select id from service_requests where table_label = ${table} and kind = ${kind} and status = 'open'`;
   if (existing) return { id: existing.id, duplicate: true };
-  const [r] = await sql<{ id: number }[]>`insert into service_requests (table_label, kind) values (${table}, ${kind}) returning id`;
-  bus.publish({ type: 'service.created', id: r.id, table, kind });
+  const [r] = await sql<{ id: number }[]>`
+    insert into service_requests (table_label, kind, guest_name, guest_phone) values (${table}, ${kind}, ${guest?.name ?? null}, ${guest?.phone ?? null})
+    returning id`;
+  bus.publish({ type: 'service.created', id: r.id, table, kind, name: guest?.name ?? null });
   return { id: r.id, duplicate: false };
 }

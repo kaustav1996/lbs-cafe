@@ -1652,10 +1652,17 @@ button.buy:hover {
   gap: 10px;
   margin-top: 8px;
 }
-.table-code label {
+.table-code > label {
   font-weight: 700;
 }
-.table-code input {
+.table-code-title {
+  font-weight: 800;
+  font-size: var(--t-lg);
+}
+.table-code .field {
+  margin-top: 0;
+}
+.table-code > input {
   font-size: var(--t-xl);
   letter-spacing: 0.4em;
   text-align: center;
@@ -2242,9 +2249,6 @@ button.buy:hover {
   background: #4a3426;
   border-radius: 4px;
 }
-.tapeflip.is-open .tape-reel {
-  animation: deck-spin 2.4s linear infinite;
-}
 .tape-foot {
   justify-self: center;
   display: grid;
@@ -2286,21 +2290,4 @@ button.buy:hover {
   text-align: center;
   font-size: var(--t-sm);
   color: var(--muted);
-}
-.tape-dishes {
-  margin-top: 6px;
-}
-.tape-dishes .cat-disc {
-  animation: record-out 0.75s cubic-bezier(0.25, 0.8, 0.3, 1) both;
-}
-@keyframes record-out {
-  from {
-    transform: translateX(0) rotate(0deg);
-  }
-}
-.tape-dishes .tracks {
-  animation: tracks-in 0.4s ease-out 0.3s both;
-}
-.tape-dishes .btn {
-  margin-top: 16px;
 }

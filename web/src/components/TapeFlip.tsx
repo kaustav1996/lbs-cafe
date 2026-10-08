@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import type { MenuCategory } from '../data/types';
-import { Track } from '../pages/Menu';
 import { inr } from '../lib/format';
 
 const FLIP_MS = 650;
@@ -9,8 +8,8 @@ const parity = (n: number) => ((n % 2) + 2) % 2;
 
 /**
  * The menu as one 3D cassette. Each side is a section of the menu. Scrolling, swiping or the arrow keys on the
- * tape flip it over its long edge to the next or previous section; tapping it opens that section's dishes
- * right underneath. Off the tape the page scrolls as usual, and at the first and last section scrolling on the
+ * tape flip it over its long edge to the next or previous section; tapping it opens the menu page at that
+ * section, with the other sections folded. Off the tape the page scrolls as usual, and at the first and last section scrolling on the
  * tape carries on down (or up) the page, so nobody gets stuck.
  */
 export function TapeFlip({ cats }: { cats: MenuCategory[] }) {
@@ -18,7 +17,7 @@ export function TapeFlip({ cats }: { cats: MenuCategory[] }) {
   // Two faces: the one showing and the one on the back. The back gets the next section just before a flip.
   const [faces, setFaces] = useState<[number, number]>([0, 1 % Math.max(cats.length, 1)]);
   const [turns, setTurns] = useState(0); // half turns so far; odd = the back face is showing
-  const [open, setOpen] = useState(false);
+  const nav = useNavigate();
   const busy = useRef(false);
   const tape = useRef<HTMLButtonElement>(null);
   const moved = useRef(false);
@@ -123,18 +122,16 @@ export function TapeFlip({ cats }: { cats: MenuCategory[] }) {
   };
 
   return (
-    <div className={`tapeflip ${open ? 'is-open' : ''}`}>
+    <div className="tapeflip">
       <div className="tape-stage">
         <button
           ref={tape}
           type="button"
           className="tape"
-          aria-expanded={open}
-          aria-controls="tape-dishes"
-          aria-label={`${cat.name}, section ${index + 1} of ${cats.length}. ${open ? 'Hide' : 'Show'} the dishes. Up and down arrows change the section.`}
+          aria-label={`${cat.name}, section ${index + 1} of ${cats.length}. Opens it on the menu. Up and down arrows change the section.`}
           onClick={() => {
             if (moved.current) return void (moved.current = false);
-            setOpen(o => !o);
+            nav({ pathname: '/menu', hash: cat.id }, { state: { only: cat.id } });
           }}
           onKeyDown={e => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
@@ -158,38 +155,12 @@ export function TapeFlip({ cats }: { cats: MenuCategory[] }) {
             <path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <p className="tape-hint">Scroll or swipe on the tape to change the section. Tap it to see the dishes.</p>
+        <p className="tape-hint">Scroll or swipe on the tape to change the section. Tap it to open that section of the menu.</p>
         <button type="button" className="tape-step" onClick={() => flip(1)} disabled={index >= cats.length - 1} aria-label="Next section">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
             <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-      </div>
-      <div id="tape-dishes" className="tape-dishes" hidden={!open} style={{ '--label': cat.color } as CSSProperties}>
-        <div className="cat-head tape-dishes-head" key={`head-${cat.id}`}>
-          <span className="cat-art" aria-hidden="true">
-            <span className="vinyl cat-disc" style={{ '--label': cat.color } as CSSProperties}>
-              <span className="vinyl-label">
-                <span className="vinyl-hole" />
-              </span>
-            </span>
-            <span className="cat-sleeve" />
-          </span>
-          <span className="cat-text">
-            <span className="cat-name">{cat.name}</span>
-            <span className="cat-meta muted num">
-              {cat.items.length} {cat.items.length === 1 ? 'item' : 'items'}, {inr(cat.min)} to {inr(cat.max)}
-            </span>
-          </span>
-        </div>
-        <ul className="tracks" key={cat.id}>
-          {cat.items.map(i => (
-            <Track key={i.id} item={i} />
-          ))}
-        </ul>
-        <Link to={{ pathname: '/menu', hash: cat.id }} className="btn btn-line btn-block">
-          {cat.name} on the full menu
-        </Link>
       </div>
     </div>
   );

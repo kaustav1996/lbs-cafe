@@ -88,7 +88,13 @@ export default function Menu() {
 
   useEffect(() => {
     const id = loc.hash.replace('#', '');
-    if (id) open1(id);
+    // From the cassette on the home page: that section open, the rest folded.
+    const only = (loc.state as { only?: string } | null)?.only;
+    if (only) {
+      saveClosed(new Set(MENU.map(c => c.id).filter(c => c !== only)));
+      setJustOpened(only);
+    }
+    else if (id) open1(id);
     if (id) requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
     else window.scrollTo(0, 0);
   }, [loc.hash]);

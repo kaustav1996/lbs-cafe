@@ -127,9 +127,12 @@ function Shell() {
   useOnEvent(['service.created'], e => {
     if (chef) return; // calls from tables are for the floor
     chime('call');
-    const msg = `Table ${e.table} wants ${e.kind === 'bill' ? 'the bill' : e.kind === 'water' ? 'water' : 'a server'}`;
+    const msg =
+      e.kind === 'code'
+        ? `Table ${e.table}${e.name ? ` (${e.name})` : ''} wants the table code`
+        : `Table ${e.table} wants ${e.kind === 'bill' ? 'the bill' : e.kind === 'water' ? 'water' : 'a server'}`;
     toast(msg);
-    notify(msg, 'Tap to open the orders board.');
+    notify(msg, e.kind === 'code' ? 'The code is on the orders board.' : 'Tap to open the orders board.');
   });
   useOnEvent(['reservation.created'], () => {
     if (chef) return;

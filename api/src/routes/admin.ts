@@ -325,7 +325,10 @@ export function adminRoutes() {
 
   // ---------- Service requests (call a server) ----------
   app.get('/service-requests', async c => c.json({
-    requests: await sql`select * from service_requests where status = 'open' order by created_at`,
+    // A code request comes with the table's current code, so the server can read it out.
+    requests: await sql`select r.*, case when r.kind = 'code' then t.otp end as otp
+                        from service_requests r left join dining_tables t on t.label = r.table_label
+                        where r.status = 'open' order by r.created_at`,
   }));
   app.patch('/service-requests/:id', async c => {
     const id = Number(c.req.param('id'));
