@@ -456,8 +456,13 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
           <div className="bb-modal-box">
             <img className="bb-raider" src={BANDIT_IMG} alt="" />
             <p>
-              <b>{name(pd.from)}</b> sent a Bandit to raid your cup! It scores nothing until the Bandit is gone. <b className="num">{left}s</b>
+              <b>{name(pd.from)}</b> sent a Bandit to raid your cup! It scores nothing until the Bandit is gone.{' '}
+              {has('chappal') ? 'Throw your Chappal to chase it off.' : has('newspaper') ? 'Shoo it onto someone else’s cup with your Newspaper.' : 'You have no Chappal or Newspaper, so it stays for now.'}
             </p>
+            <div className="bb-timer" aria-label={`${left} seconds left`}>
+              <span style={{ width: `${Math.min(100, (left / 15) * 100)}%` }} />
+              <b className="num">{left}s</b>
+            </div>
             {newsTarget ? (
               <>
                 <p>Shoo it onto whose cup?</p>
@@ -562,7 +567,7 @@ function TradePanel(p: {
         ))}
       </div>
       <p>
-        <b>You give:</b> {p.giving.length ? p.giving.map(k => `${ICON[k]} ${LABEL[k]}`).join(', ') : 'tap cards in your hand (ingredients, Masala, Chappal, Newspaper)'}
+        <b>You give:</b> {p.giving.length ? p.giving.map(k => `${ICON[k]} ${LABEL[k]}`).join(', ') : 'tap ingredients in your hand'}
       </p>
       <p>
         <b>You ask for:</b> {p.want.length ? '' : 'tap below'}

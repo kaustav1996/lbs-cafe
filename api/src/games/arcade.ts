@@ -19,6 +19,8 @@ interface Room {
   host: string;
   max: number;
   status: 'waiting' | 'playing' | 'over';
+  /** With the extension: Kauwa, Sheru and Monsoon. */
+  extended: boolean;
   seats: Seat[];
   g: Game | null;
   botAt: number | null;
@@ -32,7 +34,8 @@ interface Who {
 }
 type In =
   | { t: 'hello'; id: string; name: string }
-  | { t: 'create'; max: number }
+  | { t: 'create'; max: number; extended?: boolean }
+  | { t: 'extended'; on: boolean }
   | { t: 'join'; code: string }
   | { t: 'leave' }
   | { t: 'bot'; add: boolean }
@@ -108,7 +111,7 @@ export class Arcade extends DurableObject {
         if (room) return 'Leave your room first.';
         const max = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, Math.floor(Number(m.max) || 4)));
         const code = this.newCode();
-        const r: Room = { code, game: 'brew', host: who.id, max, status: 'waiting', seats: [{ id: who.id, name: who.name!, table: who.table, bot: false }], g: null, botAt: null, active: now };
+        const r: Room = { code, game: 'brew', host: who.id, max, status: 'waiting', extended: !!m.extended, seats: [{ id: who.id, name: who.name!, table: who.table, bot: false }], g: null, botAt: null, active: now };
         this.rooms.set(code, r);
         who.room = code;
         ws.serializeAttachment(who);
@@ -150,12 +153,19 @@ export class Arcade extends DurableObject {
         this.changed(room);
         return null;
       }
+      case 'extended': {
+        if (!room || room.host !== who.id) return 'Only the host can change that.';
+        if (room.status !== 'waiting') return 'The game has started.';
+        room.extended = !!m.on;
+        this.changed(room);
+        return null;
+      }
       case 'start':
       case 'again': {
         if (!room || room.host !== who.id) return 'Only the host can start the game.';
         if (m.t === 'start' && room.status !== 'waiting') return 'The game has started.';
         if (room.seats.length < MIN_PLAYERS) return 'Add at least one more player or a bot.';
-        room.g = newGame(room.seats, now);
+        room.g = newGame(room.seats, now, Math.random, { extended: !!room.extended });
         room.status = 'playing';
         this.changed(room);
         return null;
@@ -263,7 +273,7 @@ export class Arcade extends DurableObject {
     }
   }
   private roomInfo(r: Room) {
-    return { code: r.code, host: r.host, max: r.max, status: r.status, seats: r.seats.map(s => ({ id: s.id, name: s.name, table: s.table, bot: s.bot })) };
+    return { code: r.code, host: r.host, max: r.max, status: r.status, extended: !!r.extended, seats: r.seats.map(s => ({ id: s.id, name: s.name, table: s.table, bot: s.bot })) };
   }
   private sendRoom(r: Room) {
     for (const ws of this.sockets(r.code)) {
@@ -274,7 +284,7 @@ export class Arcade extends DurableObject {
   private lobby() {
     return [...this.rooms.values()]
       .filter(r => r.status === 'waiting')
-      .map(r => ({ code: r.code, hostName: r.seats.find(s => s.id === r.host)?.name ?? '', table: r.seats.find(s => s.id === r.host)?.table ?? null, players: r.seats.length, max: r.max }));
+      .map(r => ({ code: r.code, extended: !!r.extended, hostName: r.seats.find(s => s.id === r.host)?.name ?? '', table: r.seats.find(s => s.id === r.host)?.table ?? null, players: r.seats.length, max: r.max }));
   }
   private sendLobby(ws: WebSocket) {
     this.send(ws, { t: 'lobby', rooms: this.lobby() });

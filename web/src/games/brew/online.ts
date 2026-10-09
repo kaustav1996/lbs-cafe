@@ -4,6 +4,7 @@ import type { GameView, Move } from './engine';
 
 export interface LobbyRoom {
   code: string;
+  extended?: boolean;
   hostName: string;
   table: string | null;
   players: number;
@@ -14,6 +15,7 @@ export interface RoomInfo {
   host: string;
   max: number;
   status: 'waiting' | 'playing' | 'over';
+  extended?: boolean;
   seats: { id: string; name: string; table: string | null; bot: boolean }[];
 }
 

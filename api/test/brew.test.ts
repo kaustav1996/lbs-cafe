@@ -67,7 +67,7 @@ test('brew: a Bandit spoils a cup; the target chases it off with a chappal, or s
   assert.equal(g.pending, null);
   // Unanswered: it stays when the time runs out.
   assert.equal(play(g, a.id, { a: 'bandit', target: b.id }, 4, rng), null);
-  tick(g, 4 + 9_000, rng);
+  tick(g, 4 + 16_000, rng);
   assert.equal(g.pending, null);
   assert.equal(b.cups[0].bandit, true);
 });
@@ -104,7 +104,7 @@ test('brew: 5 points of clean cups wins', () => {
 test('brew: bots finish a game at every room size from 2 to 10', () => {
   for (let n = 2; n <= 10; n++) {
     const rng = seeded(100 + n);
-    const g = newGame(people(n).map(p => ({ ...p, bot: true })), 0, rng);
+    const g = newGame(people(n).map(p => ({ ...p, bot: true })), 0, rng, { extended: n % 2 === 0 });
     let now = 0;
     let moves = 0;
     while (g.phase === 'playing' && moves < 20_000) {
@@ -119,7 +119,7 @@ test('brew: bots finish a game at every room size from 2 to 10', () => {
     }
     assert.equal(g.phase, 'over', `${n}-player game finished`);
     // Cards are neither lost nor made up: deck + discards + hands = everything dealt.
-    const total = Object.values(deckCounts(n)).reduce((a, b) => a + b, 0);
+    const total = Object.values(deckCounts(n, n % 2 === 0)).reduce((a, b) => a + b, 0);
     const counted = g.deck.length + g.discard.length + g.players.reduce((a, p) => a + p.hand.length, 0) + g.crows.reduce((a, c) => a + c.stash.length, 0);
     assert.equal(counted, total);
   }
@@ -186,7 +186,7 @@ test('brew: Havaldar searches a hand and takes two; Chor steals from everyone; K
 
 test('brew: a Kauwa lands on whoever brews next, blocks brewing until fed and sent on; Sheru catches it', () => {
   const rng = seeded(41);
-  const g = newGame(people(4), 0, rng);
+  const g = newGame(people(4), 0, rng, { extended: true });
   assert.equal(g.crows.length, 2);
   const a = g.players[g.turn];
   const b = g.players[(g.turn + 1) % 4];
@@ -223,4 +223,26 @@ test('brew: when the cups run out, the most points wins', () => {
   assert.equal(play(g, me.id, { a: 'brew' }, 1, rng), null);
   assert.equal(g.phase, 'over');
   assert.equal(g.winner, other.id, '2 clean points beats 1');
+});
+
+test('brew: without the extension there is no Kauwa, Sheru or Monsoon', () => {
+  const g = newGame(people(5), 0, seeded(61));
+  assert.equal(g.crows.length, 0);
+  assert.equal(g.extended, false);
+  const all = [...g.deck, ...g.players.flatMap(p => p.hand)];
+  assert.ok(!all.some(c => c.kind === 'sheru' || c.kind === 'monsoon'));
+  const ext = newGame(people(5), 0, seeded(61), { extended: true });
+  assert.equal(ext.crows.length, 2);
+  assert.ok([...ext.deck, ...ext.players.flatMap(p => p.hand)].some(c => c.kind === 'sheru'));
+});
+
+test('brew: only ingredients can be traded', () => {
+  const rng = seeded(71);
+  const g = newGame(people(2), 0, rng);
+  const a = g.players[g.turn];
+  const b = g.players.find(p => p.id !== a.id)!;
+  give(g, a.id, ['chappal', 'masala']);
+  const chappal = a.hand.find(c => c.kind === 'chappal')!.id;
+  assert.match(play(g, a.id, { a: 'trade', to: b.id, give: [chappal], want: [] }, 1, rng)!, /only ingredients/);
+  assert.match(play(g, a.id, { a: 'trade', to: b.id, give: [], want: ['masala'] }, 1, rng)!, /only trade ingredients/);
 });

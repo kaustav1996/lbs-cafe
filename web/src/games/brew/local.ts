@@ -10,13 +10,18 @@ export const ME = 'me';
  * A game on this phone against bots (practice, and the tutorial). `setup` can change the fresh game (the
  * tutorial deals set hands); `paused` stops bots and timers while the tutorial explains something.
  */
-export function useLocalGame(bots: string[], opts: { setup?: (g: Game) => void; paused?: boolean; onMove?: (g: Game, by: string, m: Move) => void } = {}) {
+export function useLocalGame(
+  bots: string[],
+  opts: { setup?: (g: Game) => void; paused?: boolean; onMove?: (g: Game, by: string, m: Move) => void; extended?: boolean } = {},
+) {
   const make = useCallback(() => {
-    const g = newGame([{ id: ME, name: savedName() || 'Barista', table: null, bot: false }, ...bots.map((n, i) => ({ id: `b${i}`, name: n, table: null, bot: true }))], Date.now());
+    const g = newGame([{ id: ME, name: savedName() || 'Barista', table: null, bot: false }, ...bots.map((n, i) => ({ id: `b${i}`, name: n, table: null, bot: true }))], Date.now(), Math.random, {
+      extended: !!opts.extended,
+    });
     opts.setup?.(g);
     return g;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bots.join('|')]);
+  }, [bots.join('|'), opts.extended]);
   const game = useRef<Game>(make());
   // A copy each time: the engine changes its arrays in place, and the screen needs to see new ones.
   const snap = () => structuredClone(view(game.current, ME));

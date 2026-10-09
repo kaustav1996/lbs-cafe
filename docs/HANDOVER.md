@@ -73,7 +73,8 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   Fun's almanacs), with hemp coffee. Cards: 5 ingredients, Masala (wild, Rendang), Bandit/Chappal/Newspaper
   (Fly/Swatter/Fan), Havaldar (Officer), Chor (Thief), Kirana (Supplier), Mandi (Wholesaler), Jugaad (Mak Cik,
   2 actions), Kauwa/Sheru (Crow/Si Oyen), plus LB's Monsoon. 7-card hands, draw 2 a turn, 3 actions, first to
-  5 points or most points when the cups run out. Card art is SVG in `web/src/games/brew/art.tsx`; the Bandit is
+  5 points or most points when the cups run out. Kauwa, Sheru and Monsoon are the extension, off unless the room's
+  host (or a practice game) turns it on. Only the five ingredients can be traded. A raided player has 15 s to react. Card art is SVG in `web/src/games/brew/art.tsx`; the Bandit is
   the Lemon Bandits logo.
   Rules in `api/src/games/brew.ts` (pure, tested in `test/brew.test.ts`, including bot-only games at 2 to 10
   players); the deck grows with the room. Rooms live in the `Arcade` Durable Object (`api/src/games/arcade.ts`,

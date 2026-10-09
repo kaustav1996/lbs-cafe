@@ -44,18 +44,18 @@ const STEPS: Step[] = [
     done: g => g.players[0].cups.length === 1,
   },
   {
-    say: 'Your cup is face down to everyone else: worth 1 or 2 points, and only you know which. But the smell brought a Kauwa (crow) to your stall: you can’t brew again until it’s gone. Tap a Gur card, then Feed the Kauwa and send it on, then tap a player.',
+    say: 'Your cup is face down to everyone else: worth 1 or 2 points, and only you know which. With the extension, the smell brings a Kauwa (crow) to your stall: you can’t brew again until it’s gone. Tap a Gur card, then Feed the Kauwa and send it on, then tap a player.',
     allow: ['feed'],
     done: g => !g.crows.some(c => c.holder === ME),
   },
   {
-    say: 'Chai Bot sent a Bandit to raid your cup! A raided cup scores nothing. You have a Chappal: tap Chase it off.',
+    say: 'Chai Bot sent a Bandit to raid your cup! A raided cup scores nothing. You have a Chappal: tap Chase it off. (Missed the moment? Tap your Chappal card, then Chase off the Bandit.)',
     setup: g => {
       const c = g.players[0].cups[0];
       c.bandit = true;
       g.pending = { kind: 'bandit', from: 'b0', target: ME, cupId: c.id, deadline: Date.now() + 60_000, flicks: 0 };
     },
-    allow: ['react'],
+    allow: ['react', 'chappal'],
     done: g => !g.pending && !g.players[0].cups[0].bandit,
   },
   {
@@ -100,7 +100,7 @@ const STEPS: Step[] = [
     done: g => g.players[0].cups.length === 2,
   },
   {
-    say: 'More tricks: Chor steals a card from everyone, Kirana makes everyone hand over one ingredient you name, Mandi turns up the top 3 and you keep the ingredients, Sheru (the street dog) catches a Kauwa and keeps what it carried, Monsoon passes 2 cards left. You can also trade ingredients, Masala, Chappals and Newspapers. Tap End turn.',
+    say: 'More tricks: Chor steals a card from everyone, Kirana makes everyone hand over one ingredient you name, Mandi turns up the top 3 and you keep the ingredients, and with the extension Sheru (the street dog) catches a Kauwa and Monsoon passes 2 cards left. You can also trade ingredients (only ingredients) with anyone. Tap End turn.',
     allow: ['end'],
     done: g => g.turn !== 0,
   },
@@ -115,6 +115,7 @@ export default function Tutorial({ onDone }: { onDone: (next: 'practice' | 'onli
   const [nudge, setNudge] = useState('');
   const local = useLocalGame(['Chai Bot', 'Masala Bot'], {
     paused: true,
+    extended: true,
     setup: g => STEPS[0].setup?.(g),
     onMove: (g, by) => {
       if (by !== ME) return;

@@ -3547,3 +3547,31 @@ span.pc {
   width: 90px;
   justify-self: center;
 }
+/* Pop-ups over the game table read in ink on paper (the table itself is light-on-felt). */
+.bb-modal-box {
+  color: var(--ink);
+}
+.bb-timer {
+  position: relative;
+  height: 26px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #ffe0e0;
+  overflow: hidden;
+}
+.bb-timer span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #ff5f5f;
+  transition: width 0.25s linear;
+}
+.bb-timer b {
+  position: relative;
+  display: block;
+  text-align: center;
+  line-height: 22px;
+  font-size: var(--t-sm);
+}
+.bb-ext {
+  justify-content: center;
+}

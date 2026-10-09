@@ -11,15 +11,16 @@ type Screen = 'home' | 'tutorial' | 'practice' | 'online';
 /** Brew Bandits: the tutorial, practice against bots on this phone, and rooms to play with people at any table. */
 export default function BrewBandits() {
   const [screen, setScreen] = useState<Screen>('home');
+  const [extended, setExtended] = useState(false);
   if (screen === 'tutorial') return <Tutorial onDone={setScreen} />;
-  if (screen === 'practice') return <Practice onLeave={() => setScreen('home')} />;
+  if (screen === 'practice') return <Practice extended={extended} onLeave={() => setScreen('home')} />;
   if (screen === 'online') return <Online onLeave={() => setScreen('home')} />;
   return (
     <div className="bb-home">
       <p className="lede">Race the others to brew hemp coffee. One of each of five ingredients makes a face-down cup worth 1 or 2 points; first to 5 wins. Our take on the Malaysian card game Nasi Lemak.</p>
       <ul className="bb-rules">
         <li>
-          <b>Your turn:</b> draw 2 cards, then up to 3 actions: brew, trade, or play a trick card.
+          <b>Your turn:</b> draw 2 cards, then up to 3 actions: brew, trade ingredients, or play a special card.
         </li>
         <li>
           <b>Bandit</b> raids a cup so it scores nothing. <b>Chappal</b> chases it off; <b>Newspaper</b> shoos it onto someone else’s.
@@ -29,8 +30,11 @@ export default function BrewBandits() {
           <b>Mandi</b> keeps the ingredients from the top 3 cards.
         </li>
         <li>
-          <b>Jugaad</b> brews with any 3 (two actions). <b>Masala</b> is wild. A <b>Kauwa</b> lands on whoever brews and blocks brewing until it’s fed
-          and sent on; <b>Sheru</b> catches it.
+          <b>Jugaad</b> brews with any 3 (two actions). <b>Masala</b> is wild.
+        </li>
+        <li>
+          <b>The extension</b> (your choice): a <b>Kauwa</b> lands on whoever brews and blocks brewing until it’s fed and sent on; <b>Sheru</b>{' '}
+          catches it; <b>Monsoon</b> makes everyone pass two cards left.
         </li>
       </ul>
       <div className="bb-home-actions">
@@ -43,13 +47,17 @@ export default function BrewBandits() {
         <button type="button" className="btn btn-line btn-lg btn-block" onClick={() => setScreen('practice')}>
           Practice against bots
         </button>
+        <label className="check bb-ext">
+          <input type="checkbox" checked={extended} onChange={e => setExtended(e.target.checked)} />
+          Practise with the extension (Kauwa, Sheru and Monsoon)
+        </label>
       </div>
     </div>
   );
 }
 
-function Practice({ onLeave }: { onLeave: () => void }) {
-  const local = useLocalGame(['Chai Bot', 'Masala Bot', 'Filter Bot']);
+function Practice({ onLeave, extended }: { onLeave: () => void; extended: boolean }) {
+  const local = useLocalGame(['Chai Bot', 'Masala Bot', 'Filter Bot'], { extended });
   return (
     <>
       {local.error && <p className="error bb-error">{local.error}</p>}
@@ -79,6 +87,7 @@ function Online({ onLeave }: { onLeave: () => void }) {
   const [name, setName] = useState(() => savedName() || cart.name.trim().split(/\s+/)[0] || '');
   const [ready, setReady] = useState(!!savedName());
   const [seats, setSeats] = useState(4);
+  const [ext, setExt] = useState(false);
   const live = useArcade(ready ? table : '', ready ? name : '');
 
   if (!ready)
@@ -141,6 +150,14 @@ function Online({ onLeave }: { onLeave: () => void }) {
         <p className="status-meta">
           {room.seats.length} of {room.max} seats taken. {host ? 'Start when everyone’s in, or fill seats with bots.' : 'Waiting for the host to start.'}
         </p>
+        {host ? (
+          <label className="check">
+            <input type="checkbox" checked={!!room.extended} onChange={e => live.send({ t: 'extended', on: e.target.checked })} />
+            Play with the extension (Kauwa, Sheru and Monsoon)
+          </label>
+        ) : (
+          <p className="status-meta">{room.extended ? 'With the extension: Kauwa, Sheru and Monsoon.' : 'The base game, without the extension.'}</p>
+        )}
         <ul className="bb-seats">
           {room.seats.map(s => (
             <li key={s.id}>
@@ -188,7 +205,11 @@ function Online({ onLeave }: { onLeave: () => void }) {
             ))}
           </select>
         </div>
-        <button type="button" className="btn btn-ink btn-block" disabled={!live.connected} onClick={() => live.send({ t: 'create', max: seats })}>
+        <label className="check">
+          <input type="checkbox" checked={ext} onChange={e => setExt(e.target.checked)} />
+          Play with the extension (Kauwa, Sheru and Monsoon)
+        </label>
+        <button type="button" className="btn btn-ink btn-block" disabled={!live.connected} onClick={() => live.send({ t: 'create', max: seats, extended: ext })}>
           Create a room
         </button>
       </section>
@@ -205,7 +226,7 @@ function Online({ onLeave }: { onLeave: () => void }) {
                   <br />
                   <span className="muted">
                     {r.table ? `Table ${r.table}, ` : ''}
-                    {r.players} of {r.max} seats
+                    {r.players} of {r.max} seats{r.extended ? ', with the extension' : ''}
                   </span>
                 </span>
                 <button type="button" className="btn btn-ink btn-sm" onClick={() => live.send({ t: 'join', code: r.code })}>

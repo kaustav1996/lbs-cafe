@@ -12,7 +12,7 @@
  * Newspaper (Fan) shoos it onto someone else's (also the moment you're raided). From the Rendang expansion: a
  * Kauwa (Crow) lands on whoever brews next and stops them brewing until they feed it an ingredient to send it
  * on; Sheru (Si Oyen) catches a Kauwa and keeps what it collected. Monsoon is LB's own: all pass 2 cards left.
- * The deck grows with the room (2 to 10). Pure functions, no I/O: the Arcade room runs it.
+ * The Kauwa, Sheru and Monsoon are the extension, chosen when a room is made. The deck grows with the room (2 to 10). Pure functions, no I/O: the Arcade room runs it.
  */
 
 export const INGREDIENTS = ['espresso', 'milk', 'gur', 'elaichi', 'seeds'] as const;
@@ -22,8 +22,8 @@ export type Trick = (typeof TRICKS)[number];
 /** The wildcard: Masala stands in for any one ingredient. */
 export const WILD = 'masala' as const;
 export type CardKind = Ing | Trick | typeof WILD;
-/** What can change hands in a trade (as in the original: ingredients, swatter and fan). */
-export const TRADEABLE: CardKind[] = [...INGREDIENTS, WILD, 'chappal', 'newspaper'];
+/** Only the five ingredients can change hands in a trade; special cards (and Masala) can't. */
+export const TRADEABLE: CardKind[] = [...INGREDIENTS];
 
 export interface Card {
   id: number;
@@ -62,6 +62,8 @@ export interface Game {
   discard: Card[];
   cupPile: Cup[];
   crows: Crow[];
+  /** Playing with the extension (Kauwa, Sheru, Monsoon). */
+  extended: boolean;
   pending: Pending | null;
   winner: string | null;
   log: string[];
@@ -93,7 +95,7 @@ export const WIN_POINTS = 5;
 export const START_HAND = 7;
 export const ACTIONS_PER_TURN = 3;
 export const TURN_MS = 90_000;
-export const REACT_MS = 8_000;
+export const REACT_MS = 15_000;
 export const TRADE_MS = 20_000;
 export const PEEK_MS = 20_000;
 export const MIN_PLAYERS = 2;
@@ -128,8 +130,13 @@ const shuffle = <T>(a: T[], rng: Rng) => {
 };
 export const isIng = (k: CardKind): k is Ing => (INGREDIENTS as readonly string[]).includes(k);
 
-/** The original's counts (for up to 5 players), scaled up for bigger rooms. */
-export function deckCounts(n: number): Record<CardKind, number> {
+/** Game options: the extension adds the Kauwa (crows), Sheru and Monsoon. */
+export interface GameOptions {
+  extended: boolean;
+}
+
+/** The original's counts (for up to 5 players), scaled up for bigger rooms. Without the extension there's no Sheru or Monsoon. */
+export function deckCounts(n: number, extended = true): Record<CardKind, number> {
   const f = Math.max(1, n / 5);
   const r = (x: number) => Math.max(1, Math.round(x * f));
   return {
@@ -147,19 +154,24 @@ export function deckCounts(n: number): Record<CardKind, number> {
     havaldar: r(3),
     kirana: r(3),
     mandi: r(3),
-    sheru: r(2),
-    monsoon: 1 + Math.floor(n / 5),
+    sheru: extended ? r(2) : 0,
+    monsoon: extended ? 1 + Math.floor(n / 5) : 0,
   };
 }
 /** How many cups there are to brew: the original has 15 cards; more for big rooms. */
 export const cupCount = (n: number) => Math.max(15, 3 * n + 3);
-export const crowCount = (n: number) => (n < 4 ? 1 : 2);
+export const crowCount = (n: number, extended = true) => (!extended ? 0 : n < 4 ? 1 : 2);
 
-export function newGame(players: { id: string; name: string; table: string | null; bot: boolean }[], now: number, rng: Rng = Math.random): Game {
+export function newGame(
+  players: { id: string; name: string; table: string | null; bot: boolean }[],
+  now: number,
+  rng: Rng = Math.random,
+  opts: GameOptions = { extended: false },
+): Game {
   if (players.length < MIN_PLAYERS || players.length > MAX_PLAYERS) throw new Error('bad player count');
   let id = 1;
   const deck: Card[] = [];
-  for (const [kind, count] of Object.entries(deckCounts(players.length)) as [CardKind, number][])
+  for (const [kind, count] of Object.entries(deckCounts(players.length, opts.extended)) as [CardKind, number][])
     for (let i = 0; i < count; i++) deck.push({ id: id++, kind });
   shuffle(deck, rng);
   const total = cupCount(players.length);
@@ -173,7 +185,8 @@ export function newGame(players: { id: string; name: string; table: string | nul
     deck,
     discard: [],
     cupPile,
-    crows: Array.from({ length: crowCount(players.length) }, () => ({ id: id++, holder: null, stash: [] })),
+    crows: Array.from({ length: crowCount(players.length, opts.extended) }, () => ({ id: id++, holder: null, stash: [] })),
+    extended: opts.extended,
     pending: null,
     winner: null,
     log: [],
@@ -490,9 +503,9 @@ function playInner(g: Game, me: Player, m: Move, now: number, rng: Rng): string 
       for (const id of m.give) {
         const c = me.hand.find(x => x.id === id);
         if (!c) return 'You can only offer cards in your hand.';
-        if (!TRADEABLE.includes(c.kind)) return `${LABEL[c.kind]} can’t be traded.`;
+        if (!TRADEABLE.includes(c.kind)) return `${LABEL[c.kind]} can’t be traded: only ingredients can.`;
       }
-      if (!m.want.every(k => TRADEABLE.includes(k))) return 'You can only ask for ingredients, Masala, Chappal or Newspaper.';
+      if (!m.want.every(k => TRADEABLE.includes(k))) return 'You can only trade ingredients.';
       g.pending = { kind: 'trade', from: me.id, to: t.id, give: m.give, want: m.want, deadline: now + TRADE_MS };
       say(g, `${me.name} offered ${t.name} a trade.`);
       return null;
@@ -617,6 +630,7 @@ export function view(g: Game, me: string) {
     discardTop: g.discard.length ? g.discard[g.discard.length - 1].kind : null,
     winner: g.winner,
     winPoints: WIN_POINTS,
+    extended: g.extended,
     pending: pd,
     /** The Havaldar's search: the target's whole hand, shown only to whoever played it. */
     peek: pd?.kind === 'havaldar' && pd.from === me ? find(g, pd.target)!.hand : null,
