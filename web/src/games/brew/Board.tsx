@@ -55,14 +55,18 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
   const tradeForMe = pd?.kind === 'trade' && pd.to === view.me;
   const left = useLeft(pd ? pd.deadline : view.phase === 'playing' ? view.turnDeadline : null);
   const has = (k: CardKind) => hand.some(c => c.kind === k);
-  const canBrew = !!brewPlan(hand as Card[], 5);
-  const canJugaad = has('jugaad') && view.actionsLeft >= 2 && !!brewPlan(hand as Card[], 3);
   const raidedMine = me.cups.some(c => c.bandit);
+  // No brewing while a Bandit is on one of your cups.
+  const canBrew = !raidedMine && !!brewPlan(hand as Card[], 5);
+  const canJugaad = !raidedMine && has('jugaad') && view.actionsLeft >= 2 && !!brewPlan(hand as Card[], 3);
   const name = (id: string) => view.players.find(p => p.id === id)?.name ?? '';
   const whoseTurn = view.players.find(p => p.id === view.turn);
   const chosen = hand.filter(c => sel.includes(c.id));
   const one = chosen.length === 1 ? chosen[0] : null;
   const fan = useFan(hand.length);
+  // Swipe sideways on the hand (or tap the button) to lay the cards out side by side.
+  const [spread, setSpread] = useState(false);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
 
   // Cards that just arrived (the two you draw at the start of your turn) fly in from the deck.
   const seen = useRef<Set<number> | null>(null);
@@ -237,7 +241,24 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
       <div className="bbt-dock">
       {drew && <p className="bbt-drew">{drew}</p>}
 
-      <section className="bbt-hand" aria-label={`Your hand, ${hand.length} cards`}>
+      <section
+        className={`bbt-hand ${spread ? 'is-spread' : ''}`}
+        aria-label={`Your hand, ${hand.length} cards`}
+        onTouchStart={e => (swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
+        onTouchEnd={e => {
+          const s0 = swipe.current;
+          swipe.current = null;
+          if (!s0 || spread) return;
+          const dx = e.changedTouches[0].clientX - s0.x;
+          const dy = e.changedTouches[0].clientY - s0.y;
+          if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) setSpread(true);
+        }}
+      >
+        {hand.length > 2 && (
+          <button type="button" className="bbt-spread-btn" onClick={() => setSpread(v => !v)} aria-pressed={spread}>
+            {spread ? 'Fan the cards' : 'Spread the cards'}
+          </button>
+        )}
         <div className="bbt-fan" ref={fan.ref}>
           {hand.map((c, i) => {
             const mid = (hand.length - 1) / 2;
@@ -250,13 +271,15 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
                 fresh={fresh.includes(c.id)}
                 onClick={() => tap(c)}
                 style={
-                  {
-                    width: fan.card,
-                    marginLeft: i === 0 ? 0 : fan.step - fan.card,
-                    '--tilt': `${tilt}deg`,
-                    '--lift': `${Math.abs(i - mid) * 3}px`,
-                    zIndex: sel.includes(c.id) ? 50 : i,
-                  } as React.CSSProperties
+                  (spread
+                    ? { width: 96, zIndex: sel.includes(c.id) ? 50 : i }
+                    : {
+                        width: fan.card,
+                        marginLeft: i === 0 ? 0 : fan.step - fan.card,
+                        '--tilt': `${tilt}deg`,
+                        '--lift': `${Math.abs(i - mid) * 3}px`,
+                        zIndex: sel.includes(c.id) ? 50 : i,
+                      }) as React.CSSProperties
                 }
               />
             );
@@ -431,7 +454,11 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
                 End turn
               </button>
             </div>
-            <p className="bbt-note">{myCrow ? 'A Kauwa blocks brewing: tap an ingredient to feed it and send it on.' : canBrew ? 'You have everything to brew a cup!' : 'Tap a card to see what it does.'}</p>
+            <p className="bbt-note">{raidedMine
+                ? 'A Bandit is on your cup, so you can’t brew. Tap your Chappal or Newspaper to get rid of it.'
+                : myCrow
+                  ? 'A Kauwa blocks brewing: tap an ingredient to feed it and send it on.'
+                  : canBrew ? 'You have everything to brew a cup!' : 'Tap a card to see what it does.'}</p>
           </>
         ) : (
           <p className="bbt-note">{view.phase === 'over' ? 'Game over.' : 'Tap a card to see what it does. You’ll draw 2 cards when your turn comes.'}</p>

@@ -9,7 +9,8 @@
  * The tricks, after the original's: Havaldar (Officer) looks at a player's hand and takes 2; Chor (Thief) steals
  * a card from everyone; Kirana (Supplier) names an ingredient and everyone hands theirs over; Mandi (Wholesaler)
  * turns up the top 3 and keeps the ingredients; Bandit (Fly) raids a cup, Chappal (Swatter) chases it off,
- * Newspaper (Fan) shoos it onto someone else's (also the moment you're raided). From the Rendang expansion: a
+ * Newspaper (Fan) shoos it onto someone else's (also the moment you're raided). While a Bandit is on any of your
+ * cups you can't brew. From the Rendang expansion: a
  * Kauwa (Crow) lands on whoever brews next and stops them brewing until they feed it an ingredient to send it
  * on; Sheru (Si Oyen) catches a Kauwa and keeps what it collected. Monsoon is LB's own: all pass 2 cards left.
  * The Kauwa, Sheru and Monsoon are the extension, chosen when a room is made. The deck grows with the room (2 to 10). Pure functions, no I/O: the Arcade room runs it.
@@ -147,8 +148,9 @@ export function deckCounts(n: number, extended = true): Record<CardKind, number>
     seeds: r(10),
     masala: r(4),
     bandit: r(5),
-    chappal: r(3),
-    newspaper: r(2),
+    // A raided cup blocks brewing, so there are enough cures to go round.
+    chappal: r(4),
+    newspaper: r(3),
     jugaad: r(3),
     chor: r(3),
     havaldar: r(3),
@@ -329,6 +331,7 @@ function playInner(g: Game, me: Player, m: Move, now: number, rng: Rng): string 
 
   switch (m.a) {
     case 'brew': {
+      if (me.cups.some(c => c.bandit)) return 'A Bandit is on your cup. Chase it off with a Chappal or shoo it on with a Newspaper before you brew.';
       if (crowOf(g, me.id)) return 'A Kauwa is at your stall. Feed it an ingredient to send it on, or catch it with Sheru.';
       const plan = brewPlan(me.hand, 5);
       if (!plan) return 'You need one of each of the five ingredients (Masala can stand in).';
@@ -342,6 +345,7 @@ function playInner(g: Game, me: Player, m: Move, now: number, rng: Rng): string 
     case 'jugaad': {
       const e = needCard('jugaad');
       if (e) return e;
+      if (me.cups.some(c => c.bandit)) return 'A Bandit is on your cup. Get rid of it before you brew.';
       if (crowOf(g, me.id)) return 'A Kauwa is at your stall. Send it on first.';
       if (g.actionsLeft < 2) return 'Jugaad takes two actions: the card and the brew.';
       const plan = brewPlan(me.hand, 3);
@@ -697,12 +701,16 @@ export function botMove(g: Game, botId: string, rng: Rng = Math.random): Move | 
       const to = others.filter(p => !crowOf(g, p.id));
       if (food && to.length) return { a: 'feed', card: food.id, target: leader(to).id };
     }
-    if (!crow && brewPlan(me.hand, 5)) return { a: 'brew' };
-    if (!crow && has('jugaad') && g.actionsLeft >= 2 && brewPlan(me.hand, 3)) return { a: 'jugaad' };
-    if (has('chappal') && me.cups.some(c => c.bandit)) return { a: 'chappal' };
+    // A Bandit on a cup stops brewing, so deal with it first.
+    const raided = me.cups.some(c => c.bandit);
     const raidable = others.filter(p => p.cups.some(c => !c.bandit));
-    if (has('newspaper') && me.cups.some(c => c.bandit) && raidable.length) return { a: 'newspaper', target: leader(raidable).id };
-    if (has('bandit') && raidable.length) return { a: 'bandit', target: leader(raidable).id };
+    if (raided && has('chappal')) return { a: 'chappal' };
+    if (raided && has('newspaper') && raidable.length) return { a: 'newspaper', target: leader(raidable).id };
+    if (!crow && !raided && brewPlan(me.hand, 5)) return { a: 'brew' };
+    if (!crow && !raided && has('jugaad') && g.actionsLeft >= 2 && brewPlan(me.hand, 3)) return { a: 'jugaad' };
+    // Raid someone who can still brew (a second Bandit on a blocked player does little).
+    const open = raidable.filter(p => !p.cups.some(c => c.bandit));
+    if (has('bandit') && open.length) return { a: 'bandit', target: leader(open).id };
     if (has('mandi')) return { a: 'mandi' };
     if (has('kirana') && missing.length) return { a: 'kirana', ing: missing[0] };
     const withCards = others.filter(p => p.hand.length);

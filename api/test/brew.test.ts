@@ -246,3 +246,15 @@ test('brew: only ingredients can be traded', () => {
   assert.match(play(g, a.id, { a: 'trade', to: b.id, give: [chappal], want: [] }, 1, rng)!, /only ingredients/);
   assert.match(play(g, a.id, { a: 'trade', to: b.id, give: [], want: ['masala'] }, 1, rng)!, /only trade ingredients/);
 });
+
+test('brew: no brewing while a Bandit is on one of your cups', () => {
+  const rng = seeded(81);
+  const g = newGame(people(2), 0, rng);
+  const me = g.players[g.turn];
+  me.cups.push({ id: 6000, points: 1, bandit: true });
+  give(g, me.id, [...INGREDIENTS, 'jugaad', 'chappal']);
+  assert.match(play(g, me.id, { a: 'brew' }, 1, rng)!, /Bandit/);
+  assert.match(play(g, me.id, { a: 'jugaad' }, 1, rng)!, /Bandit/);
+  assert.equal(play(g, me.id, { a: 'chappal' }, 1, rng), null);
+  assert.equal(play(g, me.id, { a: 'brew' }, 2, rng), null);
+});

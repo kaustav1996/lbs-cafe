@@ -3575,3 +3575,52 @@ span.pc {
 .bb-ext {
   justify-content: center;
 }
+/* The hand laid out side by side (swipe or the button): no overlap, scroll through the cards. */
+.bbt-hand {
+  position: relative;
+}
+.bbt-spread-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 60;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.bbt-hand.is-spread .bbt-fan {
+  justify-content: flex-start;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 30px 10px 8px;
+  margin-top: -26px;
+  scrollbar-width: none;
+}
+.bbt-hand.is-spread .pc {
+  scroll-snap-align: center;
+  --tilt: 0deg;
+  --lift: 0px;
+  margin-left: 0 !important;
+}
+/* Keep the hand inside the screen; a spread hand scrolls within itself. */
+.bbt,
+.bbt-dock {
+  min-width: 0;
+}
+.bbt > *,
+.bbt-dock > * {
+  min-width: 0;
+}
+.bbt-hand,
+.bbt-fan {
+  width: 100%;
+  max-width: 100%;
+}
