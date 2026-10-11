@@ -96,8 +96,10 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
 - **Games** (9 Oct 2026, migration 013): a table's games open when it orders (or staff open them) and stay open until
   a server taps Close games (Settings, Tables); the next order opens them again. Settings has "Games open at every
   table", which opens them at every table now and at each new visit. Guests get a Games tab and a Play games
-  banner on the order page; `/games` lists four single-player games written for the site (`web/src/games/`:
-  Lemon 2048, Snake, Tape match, Record Simon), each lazy-loaded, best scores kept on the phone. Multiplayer next.
+  banner on the order page; `/games` lists single-player games written for the site (`web/src/games/`:
+  Lemon 2048, Snake, Tape match, Record Simon, plus Flappy Bandit, Cup stack, Record breakout and Whack-a-bandit
+  on the shared canvas engine in `games/canvas.tsx`: 360-wide board, fixed 1/60 s steps, tap/drag, pause when hidden),
+  each lazy-loaded, best scores kept on the phone. Multiplayer: Brew Bandits and LB's Space.
 - **LB's card is claimed from a paid bill** (9 Oct 2026, migration 012): no sign-up from the card page any more. The
   guest's bill (/bill/<token>) shows Claim my LB's card once it's paid: the number given at the table (editable)
   gets a 6-digit code, every claim, even for a number checked before; the stamp lands on that number's card.
