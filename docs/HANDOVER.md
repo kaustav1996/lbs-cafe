@@ -70,7 +70,7 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   (both, for quiet days; migration 010) and Manager/Owner (everything). Reports, offers
   and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
 - **LB's Space** (11 Oct 2026): one shared space-shooter map for every table with games open, plus solo against
-  bots on the phone. White matter = health and size, purple dark matter = weapon power (a shot with none costs
+  bots on the phone. White matter = health and size (bigger ships are slower: top speed ~285 new, ~165 at 300 matter, ~100 at 1000), purple dark matter = weapon power (a shot with none costs
   health), cyan dark energy = boosts and gravity weapons (small ships boost free). Bigger ships eat smaller ones;
   asteroids and planets hurt. Levels unlock Missiles (2), Anti-gravity shield (3, reflects shots), Light speed (4),
   Black hole (5, pulls things in, asteroids can't hurt you) and Gamma-ray beam (6, to the map edge, stronger

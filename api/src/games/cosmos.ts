@@ -150,7 +150,10 @@ const COLORS = ['#d0ff00', '#00bcc8', '#ff5fa2', '#ff9f1c', '#b388ff', '#69f0ae'
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const dist2 = (ax: number, ay: number, bx: number, by: number) => (ax - bx) ** 2 + (ay - by) ** 2;
 export const radius = (mass: number) => 8 + Math.sqrt(mass) * 2.4;
-const maxSpeed = (s: Ship) => 300 / Math.pow(1 + s.mass / 300, 0.35);
+/** Big ships are slow: top speed falls with mass (about 300 at the start, 175 at 300 matter, 110 at 1000). */
+const maxSpeed = (s: Ship) => Math.max(70, 330 / Math.sqrt(1 + s.mass / 120));
+/** ...and heavy: they take longer to get going and to turn. */
+const thrust = (s: Ship) => 900 / Math.sqrt(1 + s.mass / 200);
 export const levelFor = (xp: number) => LEVEL_XP.filter(t => xp >= t).length;
 
 export function newWorld(rng: Rng = Math.random, now = 0): World {
@@ -489,7 +492,7 @@ export function step(w: World, dt: number, rng: Rng = Math.random) {
     }
     if (s.boosting) top *= 1.8;
     if (w.now < s.lightUntil) top *= 4.5;
-    const accel = 900;
+    const accel = thrust(s);
     s.vx += inp.ax * accel * t * (w.now < s.lightUntil ? 3 : 1);
     s.vy += inp.ay * accel * t * (w.now < s.lightUntil ? 3 : 1);
     // Planet gravity (not on ships that are past it).
