@@ -18,6 +18,10 @@ export interface CanvasGameDef<S> {
   step(s: S, dt: number): boolean;
   draw(ctx: CanvasRenderingContext2D, s: S, t: number): void;
   score(s: S): number;
+  /** Current level (1 up); shown beside the score, announced when it goes up, and the best one is kept. */
+  level?(s: S): number;
+  /** What a level is called in the banner, e.g. "Level 3: Howrah Bridge". */
+  levelName?(n: number): string;
   /** A tap or click on the board, in board coordinates. */
   tap?(s: S, x: number, y: number): void;
   /** Pointer movement over the board (paddles). */
@@ -56,6 +60,8 @@ export function CanvasGame<S>({ game }: { game: CanvasGameDef<S> }) {
   stateRef.current = state;
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(() => readBest(game.id));
+  const [level, setLevel] = useState(1);
+  const [banner, setBanner] = useState<{ n: number; key: number } | null>(null);
 
   // Size and frame loop. Draws every frame (also behind the cover, so the board shows).
   useEffect(() => {
@@ -63,6 +69,7 @@ export function CanvasGame<S>({ game }: { game: CanvasGameDef<S> }) {
     let raf = 0;
     let last = performance.now();
     let shown = -1;
+    let shownLevel = 1;
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const c = canvas.current;
@@ -86,6 +93,16 @@ export function CanvasGame<S>({ game }: { game: CanvasGameDef<S> }) {
           setState('over');
           buzz(140);
         }
+      }
+      const lv = game.level?.(s) ?? 1;
+      if (lv !== shownLevel) {
+        if (lv > shownLevel && stateRef.current === 'playing') {
+          setBanner({ n: lv, key: now });
+          saveBest(`${game.id}-level`, lv);
+          buzz([30, 50, 30]);
+        }
+        shownLevel = lv;
+        setLevel(lv);
       }
       const sc = game.score(s);
       if (sc !== shown) {
@@ -148,11 +165,22 @@ export function CanvasGame<S>({ game }: { game: CanvasGameDef<S> }) {
           <span>Best</span>
           <b className="num">{best}</b>
         </p>
+        {game.level && (
+          <p>
+            <span>Level</span>
+            <b className="num">{level}</b>
+          </p>
+        )}
         <button type="button" className="btn btn-line btn-sm" onClick={() => (state === 'playing' ? setState('paused') : start())}>
           {state === 'playing' ? 'Pause' : state === 'over' ? 'Play again' : 'Play'}
         </button>
       </div>
       <div className="gcanvas-board" style={{ aspectRatio: `${W} / ${game.height}` }}>
+        {banner && state === 'playing' && (
+          <p key={banner.key} className="gcanvas-level" onAnimationEnd={() => setBanner(null)}>
+            {game.levelName ? game.levelName(banner.n) : `Level ${banner.n}`}
+          </p>
+        )}
         <canvas ref={canvas} onPointerDown={down} onPointerMove={move} aria-label={`${game.scoreLabel}: ${score}`} />
         {state !== 'playing' && (
           <div className="game-over">

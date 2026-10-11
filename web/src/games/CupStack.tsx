@@ -30,6 +30,11 @@ interface S {
 }
 
 const colorFor = (i: number) => PALETTE[i % PALETTE.length];
+const PER_LEVEL = 10;
+const levelOf = (score: number) => 1 + Math.floor(score / PER_LEVEL);
+/** Each level slides faster and caps how wide a new layer can be. */
+const speedFor = (score: number) => 170 + (levelOf(score) - 1) * 45 + (score % PER_LEVEL) * 6;
+const maxWidth = (level: number) => Math.max(90, 200 - (level - 1) * 22);
 /** Screen y of layer i's top, given the camera. */
 const yOf = (s: S, i: number) => H - 70 - (i + 1) * LAYER + s.cam;
 
@@ -98,8 +103,10 @@ export const game: CanvasGameDef<S> = {
       return;
     }
     let placed: Layer;
-    if (Math.abs(m.x - top.x) < 5) {
-      placed = { x: top.x, w: top.w, color: m.color };
+    const centre = top.x + (top.w - m.w) / 2;
+    if (Math.abs(m.x - centre) < 5 && m.w <= top.w) {
+      // Perfect: snap into place, nothing cut.
+      placed = { x: centre, w: m.w, color: m.color };
       s.perfect = s.t;
       buzz(25);
     } else {
@@ -109,9 +116,11 @@ export const game: CanvasGameDef<S> = {
     }
     s.stack.push(placed);
     s.score = s.stack.length - 1;
-    s.speed = 170 + Math.min(230, s.score * 9);
+    s.speed = speedFor(s.score);
     s.dir = s.score % 2 ? -1 : 1;
-    s.moving = { x: s.dir > 0 ? -placed.w : W, w: placed.w, color: colorFor(s.stack.length) };
+    // A new level can only bring a narrower layer, centred over the top of the stack.
+    const w = Math.min(placed.w, maxWidth(levelOf(s.score)));
+    s.moving = { x: s.dir > 0 ? -w : W, w, color: colorFor(s.stack.length) };
   },
   step(s, dt) {
     s.t += dt;
@@ -158,6 +167,7 @@ export const game: CanvasGameDef<S> = {
     ctx.fillText(String(s.score), W / 2, 56);
   },
   score: s => s.score,
+  level: s => levelOf(s.score),
 };
 
 /** Cup stack: drop each sliding layer onto the stack; overhang is trimmed. */

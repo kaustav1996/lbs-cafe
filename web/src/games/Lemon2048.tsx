@@ -45,6 +45,13 @@ function move(b: Board, d: Dir): [Board, number, boolean] {
 }
 const stuck = (b: Board) => (['up', 'down', 'left', 'right'] as Dir[]).every(d => !move(b, d)[2]);
 
+/** Levels are tile goals: make a 512 to reach level 2, then 1024, 2048, 4096, 8192. */
+const GOALS = [512, 1024, 2048, 4096, 8192];
+const levelOf = (b: Board) => {
+  const top = Math.max(...b);
+  return 1 + GOALS.filter(g => top >= g).length;
+};
+
 /** 2048 in LB's colours: swipe (or arrow keys) to slide; matching lemons merge. */
 export default function Lemon2048() {
   const [board, setBoard] = useState<Board>(fresh);
@@ -55,6 +62,9 @@ export default function Lemon2048() {
   const [fresh1, setFresh1] = useState(-1);
   const ref = useRef<HTMLDivElement>(null);
   const over = stuck(board);
+  const level = levelOf(board);
+  const goal = GOALS[level - 1];
+  const [banner, setBanner] = useState(0);
 
   const go = useCallback(
     (d: Dir) => {
@@ -68,6 +78,11 @@ export default function Lemon2048() {
       setScore(s);
       setBest(saveBest('2048', s));
       if (!won && next.includes(2048)) setWon(true);
+      const lv = levelOf(next);
+      if (lv > levelOf(board)) {
+        saveBest('2048-level', lv);
+        if (lv !== 4) setBanner(Date.now()); // 2048 has its own cover
+      }
     },
     [board, score, over, won, keepGoing],
   );
@@ -91,6 +106,10 @@ export default function Lemon2048() {
           <span>Best</span>
           <b className="num">{best}</b>
         </p>
+        <p>
+          <span>Level</span>
+          <b className="num">{level}</b>
+        </p>
         <button type="button" className="btn btn-line btn-sm" onClick={restart}>
           New game
         </button>
@@ -101,6 +120,12 @@ export default function Lemon2048() {
             {v || ''}
           </div>
         ))}
+        {banner > 0 && (
+          <p key={banner} className="gcanvas-level" onAnimationEnd={() => setBanner(0)}>
+            Level {level}
+            {goal ? `: make ${goal}` : ''}
+          </p>
+        )}
         {(over || (won && !keepGoing)) && (
           <div className="game-over">
             <p>{over ? 'No moves left.' : 'You made 2048!'}</p>
@@ -115,7 +140,9 @@ export default function Lemon2048() {
           </div>
         )}
       </div>
-      <p className="game-help">Swipe on the board to slide every tile. Two of the same merge into one. Make 2048.</p>
+      <p className="game-help">
+        Swipe on the board to slide every tile. Two of the same merge into one. {goal ? `Make a ${goal} tile for level ${level + 1}.` : 'Every level cleared.'}
+      </p>
     </div>
   );
 }

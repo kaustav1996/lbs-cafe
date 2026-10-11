@@ -1,22 +1,36 @@
 import { useEffect, useState } from 'react';
 import { readBest, saveBest } from './shared';
 
-const FACES = ['🍋', '☕', '🍕', '🍔', '🥤', '🍟', '🎧', '📼'];
+const FACES = ['🍋', '☕', '🍕', '🍔', '🥤', '🍟', '🎧', '📼', '🍩', '🧁', '🎸', '🎷', '🎤', '🎹', '🍦'];
 type Card = { id: number; face: string; open: boolean; done: boolean };
 
-const deal = (): Card[] =>
-  [...FACES, ...FACES]
+/** Level 1 is 8 pairs with no limit; then 10, 12 and 15 pairs, each with a move limit that tightens. */
+function levelSpec(level: number) {
+  const pairs = [8, 10, 12, 15][Math.min(level, 4) - 1];
+  const cols = pairs >= 15 ? 5 : 4;
+  const limit = level === 1 ? null : Math.max(pairs * 2, Math.round(pairs * 2.6) - Math.max(0, level - 4) * 2);
+  return { pairs, cols, limit };
+}
+
+const deal = (pairs: number): Card[] => {
+  const faces = FACES.slice(0, pairs);
+  return [...faces, ...faces]
     .map((face, i) => ({ id: i, face, open: false, done: false, r: Math.random() }))
     .sort((a, b) => a.r - b.r)
     .map(({ id, face, open, done }) => ({ id, face, open, done }));
+};
 
-/** Memory with cassettes: flip two at a time and find the pairs in as few moves as you can. */
+/** Memory with cassettes: flip two at a time and find the pairs. Bigger boards and move limits as you level up. */
 export default function TapeMatch() {
-  const [cards, setCards] = useState<Card[]>(deal);
+  const [level, setLevel] = useState(1);
+  const spec = levelSpec(level);
+  const [cards, setCards] = useState<Card[]>(() => deal(spec.pairs));
   const [picked, setPicked] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
   const [best, setBest] = useState(() => readBest('match'));
+  const [bestLevel, setBestLevel] = useState(() => Math.max(1, readBest('match-level')));
   const done = cards.every(c => c.done);
+  const out = !done && spec.limit !== null && moves >= spec.limit && picked.length === 0;
 
   useEffect(() => {
     if (picked.length !== 2) return;
@@ -33,18 +47,22 @@ export default function TapeMatch() {
   }, [picked, cards]);
 
   useEffect(() => {
-    if (done) setBest(saveBest('match', moves, true));
-  }, [done, moves]);
+    if (!done) return;
+    // Best moves is for the first board, so it compares like with like; the best level is kept too.
+    if (level === 1) setBest(saveBest('match', moves, true));
+    setBestLevel(saveBest('match-level', level + 1));
+  }, [done, moves, level]);
 
   const flip = (i: number) => {
-    if (picked.length === 2 || cards[i].open || cards[i].done) return;
+    if (out || picked.length === 2 || cards[i].open || cards[i].done) return;
     setCards(cs => cs.map((c, j) => (j === i ? { ...c, open: true } : c)));
     const next = [...picked, i];
     setPicked(next);
     if (next.length === 2) setMoves(m => m + 1);
   };
-  const restart = () => {
-    setCards(deal());
+  const play = (lv: number) => {
+    setLevel(lv);
+    setCards(deal(levelSpec(lv).pairs));
     setPicked([]);
     setMoves(0);
   };
@@ -54,20 +72,27 @@ export default function TapeMatch() {
       <div className="game-scores">
         <p>
           <span>Moves</span>
-          <b className="num">{moves}</b>
+          <b className="num">
+            {moves}
+            {spec.limit !== null && <small> of {spec.limit}</small>}
+          </b>
+        </p>
+        <p>
+          <span>Level</span>
+          <b className="num">{level}</b>
         </p>
         <p>
           <span>Best</span>
           <b className="num">{best || '–'}</b>
         </p>
-        <button type="button" className="btn btn-line btn-sm" onClick={restart}>
+        <button type="button" className="btn btn-line btn-sm" onClick={() => play(1)}>
           New game
         </button>
       </div>
-      <div className="gmatch-board">
+      <div className="gmatch-board" style={{ gridTemplateColumns: `repeat(${spec.cols}, 1fr)` }}>
         {cards.map((c, i) => (
           <button
-            key={c.id}
+            key={`${level}-${c.id}`}
             type="button"
             className={`gmatch-card ${c.open || c.done ? 'is-open' : ''} ${c.done ? 'is-done' : ''}`}
             onClick={() => flip(i)}
@@ -86,14 +111,32 @@ export default function TapeMatch() {
         ))}
         {done && (
           <div className="game-over">
-            <p>All pairs in {moves} moves.</p>
-            <button type="button" className="btn btn-ink" onClick={restart}>
-              Play again
+            <p>
+              Level {level} cleared in {moves} moves.
+              <br />
+              Next: {levelSpec(level + 1).pairs} pairs in {levelSpec(level + 1).limit} moves.
+            </p>
+            <button type="button" className="btn btn-ink" onClick={() => play(level + 1)}>
+              Level {level + 1}
+            </button>
+          </div>
+        )}
+        {out && (
+          <div className="game-over">
+            <p>Out of moves on level {level}.</p>
+            <button type="button" className="btn btn-ink" onClick={() => play(level)}>
+              Try level {level} again
+            </button>
+            <button type="button" className="btn btn-line" onClick={() => play(1)}>
+              Start from level 1
             </button>
           </div>
         )}
       </div>
-      <p className="game-help">Tap two tapes to flip them. A pair stays face up. Find all eight pairs.</p>
+      <p className="game-help">
+        Tap two tapes to flip them; a pair stays face up. Level 1 is eight pairs. Later levels have more tapes and a move limit. Your best level is{' '}
+        {bestLevel}.
+      </p>
     </div>
   );
 }

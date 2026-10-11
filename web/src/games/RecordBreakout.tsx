@@ -134,7 +134,10 @@ export const game: CanvasGameDef<S> = {
       if (s.vy > 0 && s.by + BALL >= PAD_Y && s.by + BALL <= PAD_Y + PAD_H + 6 && Math.abs(s.bx - s.padX) < s.padW / 2 + BALL) {
         const k = (s.bx - s.padX) / (s.padW / 2);
         const sp = Math.hypot(s.vx, s.vy);
-        const a = -Math.PI / 2 + k * 1.05;
+        // Never straight up: a dead-centre hit would bounce the record up and down forever.
+        let off = k * 1.05 + (Math.random() - 0.5) * 0.12;
+        if (Math.abs(off) < 0.15) off = off < 0 ? -0.15 : 0.15;
+        const a = -Math.PI / 2 + off;
         s.vx = Math.cos(a) * sp;
         s.vy = Math.sin(a) * sp;
         s.by = PAD_Y - BALL;
@@ -240,6 +243,8 @@ export const game: CanvasGameDef<S> = {
     }
   },
   score: s => s.score,
+  level: s => s.level,
+  levelName: n => `Wall ${n}`,
 };
 
 /** Record breakout: a cassette paddle, a vinyl ball and walls of tapes. */

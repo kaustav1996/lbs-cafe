@@ -99,7 +99,12 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   banner on the order page; `/games` lists single-player games written for the site (`web/src/games/`:
   Lemon 2048, Snake, Tape match, Record Simon, plus Flappy Bandit, Cup stack, Record breakout and Whack-a-bandit
   on the shared canvas engine in `games/canvas.tsx`: 360-wide board, fixed 1/60 s steps, tap/drag, pause when hidden),
-  each lazy-loaded, best scores kept on the phone. Multiplayer: Brew Bandits and LB's Space.
+  each lazy-loaded, best scores kept on the phone. Every single-player game has levels (best level kept as
+  `lbs.games.<id>-level` and shown in the list): Flappy Bandit every 10 towers (narrower gaps, more speed, a new
+  Kolkata landmark, swaying towers from level 3); Cup stack every 10 layers (faster, narrower); Record breakout by
+  wall; Whack-a-bandit rounds with a target score; Snake every 10 lemons (faster, more stools); Tape match 8/10/12/15
+  pairs with move limits; Lemon 2048 by tile goal (512 to 8192); Record Simon by round.
+  Multiplayer: Brew Bandits and LB's Space.
 - **LB's card is claimed from a paid bill** (9 Oct 2026, migration 012): no sign-up from the card page any more. The
   guest's bill (/bill/<token>) shows Claim my LB's card once it's paid: the number given at the table (editable)
   gets a 6-digit code, every claim, even for a number checked before; the stamp lands on that number's card.

@@ -2476,8 +2476,8 @@ button.buy:hover {
 }
 .game-scores p {
   display: grid;
-  min-width: 76px;
-  padding: 6px 12px;
+  min-width: 62px;
+  padding: 6px 10px;
   border: 2px solid var(--ink);
   border-radius: var(--radius-sm);
   background: var(--paper);
@@ -4234,4 +4234,43 @@ body.sp-playing {
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
+}
+.gcanvas-level {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  z-index: 1;
+  margin: 0;
+  padding: 10px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--lime);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: var(--t-lg);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: glevel 1.8s ease forwards;
+}
+@keyframes glevel {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  15%,
+  75% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -70%) scale(1);
+  }
+}
+.game-scores p.is-level {
+  min-width: 64px;
+}
+.gcanvas .game-scores p {
+  min-width: 0;
+  padding: 6px 10px;
 }

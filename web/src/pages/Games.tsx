@@ -75,6 +75,7 @@ export default function Games() {
             <ul className="gb-list">
               {GAMES.map(g => {
                 const best = readBest(g.id);
+                const bestLevel = readBest(`${g.id}-level`);
                 return (
                   <li key={g.id}>
                     <Link to={`/games/${g.id}`} className="gb" style={{ '--body': g.color } as React.CSSProperties} aria-label={`${g.name}. ${g.blurb}`}>
@@ -83,7 +84,7 @@ export default function Games() {
                         <span className="gb-screen">
                           <span className="gb-title">{g.name}</span>
                           <span className="gb-blurb">{g.blurb}</span>
-                          <span className="gb-best num">{best > 0 ? g.best(best) : 'Press start'}</span>
+                          <span className="gb-best num">{best > 0 ? `${g.best(best)}${bestLevel > 1 ? `, level ${bestLevel}` : ''}` : 'Press start'}</span>
                         </span>
                       </span>
                       <span className="gb-brand" aria-hidden="true">

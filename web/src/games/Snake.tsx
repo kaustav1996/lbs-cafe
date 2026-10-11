@@ -6,11 +6,27 @@ type P = { x: number; y: number };
 const STEP: Record<Dir, P> = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
 const OPP: Record<Dir, Dir> = { up: 'down', down: 'up', left: 'right', right: 'left' };
 
-function spot(snake: P[]): P {
+const PER_LEVEL = 10; // lemons per level
+const levelOf = (score: number) => 1 + Math.floor(score / PER_LEVEL);
+const START: P[] = [{ x: 7, y: 8 }, { x: 6, y: 8 }, { x: 5, y: 8 }];
+
+function spot(snake: P[], stools: P[] = []): P {
   for (;;) {
     const p = { x: Math.floor(Math.random() * N), y: Math.floor(Math.random() * N) };
-    if (!snake.some(s => s.x === p.x && s.y === p.y)) return p;
+    if (!snake.some(s => s.x === p.x && s.y === p.y) && !stools.some(s => s.x === p.x && s.y === p.y)) return p;
   }
+}
+
+/** Stools for a level: three more each level, kept off the start row and away from the walls' corners. */
+function stoolsFor(level: number): P[] {
+  const out: P[] = [];
+  const n = Math.min(24, (level - 1) * 3);
+  while (out.length < n) {
+    const p = { x: 1 + Math.floor(Math.random() * (N - 2)), y: 1 + Math.floor(Math.random() * (N - 2)) };
+    if (p.y >= 7 && p.y <= 9) continue; // the row you start on, and its neighbours
+    if (!out.some(o => o.x === p.x && o.y === p.y)) out.push(p);
+  }
+  return out;
 }
 
 /** Snake: eat the lemons, don't hit the walls or your own tail. Swipe, use the pad, or the arrow keys. */
@@ -20,7 +36,9 @@ export default function Snake() {
   const [state, setState] = useState<'ready' | 'playing' | 'paused' | 'over'>('ready');
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(() => readBest('snake'));
-  const game = useRef({ snake: [{ x: 7, y: 8 }, { x: 6, y: 8 }, { x: 5, y: 8 }] as P[], dir: 'right' as Dir, next: 'right' as Dir, food: { x: 11, y: 8 } as P, score: 0 });
+  const [level, setLevel] = useState(1);
+  const [banner, setBanner] = useState(0);
+  const game = useRef({ snake: START as P[], dir: 'right' as Dir, next: 'right' as Dir, food: { x: 11, y: 8 } as P, score: 0, stools: [] as P[] });
 
   const draw = useCallback(() => {
     const c = canvas.current;
@@ -44,6 +62,20 @@ export default function Snake() {
       ctx.stroke();
     }
     const g = game.current;
+    // Stools to steer round.
+    for (const st of g.stools) {
+      ctx.fillStyle = '#ff9f1c';
+      ctx.beginPath();
+      ctx.arc((st.x + 0.5) * cell, (st.y + 0.5) * cell, cell * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = Math.max(1.5, cell * 0.08);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.arc((st.x + 0.5) * cell, (st.y + 0.5) * cell, cell * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+    }
     // The lemon.
     ctx.fillStyle = lime;
     ctx.beginPath();
@@ -88,9 +120,10 @@ export default function Snake() {
     const n = { x: h.x + STEP[g.dir].x, y: h.y + STEP[g.dir].y };
     const eats = n.x === g.food.x && n.y === g.food.y;
     const body = eats ? g.snake : g.snake.slice(0, -1);
-    if (n.x < 0 || n.y < 0 || n.x >= N || n.y >= N || body.some(s => s.x === n.x && s.y === n.y)) {
+    if (n.x < 0 || n.y < 0 || n.x >= N || n.y >= N || body.some(s => s.x === n.x && s.y === n.y) || g.stools.some(s => s.x === n.x && s.y === n.y)) {
       setState('over');
       setBest(saveBest('snake', g.score));
+      saveBest('snake-level', levelOf(g.score));
       try {
         navigator.vibrate?.(120);
       } catch {
@@ -102,7 +135,22 @@ export default function Snake() {
     if (eats) {
       g.score += 1;
       setScore(g.score);
-      g.food = spot(g.snake);
+      if (g.score % PER_LEVEL === 0) {
+        // Next level: back to the start, new stools, a bit faster.
+        const lv = levelOf(g.score);
+        g.snake = START;
+        g.dir = g.next = 'right';
+        g.stools = stoolsFor(lv);
+        setLevel(lv);
+        setBanner(Date.now());
+        saveBest('snake-level', lv);
+        try {
+          navigator.vibrate?.([30, 50, 30]);
+        } catch {
+          /* fine */
+        }
+      }
+      g.food = spot(g.snake, g.stools);
     }
     draw();
   }, [draw]);
@@ -110,7 +158,7 @@ export default function Snake() {
   // Speeds up a little with every lemon.
   useEffect(() => {
     if (state !== 'playing') return;
-    const t = setInterval(tick, Math.max(85, 170 - score * 4));
+    const t = setInterval(tick, Math.max(70, 170 - (levelOf(score) - 1) * 18 - (score % PER_LEVEL) * 3));
     const away = () => document.hidden && setState('paused');
     document.addEventListener('visibilitychange', away);
     return () => {
@@ -131,8 +179,9 @@ export default function Snake() {
   useSwipe(wrap, turn);
 
   const restart = () => {
-    game.current = { snake: [{ x: 7, y: 8 }, { x: 6, y: 8 }, { x: 5, y: 8 }], dir: 'right', next: 'right', food: { x: 11, y: 8 }, score: 0 };
+    game.current = { snake: START, dir: 'right', next: 'right', food: { x: 11, y: 8 }, score: 0, stools: [] };
     setScore(0);
+    setLevel(1);
     setState('playing');
     draw();
   };
@@ -148,11 +197,20 @@ export default function Snake() {
           <span>Best</span>
           <b className="num">{best}</b>
         </p>
+        <p>
+          <span>Level</span>
+          <b className="num">{level}</b>
+        </p>
         <button type="button" className="btn btn-line btn-sm" onClick={() => (state === 'playing' ? setState('paused') : state === 'over' ? restart() : setState('playing'))}>
           {state === 'playing' ? 'Pause' : state === 'over' ? 'Play again' : 'Play'}
         </button>
       </div>
       <div className="gsnake-board" ref={wrap}>
+        {banner > 0 && state === 'playing' && (
+          <p key={banner} className="gcanvas-level" onAnimationEnd={() => setBanner(0)}>
+            Level {level}: {Math.min(24, (level - 1) * 3)} stools
+          </p>
+        )}
         <canvas ref={canvas} aria-label={`Snake. ${score} lemons. Swipe or use the arrows to turn.`} />
         {state !== 'playing' && (
           <div className="game-over">

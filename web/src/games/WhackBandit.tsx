@@ -27,16 +27,24 @@ interface S {
   score: number;
   floats: Float[];
   chappal: { x: number; y: number; at: number } | null;
+  level: number;
+  /** Points this round, towards the target. */
+  roundPts: number;
+  /** When this round's clock started (rounds start after a short break). */
+  roundStart: number;
 }
+
+/** Points needed in a round to reach the next level. */
+const target = (level: number) => 10 + level * 4;
 
 export const game: CanvasGameDef<S> = {
   id: 'whack',
   height: H,
   scoreLabel: 'Points',
-  startText: 'Bandits are raiding the cups. Tap them before they duck back down. Leave the lemons alone.',
-  overText: n => `Time’s up. ${n} ${n === 1 ? 'point' : 'points'}.`,
-  help: 'Bandit 1 point, golden bandit 3 points, lemon minus 2. Thirty seconds.',
-  init: () => ({ t: 0, pops: [], next: 0.6, score: 0, floats: [], chappal: null }),
+  startText: `Bandits are raiding the cups. Tap them before they duck back down, and leave the lemons alone. Score ${10 + 4} in 30 seconds to reach level 2.`,
+  overText: n => `Time’s up. You missed the target. ${n} ${n === 1 ? 'point' : 'points'} in all.`,
+  help: 'Bandit 1 point, golden bandit 3, lemon minus 2. Each level is 30 seconds; reach the target to go on.',
+  init: () => ({ t: 0, pops: [], next: 0.6, score: 0, floats: [], chappal: null, level: 1, roundPts: 0, roundStart: 0 }),
   tap(s, x, y) {
     s.chappal = { x, y, at: s.t };
     for (const p of s.pops) {
@@ -46,6 +54,7 @@ export const game: CanvasGameDef<S> = {
       p.hit = s.t;
       const pts = p.kind === 'gold' ? 3 : p.kind === 'lemon' ? -2 : 1;
       s.score = Math.max(0, s.score + pts);
+      s.roundPts = Math.max(0, s.roundPts + pts);
       s.floats.push({ x: sp.x, y: sp.y - 70, text: pts > 0 ? `+${pts}` : `${pts}`, born: s.t, good: pts > 0 });
       buzz(pts > 0 ? 20 : [40, 30, 40]);
       return;
@@ -53,17 +62,27 @@ export const game: CanvasGameDef<S> = {
   },
   step(s, dt) {
     s.t += dt;
-    if (s.t >= ROUND) return false;
-    // Faster and shorter pops as the round goes on.
-    const pace = s.t / ROUND;
+    const rt = s.t - s.roundStart;
+    if (rt < 0) return true; // the break between levels
+    if (rt >= ROUND) {
+      if (s.roundPts < target(s.level)) return false;
+      s.level++;
+      s.roundPts = 0;
+      s.pops = [];
+      s.roundStart = s.t + 2;
+      s.next = s.roundStart + 0.4;
+      return true;
+    }
+    // Faster and shorter pops as the round goes on, and in every level.
+    const pace = Math.min(1.6, rt / ROUND + (s.level - 1) * 0.18);
     if (s.t >= s.next) {
       const free = SPOTS.map((_, i) => i).filter(i => !s.pops.some(p => p.spot === i));
       if (free.length) {
         const r = Math.random();
-        const kind: Kind = r < 0.1 ? 'gold' : r < 0.28 ? 'lemon' : 'bandit';
-        s.pops.push({ spot: free[Math.floor(Math.random() * free.length)], kind, born: s.t, stay: (kind === 'gold' ? 0.7 : 1.1) - pace * 0.45, hit: -1 });
+        const kind: Kind = r < 0.1 ? 'gold' : r < 0.25 + Math.min(0.15, s.level * 0.03) ? 'lemon' : 'bandit';
+        s.pops.push({ spot: free[Math.floor(Math.random() * free.length)], kind, born: s.t, stay: Math.max(0.38, (kind === 'gold' ? 0.7 : 1.1) - pace * 0.4), hit: -1 });
       }
-      s.next = s.t + 0.75 - pace * 0.45 + Math.random() * 0.25;
+      s.next = s.t + Math.max(0.28, 0.75 - pace * 0.35) + Math.random() * 0.25;
     }
     s.pops = s.pops.filter(p => (p.hit >= 0 ? s.t - p.hit < 0.25 : s.t - p.born < p.stay + 0.3));
     s.floats = s.floats.filter(f => s.t - f.born < 0.7);
@@ -83,7 +102,7 @@ export const game: CanvasGameDef<S> = {
       ctx.fill();
     }
     // Timer bar.
-    const left = Math.max(0, ROUND - s.t);
+    const left = Math.max(0, Math.min(ROUND, ROUND - (s.t - s.roundStart)));
     ctx.fillStyle = '#0b0b0b';
     ctx.beginPath();
     ctx.roundRect(16, 18, W - 32, 14, 7);
@@ -96,6 +115,11 @@ export const game: CanvasGameDef<S> = {
     ctx.font = '800 15px Archivo, system-ui, sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText(`${Math.ceil(left)} s`, W - 16, 52);
+    // Progress to this level's target.
+    const goal = target(s.level);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = s.roundPts >= goal ? '#1a7a00' : '#0b0b0b';
+    ctx.fillText(s.roundPts >= goal ? `Target ${goal} reached` : `Target ${s.roundPts} of ${goal}`, 16, 52);
     const img = bandit();
     SPOTS.forEach((sp, i) => {
       // The back of the cup (rim), so pop-ups come out of it.
@@ -217,6 +241,8 @@ export const game: CanvasGameDef<S> = {
     }
   },
   score: s => s.score,
+  level: s => s.level,
+  levelName: n => `Level ${n}: ${target(n)} points to pass`,
 };
 
 /** Whack-a-bandit: bonk the bandits popping out of LB's cups with a chappal; don't hit the lemons. */
