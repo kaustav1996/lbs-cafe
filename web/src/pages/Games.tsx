@@ -67,20 +67,42 @@ export default function Games() {
               <h1 className="display">Games</h1>
               <p className="status-meta">For table {table}, while you wait or after you eat.</p>
             </header>
-            <ul className="game-list">
+            <ul className="gb-list">
               {GAMES.map(g => {
                 const best = readBest(g.id);
                 return (
                   <li key={g.id}>
-                    <Link to={`/games/${g.id}`} className="game-tile" style={{ '--label': g.color } as React.CSSProperties}>
-                      <span className="game-tile-label">
-                        <span className="game-tile-name">{g.name}</span>
-                        <span className="game-tile-blurb">{g.blurb}</span>
-                        {best > 0 && <span className="game-tile-best num">{g.best(best)}</span>}
+                    <Link to={`/games/${g.id}`} className="gb" style={{ '--body': g.color } as React.CSSProperties} aria-label={`${g.name}. ${g.blurb}`}>
+                      <span className="gb-screen-frame">
+                        <span className="gb-led" aria-hidden="true" />
+                        <span className="gb-screen">
+                          <span className="gb-title">{g.name}</span>
+                          <span className="gb-blurb">{g.blurb}</span>
+                          <span className="gb-best num">{best > 0 ? g.best(best) : 'Press start'}</span>
+                        </span>
                       </span>
-                      <span className="chip-window" aria-hidden="true">
-                        <i />
-                        <i />
+                      <span className="gb-brand" aria-hidden="true">
+                        LB’s <i>Arcade</i>
+                      </span>
+                      <span className="gb-controls" aria-hidden="true">
+                        <span className="gb-dpad">
+                          <i />
+                          <i />
+                        </span>
+                        <span className="gb-ab">
+                          <b>B</b>
+                          <b>A</b>
+                        </span>
+                      </span>
+                      <span className="gb-bottom" aria-hidden="true">
+                        <span className="gb-pill">Select</span>
+                        <span className="gb-pill">Start</span>
+                        <span className="gb-speaker">
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                        </span>
                       </span>
                     </Link>
                   </li>
