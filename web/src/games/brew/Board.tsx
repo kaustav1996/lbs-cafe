@@ -48,10 +48,8 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
   const [sel, setSel] = useState<number[]>([]);
   const [tradeTo, setTradeTo] = useState('');
   const [want, setWant] = useState<CardKind[]>([]);
-  const [newsTarget, setNewsTarget] = useState(false);
   const pd = view.pending;
   const myTurn = view.phase === 'playing' && view.turn === view.me && !pd;
-  const raidOnMe = pd?.kind === 'bandit' && pd.target === view.me;
   const tradeForMe = pd?.kind === 'trade' && pd.to === view.me;
   const left = useLeft(pd ? pd.deadline : view.phase === 'playing' ? view.turnDeadline : null);
   const has = (k: CardKind) => hand.some(c => c.kind === k);
@@ -87,6 +85,27 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hand.map(c => c.id).join(',')]);
 
+  // A Bandit landing on one of your cups: a notice (you deal with it on your own turn, as in the original).
+  const raidedCount = me.cups.filter(c => c.bandit).length;
+  const prevRaided = useRef(raidedCount);
+  const [raidNote, setRaidNote] = useState('');
+  useEffect(() => {
+    if (raidedCount > prevRaided.current) {
+      const line = [...view.log].reverse().find(l => l.includes('Bandit')) ?? 'A Bandit raided your cup!';
+      setRaidNote(`${line} On your turn, use a Chappal to chase it off or a Newspaper to shoo it on. Until then you can’t brew.`);
+      try {
+        navigator.vibrate?.([120, 60, 120]);
+      } catch {
+        /* fine */
+      }
+      prevRaided.current = raidedCount;
+      const t = setTimeout(() => setRaidNote(''), 6000);
+      return () => clearTimeout(t);
+    }
+    prevRaided.current = raidedCount;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raidedCount]);
+
   // A new turn clears half-made choices; so does a card leaving your hand.
   useEffect(() => {
     setMode(null);
@@ -99,7 +118,6 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
     setMode(null);
     setSel([]);
     setWant([]);
-    setNewsTarget(false);
   };
 
   const tap = (c: Card) => {
@@ -138,13 +156,9 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
       ? view.winner === view.me
         ? 'You win!'
         : `${name(view.winner ?? '')} wins!`
-      : raidOnMe
-        ? 'A Bandit is raiding your cup!'
-        : tradeForMe
+      : tradeForMe
           ? `${name(pd!.from)} wants to trade`
-          : pd?.kind === 'bandit'
-            ? `${name(pd.target)} is dealing with a Bandit`
-            : pd?.kind === 'trade'
+          : pd?.kind === 'trade'
               ? `Waiting for ${name(pd.to)} to answer the trade`
               : pd?.kind === 'havaldar'
                 ? pd.from === view.me
@@ -204,7 +218,7 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
           <span className="bbt-pile-count">{view.deck}</span>
           <span className="bbt-pile-label">Deck</span>
         </div>
-        <div className={`bbt-banner ${myTurn ? 'is-mine' : ''} ${raidOnMe ? 'is-alert' : ''}`} aria-live="polite">
+        <div className={`bbt-banner ${myTurn ? 'is-mine' : ''}`} aria-live="polite">
           <b>{status}</b>
           {view.phase === 'playing' && <span className="bbt-clock num">{left}s</span>}
           {view.log.length > 0 && <span className="bbt-last">{view.log[view.log.length - 1]}</span>}
@@ -215,6 +229,13 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
           <span className="bbt-pile-label">Discards</span>
         </div>
       </div>
+
+      {raidNote && (
+        <div className="bbt-raidnote" role="alert">
+          <img src={BANDIT_IMG} alt="" />
+          <p>{raidNote}</p>
+        </div>
+      )}
 
       <section className="bbt-mine" aria-label="Your cups">
         <h3>
@@ -477,48 +498,6 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
       </details>
 
       {footer}
-
-      {raidOnMe && pd?.kind === 'bandit' && (
-        <div className="bb-modal" role="alertdialog" aria-label="A Bandit is raiding your cup">
-          <div className="bb-modal-box">
-            <img className="bb-raider" src={BANDIT_IMG} alt="" />
-            <p>
-              <b>{name(pd.from)}</b> sent a Bandit to raid your cup! It scores nothing until the Bandit is gone.{' '}
-              {has('chappal') ? 'Throw your Chappal to chase it off.' : has('newspaper') ? 'Shoo it onto someone else’s cup with your Newspaper.' : 'You have no Chappal or Newspaper, so it stays for now.'}
-            </p>
-            <div className="bb-timer" aria-label={`${left} seconds left`}>
-              <span style={{ width: `${Math.min(100, (left / 15) * 100)}%` }} />
-              <b className="num">{left}s</b>
-            </div>
-            {newsTarget ? (
-              <>
-                <p>Shoo it onto whose cup?</p>
-                <div className="bb-chips">
-                  {others
-                    .filter(p => p.cups.some(c => !c.bandit))
-                    .map(p => (
-                      <button key={p.id} type="button" className="bb-chip" onClick={() => go({ a: 'react', with: 'newspaper', target: p.id })}>
-                        {p.name}
-                      </button>
-                    ))}
-                </div>
-              </>
-            ) : (
-              <div className="bb-actions">
-                <button type="button" className="btn btn-ink" disabled={!has('chappal')} onClick={() => go({ a: 'react', with: 'chappal' })}>
-                  {ICON.chappal} Chase it off
-                </button>
-                <button type="button" className="btn btn-line" disabled={!has('newspaper') || !raidable} onClick={() => setNewsTarget(true)}>
-                  {ICON.newspaper} Shoo it on
-                </button>
-                <button type="button" className="btn btn-line" onClick={() => go({ a: 'react', with: 'none' })}>
-                  Let it be
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {havaldarMine && view.peek && (
         <div className="bb-modal" role="dialog" aria-label="The Havaldar's search">

@@ -8,9 +8,9 @@
  *
  * The tricks, after the original's: Havaldar (Officer) looks at a player's hand and takes 2; Chor (Thief) steals
  * a card from everyone; Kirana (Supplier) names an ingredient and everyone hands theirs over; Mandi (Wholesaler)
- * turns up the top 3 and keeps the ingredients; Bandit (Fly) raids a cup, Chappal (Swatter) chases it off,
- * Newspaper (Fan) shoos it onto someone else's (also the moment you're raided). While a Bandit is on any of your
- * cups you can't brew. From the Rendang expansion: a
+ * turns up the top 3 and keeps the ingredients; Bandit (Fly) raids a cup, and on their own turn (as in the
+ * original) the raided player uses a Chappal (Swatter) to chase it off or a Newspaper (Fan) to shoo it onto
+ * someone else's cup. While a Bandit is on any of your cups you can't brew. From the Rendang expansion: a
  * Kauwa (Crow) lands on whoever brews next and stops them brewing until they feed it an ingredient to send it
  * on; Sheru (Si Oyen) catches a Kauwa and keeps what it collected. Monsoon is LB's own: all pass 2 cards left.
  * The Kauwa, Sheru and Monsoon are the extension, chosen when a room is made. The deck grows with the room (2 to 10). Pure functions, no I/O: the Arcade room runs it.
@@ -50,7 +50,6 @@ export interface Player {
   cups: Cup[];
 }
 export type Pending =
-  | { kind: 'bandit'; from: string; target: string; cupId: number; deadline: number; flicks: number }
   | { kind: 'trade'; from: string; to: string; give: number[]; want: CardKind[]; deadline: number }
   | { kind: 'havaldar'; from: string; target: string; deadline: number };
 
@@ -89,14 +88,12 @@ export type Move =
   | { a: 'monsoon' }
   | { a: 'trade'; to: string; give: number[]; want: CardKind[] }
   | { a: 'trade-reply'; accept: boolean }
-  | { a: 'react'; with: 'chappal' | 'newspaper' | 'none'; target?: string }
   | { a: 'end' };
 
 export const WIN_POINTS = 5;
 export const START_HAND = 7;
 export const ACTIONS_PER_TURN = 3;
 export const TURN_MS = 90_000;
-export const REACT_MS = 15_000;
 export const TRADE_MS = 20_000;
 export const PEEK_MS = 20_000;
 export const MIN_PLAYERS = 2;
@@ -304,11 +301,6 @@ export function play(g: Game, by: string, m: Move, now: number, rng: Rng = Math.
 
 function playInner(g: Game, me: Player, m: Move, now: number, rng: Rng): string | null {
   // Answers come from whoever the game is waiting on.
-  if (m.a === 'react') {
-    const pd = g.pending;
-    if (pd?.kind !== 'bandit' || pd.target !== me.id) return 'Nothing to react to.';
-    return react(g, me, pd, m, now, rng);
-  }
   if (m.a === 'trade-reply') {
     const pd = g.pending;
     if (pd?.kind !== 'trade' || pd.to !== me.id) return 'No trade waiting for you.';
@@ -367,7 +359,6 @@ function playInner(g: Game, me: Player, m: Move, now: number, rng: Rng): string 
       if (!cup) return `${t.name} has no clean cup to raid.`;
       g.discard.push(takeKind(me, 'bandit')!);
       cup.bandit = true;
-      g.pending = { kind: 'bandit', from: me.id, target: t.id, cupId: cup.id, deadline: now + REACT_MS, flicks: 0 };
       say(g, `${me.name} sent a Bandit to raid ${t.name}’s cup!`);
       spend(g, now);
       return null;
@@ -395,7 +386,6 @@ function playInner(g: Game, me: Player, m: Move, now: number, rng: Rng): string 
       g.discard.push(takeKind(me, 'newspaper')!);
       cup.bandit = false;
       to.bandit = true;
-      g.pending = { kind: 'bandit', from: me.id, target: t.id, cupId: to.id, deadline: now + REACT_MS, flicks: 1 };
       say(g, `${me.name} shooed a Bandit onto ${t.name}’s cup with a newspaper!`);
       spend(g, now);
       return null;
@@ -519,33 +509,6 @@ function playInner(g: Game, me: Player, m: Move, now: number, rng: Rng): string 
   }
 }
 
-function react(g: Game, me: Player, pd: Extract<Pending, { kind: 'bandit' }>, m: Extract<Move, { a: 'react' }>, now: number, rng: Rng): string | null {
-  const cup = me.cups.find(c => c.id === pd.cupId);
-  if (m.with === 'none' || !cup) {
-    g.pending = null;
-    return null;
-  }
-  if (m.with === 'chappal') {
-    if (!hasKind(me, 'chappal')) return 'You don’t have a Chappal.';
-    g.discard.push(takeKind(me, 'chappal')!);
-    cup.bandit = false;
-    g.pending = null;
-    say(g, `${me.name} chased it off with a chappal!`);
-    return null;
-  }
-  if (!hasKind(me, 'newspaper')) return 'You don’t have a Newspaper.';
-  const t = find(g, m.target ?? '');
-  if (!t || t.id === me.id) return 'Pick whose cup to shoo it onto.';
-  const to = cleanCup(t, rng);
-  if (!to) return `${t.name} has no clean cup to shoo it onto.`;
-  g.discard.push(takeKind(me, 'newspaper')!);
-  cup.bandit = false;
-  to.bandit = true;
-  g.pending = { kind: 'bandit', from: me.id, target: t.id, cupId: to.id, deadline: now + REACT_MS, flicks: pd.flicks + 1 };
-  say(g, `${me.name} shooed it onto ${t.name}’s cup with a newspaper!`);
-  return null;
-}
-
 function tradeReply(g: Game, me: Player, pd: Extract<Pending, { kind: 'trade' }>, accept: boolean): string | null {
   const from = find(g, pd.from)!;
   if (!accept) {
@@ -616,7 +579,7 @@ export const nextDeadline = (g: Game) => (g.phase !== 'playing' ? null : g.pendi
 export function actorOf(g: Game): string | null {
   if (g.phase !== 'playing') return null;
   const pd = g.pending;
-  if (pd) return pd.kind === 'bandit' ? pd.target : pd.kind === 'trade' ? pd.to : pd.from;
+  if (pd) return pd.kind === 'trade' ? pd.to : pd.from;
   return g.players[g.turn].id;
 }
 
@@ -667,12 +630,6 @@ export function botMove(g: Game, botId: string, rng: Rng = Math.random): Move | 
   const leader = (pool: Player[]) => [...pool].sort((a, b) => b.cups.filter(c => !c.bandit).length - a.cups.filter(c => !c.bandit).length || b.hand.length - a.hand.length)[0];
   const missing = INGREDIENTS.filter(k => !has(k));
   const pd = g.pending;
-  if (pd?.kind === 'bandit' && pd.target === me.id) {
-    if (has('chappal')) return { a: 'react', with: 'chappal' };
-    const t = others.filter(p => p.cups.some(c => !c.bandit));
-    if (has('newspaper') && t.length) return { a: 'react', with: 'newspaper', target: leader(t).id };
-    return { a: 'react', with: 'none' };
-  }
   if (pd?.kind === 'trade' && pd.to === me.id) {
     const pool = [...me.hand];
     const can = pd.want.every(k => {

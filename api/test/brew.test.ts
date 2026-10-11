@@ -43,33 +43,34 @@ test('brew: one of each ingredient brews a cup; others only see counts', () => {
   assert.match(play(g, other, { a: 'brew' }, 2, rng)!, /turn/);
 });
 
-test('brew: a Bandit spoils a cup; the target chases it off with a chappal, or shoos it on with a newspaper', () => {
+test('brew: a Bandit spoils a cup and stays; only on their own turn can they chase it off or shoo it on', () => {
   const rng = seeded(3);
   const g = newGame(people(3), 0, rng);
   const [a, b, c] = [g.players[g.turn], g.players[(g.turn + 1) % 3], g.players[(g.turn + 2) % 3]];
   b.cups.push({ id: 900, points: 2, bandit: false });
   c.cups.push({ id: 901, points: 1, bandit: false });
   give(g, a.id, ['bandit', 'bandit']);
-  give(g, b.id, ['newspaper']);
+  give(g, b.id, ['newspaper', ...INGREDIENTS]);
   give(g, c.id, ['chappal']);
   assert.match(play(g, a.id, { a: 'bandit', target: a.id }, 1, rng)!, /another player/);
   assert.equal(play(g, a.id, { a: 'bandit', target: b.id }, 1, rng), null);
   assert.equal(b.cups[0].bandit, true);
   assert.equal(points(b), 0);
-  // While it's pending, the turn waits.
-  assert.match(play(g, a.id, { a: 'brew' }, 2, rng)!, /Wait/);
-  // b shoos it to c; c chases it off.
-  assert.equal(play(g, b.id, { a: 'react', with: 'newspaper', target: c.id }, 2, rng), null);
+  assert.equal(g.pending, null, 'no moment to react: the Bandit just stays');
+  // Not on someone else's turn.
+  assert.match(play(g, b.id, { a: 'newspaper', target: c.id }, 2, rng)!, /turn/);
+  play(g, a.id, { a: 'end' }, 3, rng);
+  // b's turn: can't brew while raided; shoos it onto c's cup with the Newspaper.
+  assert.equal(g.players[g.turn].id, b.id);
+  assert.match(play(g, b.id, { a: 'brew' }, 4, rng)!, /Bandit/);
+  assert.equal(play(g, b.id, { a: 'newspaper', target: c.id }, 4, rng), null);
   assert.equal(b.cups[0].bandit, false);
   assert.equal(c.cups[0].bandit, true);
-  assert.equal(play(g, c.id, { a: 'react', with: 'chappal' }, 3, rng), null);
+  assert.match(play(g, c.id, { a: 'chappal' }, 5, rng)!, /turn/);
+  play(g, b.id, { a: 'end' }, 6, rng);
+  // c's turn: chases it off with the Chappal.
+  assert.equal(play(g, c.id, { a: 'chappal' }, 7, rng), null);
   assert.equal(c.cups[0].bandit, false);
-  assert.equal(g.pending, null);
-  // Unanswered: it stays when the time runs out.
-  assert.equal(play(g, a.id, { a: 'bandit', target: b.id }, 4, rng), null);
-  tick(g, 4 + 16_000, rng);
-  assert.equal(g.pending, null);
-  assert.equal(b.cups[0].bandit, true);
 });
 
 test('brew: trades swap cards when accepted; asking for what they lack is refused', () => {

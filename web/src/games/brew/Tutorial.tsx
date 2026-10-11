@@ -49,17 +49,19 @@ const STEPS: Step[] = [
     done: g => !g.crows.some(c => c.holder === ME),
   },
   {
-    say: 'Chai Bot sent a Bandit to raid your cup! A raided cup scores nothing. You have a Chappal: tap Chase it off. (Missed the moment? Tap your Chappal card, then Chase off the Bandit.)',
+    say: 'On their turn, Chai Bot sent a Bandit to raid your cup! A raided cup scores nothing, and while a Bandit is on any of your cups you can’t brew. You deal with it on your own turn: tap your Chappal card, then Chase off the Bandit.',
     setup: g => {
-      const c = g.players[0].cups[0];
-      c.bandit = true;
-      g.pending = { kind: 'bandit', from: 'b0', target: ME, cupId: c.id, deadline: Date.now() + 60_000, flicks: 0 };
+      g.players[0].cups[0].bandit = true;
+      g.log.push(`Chai Bot sent a Bandit to raid ${g.players[0].name}’s cup!`);
     },
-    allow: ['react', 'chappal'],
-    done: g => !g.pending && !g.players[0].cups[0].bandit,
+    allow: ['chappal'],
+    done: g => !g.players[0].cups[0].bandit,
   },
   {
-    say: 'Your turn to make trouble. Tap the Bandit card, then Raid a cup, then tap a player at the top.',
+    say: 'Next turn: your turn to make trouble. Tap the Bandit card, then Raid a cup, then tap a player at the top.',
+    setup: g => {
+      g.actionsLeft = 3;
+    },
     allow: ['bandit'],
     done: g => g.players.slice(1).some(p => p.cups.some(c => c.bandit)),
     after: g => {
