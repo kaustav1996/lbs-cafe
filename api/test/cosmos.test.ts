@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addShip, levelFor, newWorld, radius, respawn, setInput, snapshot, step, TICK_MS, UNLOCK, WORLD } from '../src/games/cosmos.js';
+import { addShip, FX, levelFor, newWorld, radius, respawn, setInput, snapshot, step, TICK_MS, UNLOCK, WORLD } from '../src/games/cosmos.js';
 
 const seeded = (s: number) => () => ((s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
 
@@ -111,4 +111,32 @@ test('space: a busy map with 40 ships keeps up (each tick well under the 50 ms b
   const snap = snapshot(w, 'b0');
   assert.ok(JSON.stringify(snap).length < 40_000, `snapshot ${JSON.stringify(snap).length} bytes`);
   console.log(`  ${per.toFixed(2)} ms per tick, snapshot ${JSON.stringify(snap).length} bytes`);
+});
+
+test('shots, hits and breaks show up as effects for the players who can see them', () => {
+  const w = newWorld(() => 0.5);
+  w.planets = [];
+  w.asteroids.clear();
+  w.particles.clear();
+  addShip(w, { id: 'a', name: 'A', table: null, bot: false });
+  const a = w.ships.get('a')!;
+  Object.assign(a, { x: 1000, y: 1000, dir: 0, dm: 50 });
+  w.asteroids.set(999, { id: 999, x: 1150, y: 1000, vx: 0, vy: 0, r: 40, hp: 4, rot: 0, spin: 0, seed: 3 });
+  setInput(w, 'a', { fire: true, ax: 0, ay: 0 });
+  const seen = new Set<number>();
+  let mineShot = false;
+  for (let i = 0; i < 40; i++) {
+    step(w, TICK_MS);
+    for (const f of snapshot(w, 'a').f) {
+      seen.add(f[0]);
+      if (f[0] === FX.shot && f[4] === 1) mineShot = true;
+    }
+  }
+  assert.ok(mineShot, 'own shot is marked as yours');
+  assert.ok(seen.has(FX.hitRock), 'bullet hitting the rock');
+  assert.ok(seen.has(FX.rockBreak), 'rock breaking');
+  // Effects only last one tick.
+  setInput(w, 'a', { fire: false });
+  for (let i = 0; i < 30; i++) step(w, TICK_MS);
+  assert.equal(snapshot(w, 'a').f.length, 0);
 });

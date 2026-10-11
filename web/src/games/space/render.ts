@@ -303,6 +303,7 @@ export function draw(ctx: CanvasRenderingContext2D, w: number, h: number, f: Fra
     const sd = ps ? lerpAngle(ps[4] as number, dir, alpha) : dir;
     drawShip(ctx, sx, sy, sr, sd, color, name, flags, level, nowMs, scale);
   }
+  drawFx(ctx, nowMs);
 }
 
 function drawShip(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, dir: number, color: string, name: string, flags: number, level: number, t: number, scale: number) {
@@ -456,4 +457,136 @@ export function drawMini(ctx: CanvasRenderingContext2D, px: number, size: number
   ctx.beginPath();
   ctx.arc(meX * k, meY * k, 5, 0, Math.PI * 2);
   ctx.stroke();
+}
+
+/** Short-lived hit and explosion effects, spawned from each snapshot's `f` list and drawn in world space. */
+interface Spark {
+  a: number;
+  v: number;
+  l: number;
+}
+interface Effect {
+  k: number;
+  x: number;
+  y: number;
+  s: number;
+  born: number;
+  life: number;
+  sparks: Spark[];
+  spin: number;
+}
+const effects: Effect[] = [];
+const LIFE: Record<number, number> = { 0: 260, 1: 320, 2: 380, 3: 750, 4: 950, 7: 320, 8: 950, 9: 260 };
+
+export function spawnFx(list: number[][] | undefined, nowMs: number) {
+  if (!list) return;
+  for (const [k, x, y, s] of list) {
+    if (k === 5 || k === 6) continue; // shots: the bullet itself is the effect
+    const big = k === 3 || k === 4 || k === 8;
+    const n = big ? 14 : k === 0 || k === 1 ? 6 : 0;
+    const sparks = Array.from({ length: n }, () => ({ a: Math.random() * Math.PI * 2, v: 0.4 + Math.random() * 0.8, l: 0.5 + Math.random() * 0.5 }));
+    effects.push({ k, x, y, s, born: nowMs, life: (LIFE[k] ?? 300) * (k <= 2 && s > 1 ? 1.5 : 1), sparks, spin: Math.random() * 6 });
+  }
+  if (effects.length > 120) effects.splice(0, effects.length - 120);
+}
+
+function drawFx(ctx: CanvasRenderingContext2D, nowMs: number) {
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const e = effects[i];
+    const p = (nowMs - e.born) / e.life;
+    if (p >= 1) {
+      effects.splice(i, 1);
+      continue;
+    }
+    const ease = 1 - (1 - p) * (1 - p);
+    const fade = 1 - p;
+    const sparks = (reach: number, color: string, width: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (const s of e.sparks) {
+        const d = reach * s.v * ease;
+        const tail = reach * 0.25 * s.l * fade;
+        ctx.moveTo(e.x + Math.cos(s.a) * d, e.y + Math.sin(s.a) * d);
+        ctx.lineTo(e.x + Math.cos(s.a) * Math.max(0, d - tail), e.y + Math.sin(s.a) * Math.max(0, d - tail));
+      }
+      ctx.stroke();
+    };
+    const ring = (r: number, color: string, width: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, Math.max(0.1, r), 0, Math.PI * 2);
+      ctx.stroke();
+    };
+    const glow = (r: number, inner: string, outer: string) => {
+      const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, Math.max(0.1, r));
+      g.addColorStop(0, inner);
+      g.addColorStop(1, outer);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, Math.max(0.1, r), 0, Math.PI * 2);
+      ctx.fill();
+    };
+    switch (e.k) {
+      case 0: // hit a ship: hot sparks and a flash
+        glow(10 * e.s * fade, `rgba(255,240,200,${0.9 * fade})`, 'rgba(255,120,40,0)');
+        sparks(30 * e.s, `rgba(255,190,90,${fade})`, 2);
+        break;
+      case 1: // hit a rock: grey chips and dust
+        glow(9 * e.s * (0.5 + ease), `rgba(200,205,225,${0.35 * fade})`, 'rgba(120,125,145,0)');
+        sparks(24 * e.s, `rgba(220,225,240,${fade})`, 2.2);
+        break;
+      case 2: // hit a planet: a ripple on the surface
+        ring(6 + 22 * e.s * ease, `rgba(255,255,255,${0.7 * fade})`, 2);
+        glow(8 * e.s * fade, `rgba(255,255,255,${0.6 * fade})`, 'rgba(255,255,255,0)');
+        break;
+      case 7: // shield bounced it
+        ring(8 + 26 * ease, `rgba(0,229,255,${fade})`, 3);
+        break;
+      case 3: {
+        // asteroid breaks: tumbling chunks and a dust ring
+        ring(e.s * (0.6 + 1.4 * ease), `rgba(190,195,215,${0.45 * fade})`, 3);
+        for (const s of e.sparks) {
+          const d = e.s * 1.6 * s.v * ease;
+          ctx.save();
+          ctx.translate(e.x + Math.cos(s.a) * d, e.y + Math.sin(s.a) * d);
+          ctx.rotate(e.spin + p * 8 * s.v);
+          const c = e.s * 0.26 * s.l;
+          ctx.globalAlpha = fade;
+          ctx.fillStyle = '#5a5f74';
+          ctx.beginPath();
+          ctx.moveTo(c, 0);
+          ctx.lineTo(-c * 0.7, c * 0.8);
+          ctx.lineTo(-c * 0.6, -c * 0.7);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.25)';
+          ctx.beginPath();
+          ctx.moveTo(c, 0);
+          ctx.lineTo(-c * 0.6, -c * 0.7);
+          ctx.lineTo(0, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 4:
+      case 8: {
+        // a ship goes down: flash, fireball, shockwave, sparks
+        const r = Math.max(20, e.s);
+        if (p < 0.15) glow(r * 2.2, `rgba(255,255,255,${1 - p / 0.15})`, 'rgba(255,255,255,0)');
+        glow(r * (0.8 + 1.6 * ease), `rgba(255,220,120,${0.9 * fade})`, `rgba(255,70,30,0)`);
+        ring(r * (1 + 3 * ease), e.k === 8 ? `rgba(208,255,0,${0.6 * fade})` : `rgba(255,160,80,${0.6 * fade})`, 4);
+        sparks(r * 3.2, `rgba(255,210,120,${fade})`, 3);
+        break;
+      }
+      case 9: // gamma beam fired: a green flash at the ship
+        glow(60 * fade + 10, `rgba(200,255,220,${0.8 * fade})`, 'rgba(105,240,174,0)');
+        break;
+    }
+  }
 }

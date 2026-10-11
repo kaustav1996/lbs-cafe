@@ -143,6 +143,20 @@ export interface World {
   beams: Beam[];
   /** Things worth telling players about (kills, level ups), drained by the room. */
   events: { to?: string; text: string }[];
+  /** This tick's sights and sounds (shots, hits, explosions); cleared at the start of every step. */
+  fx: Fx[];
+}
+
+/** Effect kinds, for sound and small animations on the phones. */
+export const FX = { hitShip: 0, hitRock: 1, hitPlanet: 2, rockBreak: 3, shipDown: 4, shot: 5, missile: 6, reflect: 7, eaten: 8, gamma: 9 } as const;
+export interface Fx {
+  k: number;
+  x: number;
+  y: number;
+  /** Size: a radius for explosions, 1 or 2 (missile) for hits. */
+  s: number;
+  by?: string;
+  to?: string;
 }
 
 export type Rng = () => number;
@@ -157,7 +171,7 @@ const thrust = (s: Ship) => 900 / Math.sqrt(1 + s.mass / 200);
 export const levelFor = (xp: number) => LEVEL_XP.filter(t => xp >= t).length;
 
 export function newWorld(rng: Rng = Math.random, now = 0): World {
-  const w: World = { now, nextId: 1, ships: new Map(), particles: new Map(), asteroids: new Map(), planets: [], bullets: new Map(), beams: [], events: [] };
+  const w: World = { now, nextId: 1, ships: new Map(), particles: new Map(), asteroids: new Map(), planets: [], bullets: new Map(), beams: [], events: [], fx: [] };
   // Planets, spread out, none near the middle.
   for (let i = 0; i < 7; i++) {
     for (let tries = 0; tries < 50; tries++) {
@@ -311,6 +325,7 @@ function hurt(w: World, s: Ship, dmg: number, by: string | null, rng: Rng) {
 }
 function kill(w: World, s: Ship, by: string | null, rng: Rng) {
   s.alive = false;
+  w.fx.push({ k: FX.shipDown, x: s.x, y: s.y, s: radius(Math.max(s.mass, 1)), by: by ?? undefined, to: s.id });
   s.respawnAt = w.now + RESPAWN_MS;
   s.killedBy = by;
   // Scatter some of what it carried for others to absorb.
@@ -353,10 +368,12 @@ function fire(w: World, s: Ship) {
   const power = 1 + Math.min(s.dm, 300) / 60;
   if (s.input.weapon === 'missile' && s.level >= UNLOCK.missile) {
     if (w.now - s.lastShot < 600 || !payAttack(s, 4)) return;
+    w.fx.push({ k: FX.missile, x: s.x, y: s.y, s: 2, by: s.id });
     const b: Bullet = { id: w.nextId++, owner: s.id, kind: 'missile', x: s.x + cos * (r + 8), y: s.y + sin * (r + 8), vx: s.vx + cos * 420, vy: s.vy + sin * 420, dmg: 9 * power, until: w.now + 3000 };
     w.bullets.set(b.id, b);
   } else {
     if (w.now - s.lastShot < 180 || !payAttack(s, 1)) return;
+    w.fx.push({ k: FX.shot, x: s.x, y: s.y, s: 1, by: s.id });
     const b: Bullet = { id: w.nextId++, owner: s.id, kind: 'shot', x: s.x + cos * (r + 6), y: s.y + sin * (r + 6), vx: s.vx + cos * 720, vy: s.vy + sin * 720, dmg: 3 * power, until: w.now + 1100 };
     w.bullets.set(b.id, b);
   }
@@ -419,11 +436,13 @@ function gamma(w: World, s: Ship, rng: Rng) {
     const h = along(o.x, o.y);
     if (h && h.off < width + radius(o.mass)) hurt(w, o, power, s.id, rng);
   }
+  w.fx.push({ k: FX.gamma, x: s.x, y: s.y, s: width, by: s.id });
   w.beams.push({ id: w.nextId++, owner: s.id, x1: s.x, y1: s.y, x2: s.x + cos * len, y2: s.y + sin * len, power: width, until: w.now + 500 });
 }
 
 function breakAsteroid(w: World, a: Asteroid, rng: Rng, by?: Ship) {
   w.asteroids.delete(a.id);
+  w.fx.push({ k: FX.rockBreak, x: a.x, y: a.y, s: a.r, by: by?.id });
   if (a.r > 34) {
     for (let i = 0; i < 2; i++) addAsteroid(w, rng, a.x + (rng() - 0.5) * a.r, a.y + (rng() - 0.5) * a.r, a.r * 0.5, a.vx + (rng() - 0.5) * 80, a.vy + (rng() - 0.5) * 80);
   }
@@ -461,6 +480,7 @@ class Grid<T extends { x: number; y: number }> {
 /** Advances the world by dt milliseconds. */
 export function step(w: World, dt: number, rng: Rng = Math.random) {
   w.now += dt;
+  w.fx = [];
   const t = dt / 1000;
   const ships = [...w.ships.values()];
   for (const s of ships) if (!s.alive && s.bot && w.now >= s.respawnAt) respawn(w, s.id, rng);
@@ -670,6 +690,7 @@ export function step(w: World, dt: number, rng: Rng = Math.random) {
         big.xp += 10 + small.mass * 0.3;
         big.kills++;
         w.events.push({ text: `${big.name} consumed ${small.name}` });
+        w.fx.push({ k: FX.eaten, x: small.x, y: small.y, s: radius(small.mass), by: big.id, to: small.id });
         small.alive = false;
         small.respawnAt = w.now + RESPAWN_MS;
         small.killedBy = big.id;
@@ -737,10 +758,12 @@ export function step(w: World, dt: number, rng: Rng = Math.random) {
           // Anti-gravity turns it around: it now belongs to the shielded ship.
           b.vx *= -1;
           b.vy *= -1;
+          w.fx.push({ k: FX.reflect, x: b.x, y: b.y, s: 1, by: b.owner, to: s.id });
           b.owner = s.id;
           b.x += b.vx * t * 2;
           b.y += b.vy * t * 2;
         } else {
+          w.fx.push({ k: FX.hitShip, x: b.x, y: b.y, s: b.kind === 'missile' ? 2 : 1, by: b.owner, to: s.id });
           hurt(w, s, b.dmg, b.owner, rng);
           hit = true;
         }
@@ -751,6 +774,7 @@ export function step(w: World, dt: number, rng: Rng = Math.random) {
       for (const a of w.asteroids.values()) {
         if (dist2(a.x, a.y, b.x, b.y) < (a.r + 3) ** 2) {
           a.hp -= b.dmg;
+          w.fx.push({ k: FX.hitRock, x: b.x, y: b.y, s: b.kind === 'missile' ? 2 : 1, by: b.owner });
           if (a.hp <= 0) breakAsteroid(w, a, rng, w.ships.get(b.owner));
           hit = true;
           break;
@@ -759,6 +783,7 @@ export function step(w: World, dt: number, rng: Rng = Math.random) {
     if (!hit)
       for (const p of w.planets)
         if (dist2(p.x, p.y, b.x, b.y) < p.r * p.r) {
+          w.fx.push({ k: FX.hitPlanet, x: b.x, y: b.y, s: b.kind === 'missile' ? 2 : 1, by: b.owner });
           hit = true;
           break;
         }
@@ -926,6 +951,8 @@ export function snapshot(w: World, id: string) {
     // [kind(0 shot, 1 missile), x, y, owner is me]
     b: [...w.bullets.values()].filter(b => near(b.x, b.y)).map(b => [b.kind === 'missile' ? 1 : 0, r1(b.x), r1(b.y), b.owner === id ? 1 : 0]),
     g: w.beams.map(b => [r1(b.x1), r1(b.y1), r1(b.x2), r1(b.y2), r1(b.power)]),
+    // [kind, x, y, size, 1 if you did it / 2 if it happened to you / 0]
+    f: w.fx.filter(f => near(f.x, f.y, 100)).map(f => [f.k, r1(f.x), r1(f.y), r1(f.s), f.by === id ? 1 : f.to === id ? 2 : 0]),
   };
 }
 export type Snapshot = ReturnType<typeof snapshot>;

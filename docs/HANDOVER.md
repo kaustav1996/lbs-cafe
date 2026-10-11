@@ -77,7 +77,7 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   through matter, ignores planets). Simulation in `api/src/games/cosmos.ts` (pure, `test/cosmos.test.ts`), run
   at 20 Hz in the `Space` Durable Object (`api/src/games/space.ts`, binding SPACE, migration tag v3) with 6 bots,
   up to 40 people; the loop stops when nobody is connected. Client in `web/src/games/space/` (canvas renderer,
-  interpolated snapshots, thumb joystick). Phones play sideways: full screen plus landscape lock where the
+  interpolated snapshots, thumb joystick). Each tick the engine lists effects (`FX`: shots, hits, breaks, explosions) in the snapshot's `f`; the phone animates them (`spawnFx` in render.ts) and plays Web Audio synth sounds (`sfx.ts`, no files; Sound on/off button, remembered per phone). Phones play sideways: full screen plus landscape lock where the
   browser allows (Android), otherwise a turn-your-phone prompt with a "Play upright" escape.
 - **Brew Bandits** (9 Oct 2026): a multiplayer card game after the Malaysian game Nasi Lemak (rules from Faculty of
   Fun's almanacs), with hemp coffee. Cards: 5 ingredients, Masala (wild, Rendang), Bandit/Chappal/Newspaper

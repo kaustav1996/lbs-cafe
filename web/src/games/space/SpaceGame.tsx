@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { API_URL } from '../../lib/api';
 import { useGames } from '../../state/games';
 import { playerId, savedName, saveName } from '../brew/online';
-import { draw, drawMini, type Frame } from './render';
+import { draw, drawMini, spawnFx, type Frame } from './render';
+import { isMuted, play, setMuted, unlockSound } from './sfx';
 import {
   addShip,
   leaderboard,
@@ -40,6 +41,14 @@ interface Source {
 }
 
 function push(src: Source, s: Snapshot) {
+  // Effects: animations and sounds, quieter the further they are from you.
+  const now = performance.now();
+  spawnFx(s.f, now);
+  if (s.f && s.me)
+    for (const [k, x, y, size, mine] of s.f) {
+      const d = Math.hypot(x - s.me.x, y - s.me.y);
+      play(k, size, 1 - d / 900, mine);
+    }
   src.prev = src.curr;
   src.prevAt = src.currAt;
   src.curr = s;
@@ -208,6 +217,7 @@ export default function SpaceGame() {
           onClick={() => {
             saveName(name.trim());
             goLandscape();
+            unlockSound();
             setMode('online');
           }}
         >
@@ -219,6 +229,7 @@ export default function SpaceGame() {
           onClick={() => {
             if (name.trim()) saveName(name.trim());
             goLandscape();
+            unlockSound();
             setMode('solo');
           }}
         >
@@ -240,6 +251,7 @@ function Play({ mode, table, name, onLeave }: { mode: 'online' | 'solo'; table: 
   const stick = useRef<{ id: number; x: number; y: number } | null>(null);
   const [knob, setKnob] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
   const portrait = usePortraitPhone();
+  const [muted, setMute] = useState(isMuted);
   const [upright, setUpright] = useState(false);
 
   // The source, and a slow HUD refresh (the canvas runs at 60 fps on its own).
@@ -395,6 +407,18 @@ function Play({ mode, table, name, onLeave }: { mode: 'online' | 'solo'; table: 
       <div className="sp-top">
         <button type="button" className="sp-leave" onClick={onLeave}>
           Leave
+        </button>
+        <button
+          type="button"
+          className="sp-leave"
+          aria-pressed={!muted}
+          onClick={() => {
+            unlockSound();
+            setMuted(!muted);
+            setMute(!muted);
+          }}
+        >
+          {muted ? 'Sound off' : 'Sound on'}
         </button>
         {me && (
           <div className="sp-stats">
