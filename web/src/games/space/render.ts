@@ -22,12 +22,62 @@ const STARS = (() => {
   return Array.from({ length: 260 }, () => ({ x: r() * 2000, y: r() * 2000, z: 0.15 + r() * 0.5, a: 0.3 + r() * 0.7 }));
 })();
 
-/** Asteroid outline from its seed: jagged but the same on every phone. */
+/** Asteroid outline and craters from its seed: the same on every phone. */
 function rockShape(seed: number) {
   let s = seed || 1;
   const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  return Array.from({ length: 11 }, (_, i) => ({ a: (i / 11) * Math.PI * 2, k: 0.72 + r() * 0.36 }));
+  const pts = Array.from({ length: 11 }, (_, i) => ({ a: (i / 11) * Math.PI * 2, k: 0.72 + r() * 0.36 }));
+  const craters = Array.from({ length: 2 + Math.floor(r() * 3) }, () => ({ a: r() * Math.PI * 2, d: r() * 0.45, s: 0.1 + r() * 0.14 }));
+  return { pts, craters };
 }
+
+/** Everything is lit from the top left; surfaces facing it are brighter. Returns 0 (dark) to 1 (lit). */
+const LIGHT = { x: -0.5, y: -0.5, z: 0.707 };
+function lit(nx: number, ny: number, tilt = 0.6) {
+  const up = Math.sqrt(1 - tilt * tilt);
+  return Math.max(0, nx * tilt * LIGHT.x + ny * tilt * LIGHT.y + up * LIGHT.z);
+}
+/** Paint over a filled path to light or shade it. */
+function tone(ctx: CanvasRenderingContext2D, l: number, mid = 0.57) {
+  ctx.fillStyle = l > mid ? `rgba(255,255,255,${Math.min(0.55, (l - mid) * 1.1)})` : `rgba(0,0,0,${Math.min(0.7, (mid - l) * 1.3)})`;
+  ctx.fill();
+}
+
+/** Pre-drawn shaded orbs (matter, dark matter, dark energy, shots), so a screen full of them stays cheap. */
+const sprites = new Map<string, HTMLCanvasElement>();
+function orb(key: string, core: string, edge: string, glow: string | null) {
+  let c = sprites.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const R = glow ? 14 : 30;
+  if (glow) {
+    const h = g.createRadialGradient(32, 32, R * 0.6, 32, 32, 32);
+    h.addColorStop(0, glow);
+    h.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = h;
+    g.fillRect(0, 0, 64, 64);
+  }
+  const b = g.createRadialGradient(32 - R * 0.4, 32 - R * 0.45, R * 0.08, 32, 32, R);
+  b.addColorStop(0, '#ffffff');
+  b.addColorStop(0.25, core);
+  b.addColorStop(1, edge);
+  g.fillStyle = b;
+  g.beginPath();
+  g.arc(32, 32, R, 0, Math.PI * 2);
+  g.fill();
+  sprites.set(key, c);
+  return c;
+}
+const ORB = {
+  m: () => orb('m', '#e8ecff', '#6c7290', null),
+  d: () => orb('d', '#c59bff', '#3d1a7a', 'rgba(179,136,255,0.55)'),
+  e: () => orb('e', '#7ff6ff', '#00606e', 'rgba(0,229,255,0.5)'),
+  mine: () => orb('mine', '#eaff7a', '#4f6600', 'rgba(208,255,0,0.6)'),
+  foe: () => orb('foe', '#ff9a9a', '#7a1010', 'rgba(255,95,95,0.6)'),
+  missile: () => orb('missile', '#ffc46b', '#8a3c00', 'rgba(255,159,28,0.6)'),
+};
 const shapes = new Map<number, ReturnType<typeof rockShape>>();
 
 export function draw(ctx: CanvasRenderingContext2D, w: number, h: number, f: Frame, planets: Planet[], size: number, nowMs: number, dpr = 1) {
@@ -38,7 +88,7 @@ export function draw(ctx: CanvasRenderingContext2D, w: number, h: number, f: Fra
   const cy = me ? (pm ? lerp(pm.y, me.y, alpha) : me.y) : size / 2;
   const myR = me ? 8 + Math.sqrt(Math.max(me.mass, 1)) * 2.4 : 20;
   // Zoom out as you grow.
-  const scale = Math.sqrt(w * h) / (2 * (250 + myR * 4));
+  const scale = Math.sqrt(w * h) / (2 * (190 + myR * 4));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = '#05060f';
   ctx.fillRect(0, 0, w, h);
@@ -86,40 +136,74 @@ export function draw(ctx: CanvasRenderingContext2D, w: number, h: number, f: Fra
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r * 5, 0, Math.PI * 2);
     ctx.fill();
-    const body = ctx.createRadialGradient(p.x - p.r * 0.35, p.y - p.r * 0.35, p.r * 0.1, p.x, p.y, p.r);
-    body.addColorStop(0, `hsl(${p.hue}, 70%, 70%)`);
-    body.addColorStop(1, `hsl(${p.hue}, 60%, 25%)`);
+    // Ring: the far half goes behind the planet, the near half in front.
+    const ring = (from: number, to: number) => {
+      if (!p.ring) return;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(-0.4);
+      ctx.strokeStyle = `hsla(${(p.hue + 40) % 360}, 70%, 72%, 0.75)`;
+      ctx.lineWidth = p.r * 0.16;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.r * 1.75, p.r * 0.45, 0, from, to);
+      ctx.stroke();
+      ctx.strokeStyle = `hsla(${(p.hue + 40) % 360}, 60%, 40%, 0.6)`;
+      ctx.lineWidth = p.r * 0.05;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.r * 1.5, p.r * 0.38, 0, from, to);
+      ctx.stroke();
+      ctx.restore();
+    };
+    ring(Math.PI, Math.PI * 2);
+    // Shadow on space below and right, then the lit sphere.
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.arc(p.x + p.r * 0.12, p.y + p.r * 0.16, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    const body = ctx.createRadialGradient(p.x - p.r * 0.4, p.y - p.r * 0.45, p.r * 0.05, p.x, p.y, p.r);
+    body.addColorStop(0, `hsl(${p.hue}, 75%, 78%)`);
+    body.addColorStop(0.45, `hsl(${p.hue}, 62%, 50%)`);
+    body.addColorStop(1, `hsl(${p.hue}, 60%, 22%)`);
     ctx.fillStyle = body;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
     ctx.fill();
-    if (p.ring) {
-      ctx.strokeStyle = `hsla(${(p.hue + 40) % 360}, 80%, 75%, 0.7)`;
-      ctx.lineWidth = p.r * 0.12;
+    // Cloud bands, clipped to the sphere.
+    ctx.save();
+    ctx.clip();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(-0.4);
+    for (let i = -2; i <= 2; i++) {
+      ctx.fillStyle = `hsla(${(p.hue + (i % 2 ? 20 : -15) + 360) % 360}, 60%, ${i % 2 ? 70 : 30}%, 0.16)`;
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y, p.r * 1.7, p.r * 0.45, -0.4, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.ellipse(0, i * p.r * 0.36, p.r * 1.1, p.r * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
+    ctx.restore();
+    // Night side.
+    const night = ctx.createRadialGradient(p.x - p.r * 0.55, p.y - p.r * 0.6, p.r * 0.7, p.x - p.r * 0.2, p.y - p.r * 0.25, p.r * 1.6);
+    night.addColorStop(0, 'rgba(0,0,0,0)');
+    night.addColorStop(1, 'rgba(0,0,8,0.75)');
+    ctx.fillStyle = night;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    // Thin lit atmosphere on the sunny edge.
+    ctx.strokeStyle = `hsla(${p.hue}, 90%, 80%, 0.45)`;
+    ctx.lineWidth = p.r * 0.05;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 0.98, Math.PI * 0.85, Math.PI * 1.65);
+    ctx.stroke();
+    ring(0, Math.PI);
   }
 
-  // Particles.
+  // Particles: shaded orbs; dark matter and dark energy glow and pulse.
   for (const [k, x, y] of curr.p as [string, number, number][]) {
     if (k === 'm') {
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.drawImage(ORB.m(), x - 3.6, y - 3.6, 7.2, 7.2);
     } else {
-      const col = k === 'd' ? '179, 136, 255' : '0, 229, 255';
-      const pulse = 4 + Math.sin(nowMs / 250 + x) * 1.2;
-      ctx.fillStyle = `rgba(${col}, 0.25)`;
-      ctx.beginPath();
-      ctx.arc(x, y, pulse * 2.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgb(${col})`;
-      ctx.beginPath();
-      ctx.arc(x, y, pulse * 0.8, 0, Math.PI * 2);
-      ctx.fill();
+      const R = 12 + Math.sin(nowMs / 250 + x) * 2;
+      ctx.drawImage(k === 'd' ? ORB.d() : ORB.e(), x - R, y - R, R * 2, R * 2);
     }
   }
 
@@ -133,16 +217,58 @@ export function draw(ctx: CanvasRenderingContext2D, w: number, h: number, f: Fra
     const ar = pa ? lerpAngle(pa[4], rot, alpha) : rot;
     let shape = shapes.get(seed);
     if (!shape) shapes.set(seed, (shape = rockShape(seed)));
+    const pts = shape.pts.map(v => [Math.cos(v.a) * r * v.k, Math.sin(v.a) * r * v.k]);
+    // Drop shadow.
+    ctx.save();
+    ctx.translate(ax + r * 0.14, ay + r * 0.2);
+    ctx.rotate(ar);
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fill();
+    ctx.restore();
     ctx.save();
     ctx.translate(ax, ay);
     ctx.rotate(ar);
     ctx.beginPath();
-    shape.forEach((v, i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, Math.cos(v.a) * r * v.k, Math.sin(v.a) * r * v.k));
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
     ctx.closePath();
-    ctx.fillStyle = '#2b2e3b';
+    ctx.fillStyle = '#4a4e60';
     ctx.fill();
-    ctx.strokeStyle = '#9aa3c7';
-    ctx.lineWidth = 2.5;
+    // Facets: each slice from the middle to an edge faces outwards; light it by where it faces.
+    const top = [0, 0];
+    for (let i = 0; i < pts.length; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[(i + 1) % pts.length];
+      const ma = Math.atan2(y1 + y2, x1 + x2) + ar;
+      ctx.beginPath();
+      ctx.moveTo(top[0], top[1]);
+      ctx.lineTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.closePath();
+      tone(ctx, lit(Math.cos(ma), Math.sin(ma), 0.75));
+    }
+    // Craters: dark bowl, lit far rim.
+    const lx = Math.cos(-ar) * -0.707 - Math.sin(-ar) * -0.707;
+    const ly = Math.sin(-ar) * -0.707 + Math.cos(-ar) * -0.707;
+    for (const c of shape.craters) {
+      const cx2 = Math.cos(c.a) * c.d * r;
+      const cy2 = Math.sin(c.a) * c.d * r;
+      const cr = c.s * r;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath();
+      ctx.arc(cx2, cy2, cr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.beginPath();
+      ctx.arc(cx2 - lx * cr * 0.35, cy2 - ly * cr * 0.35, cr * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(190, 198, 230, 0.55)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.restore();
   }
@@ -160,23 +286,10 @@ export function draw(ctx: CanvasRenderingContext2D, w: number, h: number, f: Fra
     ctx.stroke();
   }
 
-  // Bullets.
+  // Bullets: glowing shots, bigger for missiles.
   for (const [kind, x, y, mine] of curr.b as number[][]) {
-    if (kind === 1) {
-      ctx.fillStyle = '#ff9f1c';
-      ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255, 159, 28, 0.3)';
-      ctx.beginPath();
-      ctx.arc(x, y, 12, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = mine ? '#d0ff00' : '#ff5f5f';
-      ctx.beginPath();
-      ctx.arc(x, y, 3.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    const R = kind === 1 ? 16 : 9;
+    ctx.drawImage(kind === 1 ? ORB.missile() : mine ? ORB.mine() : ORB.foe(), x - R, y - R, R * 2, R * 2);
   }
 
   // Ships (interpolated).
@@ -229,32 +342,79 @@ function drawShip(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
   ctx.globalAlpha = safe && Math.floor(t / 150) % 2 ? 0.4 : 1;
   // A faint ring for the hull's size (what eats and gets eaten), and a retro delta ship inside it.
   ctx.strokeStyle = color;
-  ctx.globalAlpha *= 0.35;
+  ctx.globalAlpha *= 0.2;
   ctx.lineWidth = 2 / scale;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.stroke();
   ctx.globalAlpha = safe && Math.floor(t / 150) % 2 ? 0.4 : 1;
-  const pt = (a: number, d: number): [number, number] => [x + Math.cos(dir + a) * r * d, y + Math.sin(dir + a) * r * d];
+  // A low-poly hull seen from above, lit from the top left, with a drop shadow so it floats over the map.
+  const cos = Math.cos(dir);
+  const sin = Math.sin(dir);
+  const P = (lx: number, ly: number): [number, number] => [x + (lx * cos - ly * sin) * r, y + (lx * sin + ly * cos) * r];
+  const NOSE: [number, number] = [1.2, 0];
+  const TAIL: [number, number] = [-0.42, 0];
+  const WING_L: [number, number] = [-0.85, -0.98];
+  const WING_R: [number, number] = [-0.85, 0.98];
+  const BACK_L: [number, number] = [-0.6, -0.34];
+  const BACK_R: [number, number] = [-0.6, 0.34];
+  const poly = (pts: [number, number][], dx = 0, dy = 0) => {
+    ctx.beginPath();
+    pts.forEach(([a, b], i) => {
+      const [px, py] = P(a, b);
+      if (i) ctx.lineTo(px + dx, py + dy);
+      else ctx.moveTo(px + dx, py + dy);
+    });
+    ctx.closePath();
+  };
+  const outline: [number, number][] = [NOSE, WING_R, BACK_R, TAIL, BACK_L, WING_L];
+  poly(outline, r * 0.38, r * 0.5);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fill();
+  // Engines glow behind.
+  for (const side of [-0.3, 0.3]) {
+    const [ex, ey] = P(-0.66, side);
+    const eg = ctx.createRadialGradient(ex, ey, 0, ex, ey, r * (boost ? 0.7 : 0.4));
+    eg.addColorStop(0, boost ? 'rgba(255,200,90,0.95)' : 'rgba(120,230,255,0.8)');
+    eg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = eg;
+    ctx.beginPath();
+    ctx.arc(ex, ey, r * (boost ? 0.7 : 0.4), 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.save();
   ctx.shadowColor = color;
-  ctx.shadowBlur = 16;
+  ctx.shadowBlur = 12;
+  poly(outline);
   ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(...pt(0, 1.15));
-  ctx.lineTo(...pt(2.45, 1));
-  ctx.lineTo(...pt(Math.PI, 0.45));
-  ctx.lineTo(...pt(-2.45, 1));
-  ctx.closePath();
   ctx.fill();
   ctx.restore();
-  // Cockpit.
-  ctx.fillStyle = 'rgba(5, 6, 15, 0.7)';
+  // Two facets either side of the spine, plus darker wing undersides at the tips.
+  const shadeLocal = (nx: number, ny: number, tilt: number) => lit(nx * cos - ny * sin, nx * sin + ny * cos, tilt);
+  poly([NOSE, WING_L, BACK_L, TAIL]);
+  tone(ctx, shadeLocal(0, -1, 0.55));
+  poly([NOSE, WING_R, BACK_R, TAIL]);
+  tone(ctx, shadeLocal(0, 1, 0.55));
+  poly([WING_L, [-0.7, -0.62], BACK_L]);
+  tone(ctx, shadeLocal(-0.5, -1, 0.85));
+  poly([WING_R, [-0.7, 0.62], BACK_R]);
+  tone(ctx, shadeLocal(-0.5, 1, 0.85));
+  // Spine highlight.
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = Math.max(1, r * 0.05);
   ctx.beginPath();
-  ctx.moveTo(...pt(0, 0.65));
-  ctx.lineTo(...pt(2.2, 0.32));
-  ctx.lineTo(...pt(-2.2, 0.32));
-  ctx.closePath();
+  ctx.moveTo(...P(1.15, 0));
+  ctx.lineTo(...P(-0.4, 0));
+  ctx.stroke();
+  // Glass cockpit with a highlight towards the light.
+  const [kx, ky] = P(0.3, 0);
+  const glass = ctx.createRadialGradient(kx - r * 0.1, ky - r * 0.12, r * 0.02, kx, ky, r * 0.3);
+  glass.addColorStop(0, '#ffffff');
+  glass.addColorStop(0.3, '#8fd8ff');
+  glass.addColorStop(1, '#0a1630');
+  ctx.fillStyle = glass;
+  ctx.beginPath();
+  ctx.ellipse(kx, ky, r * 0.34, r * 0.19, dir, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
   if (shield) {
