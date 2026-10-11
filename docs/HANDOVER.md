@@ -69,6 +69,16 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   table calls, serving, invoices and payments, bookings; can't move orders to preparing or ready), Server and kitchen
   (both, for quiet days; migration 010) and Manager/Owner (everything). Reports, offers
   and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
+- **LB's Space** (11 Oct 2026): one shared space-shooter map for every table with games open, plus solo against
+  bots on the phone. White matter = health and size, purple dark matter = weapon power (a shot with none costs
+  health), cyan dark energy = boosts and gravity weapons (small ships boost free). Bigger ships eat smaller ones;
+  asteroids and planets hurt. Levels unlock Missiles (2), Anti-gravity shield (3, reflects shots), Light speed (4),
+  Black hole (5, pulls things in, asteroids can't hurt you) and Gamma-ray beam (6, to the map edge, stronger
+  through matter, ignores planets). Simulation in `api/src/games/cosmos.ts` (pure, `test/cosmos.test.ts`), run
+  at 20 Hz in the `Space` Durable Object (`api/src/games/space.ts`, binding SPACE, migration tag v3) with 6 bots,
+  up to 40 people; the loop stops when nobody is connected. Client in `web/src/games/space/` (canvas renderer,
+  interpolated snapshots, thumb joystick). Phones play sideways: full screen plus landscape lock where the
+  browser allows (Android), otherwise a turn-your-phone prompt with a "Play upright" escape.
 - **Brew Bandits** (9 Oct 2026): a multiplayer card game after the Malaysian game Nasi Lemak (rules from Faculty of
   Fun's almanacs), with hemp coffee. Cards: 5 ingredients, Masala (wild, Rendang), Bandit/Chappal/Newspaper
   (Fly/Swatter/Fan), Havaldar (Officer), Chor (Thief), Kirana (Supplier), Mandi (Wholesaler), Jugaad (Mak Cik,

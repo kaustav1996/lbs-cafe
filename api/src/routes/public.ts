@@ -187,7 +187,7 @@ export function publicRoutes() {
     if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') return c.json({ error: 'upgrade', message: 'Open this with a WebSocket.' }, 426);
     const open = runtime().openGames;
     if (!open) return c.json({ error: 'unavailable', message: 'Game rooms aren’t available here.' }, 503);
-    return open(c.req.raw, table);
+    return open(c.req.raw, table, c.req.query('game') === 'space' ? 'space' : 'arcade');
   });
 
   // The name LB's has for a number, so the first guest at a table can say "that's me" instead of typing it.

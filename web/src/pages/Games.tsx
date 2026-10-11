@@ -7,6 +7,7 @@ import { readBest } from '../games/shared';
 
 const GAMES: { id: string; name: string; blurb: string; best: (n: number) => string; color: string; load: () => Promise<{ default: ComponentType }> }[] = [
   { id: 'brew', name: 'Brew Bandits', blurb: 'Race other tables to brew hemp coffee. With people or bots; there’s a tutorial.', best: () => '', color: '#ffd84d', load: () => import('../games/brew/BrewBandits') },
+  { id: 'space', name: 'LB’s Space', blurb: 'One galaxy for every table. Grow, shoot, eat smaller ships. With bots, or solo.', best: () => '', color: '#7b6cff', load: () => import('../games/space/SpaceGame') },
   { id: '2048', name: 'Lemon 2048', blurb: 'Swipe to slide and merge the tiles. Make 2048.', best: n => `Best ${n}`, color: 'var(--lime)', load: () => import('../games/Lemon2048') },
   { id: 'snake', name: 'Snake', blurb: 'Eat the lemons. Don’t hit a wall or your own tail.', best: n => `Best ${n} ${n === 1 ? 'lemon' : 'lemons'}`, color: 'var(--cyan)', load: () => import('../games/Snake') },
   { id: 'match', name: 'Tape match', blurb: 'Flip the tapes and find the eight pairs.', best: n => `Best ${n} moves`, color: '#ff9f1c', load: () => import('../games/TapeMatch') },

@@ -16,6 +16,8 @@ repo owner (Kaustav). Read `docs/HANDOVER.md` for status, decisions and the next
   - Public documents (licence scans) live in R2 bucket `lbs-cafe-files` (binding `FILES`), served at `/files/*`;
     `src/files.ts` checks type, magic bytes and size. Everything in that bucket is public.
   - `LiveHub` Durable Object (`src/worker.ts`): admin live feed over a hibernating WebSocket, plus rate limits.
+  - Games: `Arcade` DO (Brew Bandits rooms, `src/games/arcade.ts`) and `Space` DO (LB's Space, `src/games/space.ts`).
+    Game rules are pure modules (`src/games/brew.ts`, `cosmos.ts`) that the web imports too.
   - `migrations/*.sql` run from Node with `npm run migrate` (part of `npm run deploy`), then `src/seed.ts` fills an empty DB.
   - `src/orders.ts` order pricing/GST/payments; `src/routes/{public,auth,admin}.ts`.
   - Menus: one master list (categories/items/item_options); `menus` + `menu_items` + `menu_prices` select dishes and

@@ -24,12 +24,14 @@
   "durable_objects": {
     "bindings": [
       { "name": "LIVE", "class_name": "LiveHub" },
-      { "name": "ARCADE", "class_name": "Arcade" }
+      { "name": "ARCADE", "class_name": "Arcade" },
+      { "name": "SPACE", "class_name": "Space" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["LiveHub"] },
-    { "tag": "v2", "new_sqlite_classes": ["Arcade"] }
+    { "tag": "v2", "new_sqlite_classes": ["Arcade"] },
+    { "tag": "v3", "new_sqlite_classes": ["Space"] }
   ],
   "vars": {
     "CORS_ORIGINS": "https://lbscafe.com,https://www.lbscafe.com,http://localhost:5173"

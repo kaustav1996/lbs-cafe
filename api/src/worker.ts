@@ -7,13 +7,15 @@ import type { CafeEvent } from './events.js';
 import { nextReleaseAt, releaseDue } from './orders.js';
 import { ConsoleMessenger } from './messaging.js';
 import { Arcade } from './games/arcade.js';
+import { Space } from './games/space.js';
 
-export { Arcade };
+export { Arcade, Space };
 
 export interface Env {
   HYPERDRIVE: Hyperdrive;
   LIVE: DurableObjectNamespace<LiveHub>;
   ARCADE: DurableObjectNamespace<Arcade>;
+  SPACE: DurableObjectNamespace<Space>;
   JWT_SECRET: string;
   CORS_ORIGINS: string;
   FILES?: R2Bucket;
@@ -46,10 +48,11 @@ export default {
       publish: e => ctx.waitUntil(hub.publish(e).catch(err => console.error('live feed publish failed', err))),
       allow: (key, max, windowMs) => hub.allow(key, max, windowMs),
       openStream: r => hub.fetch(r),
-      openGames: (r, table) => {
+      openGames: (r, table, game) => {
         const h = new Headers(r.headers);
         h.set('x-lbs-table', table);
-        return env.ARCADE.get(env.ARCADE.idFromName('arcade')).fetch(new Request(r, { headers: h }));
+        const req = new Request(r, { headers: h });
+        return game === 'space' ? env.SPACE.get(env.SPACE.idFromName('space')).fetch(req) : env.ARCADE.get(env.ARCADE.idFromName('arcade')).fetch(req);
       },
       scheduleRelease: at => ctx.waitUntil(hub.scheduleRelease(at.getTime()).catch(err => console.error('could not schedule a release', err))),
       files: env.FILES ? r2Store(env.FILES) : undefined,
