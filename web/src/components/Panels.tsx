@@ -33,9 +33,17 @@ function Drawer({ title, children, footer, label }: { title: string; label: stri
       el.style.setProperty('--sheet-max', `${vv.height - 24}px`);
     };
     fit();
+    // When the keyboard opens, keep the box being typed in visible inside the sheet.
+    const focusIn = (e: FocusEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.matches('input, textarea, select')) return;
+      setTimeout(() => t.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
+    };
+    el.addEventListener('focusin', focusIn);
     vv.addEventListener('resize', fit);
     vv.addEventListener('scroll', fit);
     return () => {
+      el.removeEventListener('focusin', focusIn);
       vv.removeEventListener('resize', fit);
       vv.removeEventListener('scroll', fit);
     };

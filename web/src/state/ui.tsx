@@ -22,8 +22,25 @@ export function UiProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // While a sheet is open the page behind it must not move. overflow: hidden alone doesn't stop that on iPhones
+  // (Safari, the Google app's browser), where swipes then scrolled the page instead of the sheet. So the page is
+  // pinned in place and put back where it was on close (or at the top, if closing went to a new page).
+  const open_ = panel !== null;
   useEffect(() => {
-    document.documentElement.classList.toggle('locked', panel !== null);
+    if (!open_) return;
+    const y = window.scrollY;
+    const path = window.location.pathname;
+    const body = document.body.style;
+    document.documentElement.classList.add('locked');
+    Object.assign(body, { position: 'fixed', top: `-${y}px`, left: '0', right: '0', width: '100%' });
+    return () => {
+      document.documentElement.classList.remove('locked');
+      Object.assign(body, { position: '', top: '', left: '', right: '', width: '' });
+      window.scrollTo({ top: window.location.pathname === path ? y : 0, left: 0, behavior: 'instant' });
+    };
+  }, [open_]);
+
+  useEffect(() => {
     if (!panel) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setPanel(null);
     window.addEventListener('keydown', onKey);

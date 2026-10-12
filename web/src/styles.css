@@ -1374,6 +1374,8 @@ button.buy:hover {
 .scrim {
   position: fixed;
   inset: 0;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   z-index: 50;
   display: flex;
   align-items: flex-end;
@@ -1389,6 +1391,11 @@ button.buy:hover {
   max-height: calc(100vh - 24px);
   max-height: calc(100dvh - 24px);
   max-height: var(--sheet-max, calc(100dvh - 24px));
+  /* The whole sheet scrolls as one page (title stays on top), so the button at the end can always be reached,
+     however tall the order and the table-code step get. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: var(--paper);
   border: 2px solid var(--ink);
   border-bottom: 0;
@@ -1397,7 +1404,10 @@ button.buy:hover {
   animation: sheet-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .drawer-head {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--paper);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1430,12 +1440,11 @@ button.buy:hover {
   cursor: pointer;
 }
 .drawer-body {
-  flex: 1;
-  overflow-y: auto;
+  flex: none;
   padding: 8px 16px 16px;
-  overscroll-behavior: contain;
 }
 .drawer-foot {
+  flex: none;
   display: grid;
   gap: 12px;
   padding: 14px 16px 16px;
