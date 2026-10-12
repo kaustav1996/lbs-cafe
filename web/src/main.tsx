@@ -1,6 +1,6 @@
-import { StrictMode, Suspense, lazy } from 'react';
+import { StrictMode, Suspense, lazy, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, HashRouter, Route, Routes, useLocation, Link } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Route, Routes, useLocation, useNavigationType, Link } from 'react-router-dom';
 import { CartProvider } from './state/cart';
 import { LiveProvider } from './state/live';
 import { UiProvider } from './state/ui';
@@ -27,6 +27,19 @@ import { Turntable } from './components/Gear';
 // The shareable preview is served from a single page, so it routes with the hash.
 const Router = import.meta.env.MODE === 'preview' ? HashRouter : BrowserRouter;
 
+/**
+ * Every new page opens at the top, so someone who tapped a link at the bottom of a page sees that a new one
+ * opened. Back and forward keep the browser's position. Home and Menu then jump to a section when asked.
+ */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  const how = useNavigationType();
+  useEffect(() => {
+    if (how !== 'POP') window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname, how]);
+  return null;
+}
+
 function NotFound() {
   const loc = useLocation();
   return (
@@ -48,6 +61,7 @@ function NotFound() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Router>
+      <ScrollToTop />
       <Routes>
         <Route
           path="/admin/*"
