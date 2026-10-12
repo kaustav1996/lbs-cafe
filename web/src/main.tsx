@@ -6,7 +6,7 @@ import { LiveProvider } from './state/live';
 import { UiProvider } from './state/ui';
 import { MusicProvider } from './state/music';
 import { GamesProvider } from './state/games';
-import { BottomBar, Footer, Nav, Toast } from './components/Chrome';
+import { BottomBar, Footer, Nav, OrderBar, Toast } from './components/Chrome';
 import { Panels } from './components/Panels';
 import { OrderAlerts } from './components/OrderAlerts';
 import Home from './pages/Home';
@@ -82,6 +82,7 @@ createRoot(document.getElementById('root')!).render(
                     />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
+                    <OrderBar />
                     <BottomBar />
                     <Panels />
                     <Toast />

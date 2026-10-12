@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { SITE } from '../data/site';
 import { useCart } from '../state/cart';
 import { useLive } from '../state/live';
 import { asset, useUi } from '../state/ui';
-import { openState } from '../lib/format';
+import { inr, openState } from '../lib/format';
 import { useMusic } from '../state/music';
 import { useHasCard } from '../lib/card';
 import { useGames } from '../state/games';
@@ -174,6 +174,43 @@ export function BottomBar() {
         </NavLink>
       )}
     </nav>
+  );
+}
+
+/**
+ * Once something is in the order, a bar that's always on screen (above the phone tabs, or bottom right on wide
+ * screens): how many items, the total, and a tap opens the order. Hidden while a drawer is open and on bills.
+ */
+export function OrderBar() {
+  const { count, total } = useCart();
+  const { open, panel } = useUi();
+  const { pathname } = useLocation();
+  const shown = count > 0 && panel === null && !pathname.startsWith('/bill/');
+  // A little bump each time something is added.
+  const [bump, setBump] = useState(0);
+  const last = useRef(count);
+  useEffect(() => {
+    if (count > last.current) setBump(Date.now());
+    last.current = count;
+  }, [count]);
+  useEffect(() => {
+    document.body.classList.toggle('has-orderbar', shown);
+    return () => document.body.classList.remove('has-orderbar');
+  }, [shown]);
+  if (!shown) return null;
+  return (
+    <button key={bump} type="button" className={`orderbar ${bump ? 'is-bump' : ''}`} onClick={() => open('cart')}>
+      <span className="orderbar-icon" aria-hidden="true">
+        <Icon name="bag" />
+      </span>
+      <span className="orderbar-label">
+        View your order
+        <small>
+          {count} {count === 1 ? 'item' : 'items'}, with GST
+        </small>
+      </span>
+      <span className="orderbar-total num">{inr(total)}</span>
+    </button>
   );
 }
 

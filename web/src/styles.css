@@ -4274,3 +4274,92 @@ body.sp-playing {
   min-width: 0;
   padding: 6px 10px;
 }
+
+/* The order bar: always on screen once something is in the order. */
+html {
+  /* No double-tap zoom (tapping + quickly zoomed iPhones and pushed the bars off screen); pinch zoom still works. */
+  touch-action: manipulation;
+}
+body.has-orderbar {
+  padding-bottom: calc(var(--bar-h) + var(--safe-b) + 76px);
+}
+.orderbar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--bar-h) + var(--safe-b) + 10px);
+  z-index: 41;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 16px 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--lime);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  box-shadow: 0 6px 0 var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.orderbar:active {
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 var(--ink);
+}
+.orderbar.is-bump {
+  animation: orderbar-bump 0.35s ease;
+}
+@keyframes orderbar-bump {
+  40% {
+    transform: scale(1.04);
+  }
+}
+.orderbar-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--lime);
+}
+.orderbar-label {
+  display: grid;
+  flex: 1;
+  line-height: 1.2;
+}
+.orderbar-label small {
+  font-weight: 600;
+  font-size: var(--t-sm);
+}
+.orderbar-total {
+  font-size: var(--t-lg);
+}
+@media (min-width: 1000px) {
+  body.has-orderbar {
+    padding-bottom: 90px;
+  }
+  .orderbar {
+    left: auto;
+    right: 24px;
+    bottom: 24px;
+    width: 340px;
+  }
+}
+@media print {
+  .orderbar {
+    display: none !important;
+  }
+}
+/* Toasts sit above the order bar when it's there. */
+body.has-orderbar .toast-slot {
+  bottom: calc(var(--bar-h) + var(--safe-b) + 80px);
+}
+@media (min-width: 1000px) {
+  body.has-orderbar .toast-slot {
+    bottom: 96px;
+  }
+}
