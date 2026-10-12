@@ -13,11 +13,35 @@ import { Boombox, Cassette } from './Gear';
 function Drawer({ title, children, footer, label }: { title: string; label: string; children: ReactNode; footer?: ReactNode }) {
   const { close } = useUi();
   const ref = useRef<HTMLDivElement>(null);
+  const scrim = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[data-autofocus], button, input')?.focus();
+    ref.current?.querySelector<HTMLElement>('[data-autofocus], button, input')?.focus({ preventScroll: true });
+  }, []);
+  // Pin the sheet to the part of the page actually on screen. On iPhones that can differ from the fixed-position
+  // box (toolbars sliding, a zoomed page, the keyboard closing), which left the sheet peeking from below the edge.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const el = scrim.current;
+    if (!vv || !el) return;
+    const fit = () => {
+      el.style.top = `${vv.offsetTop}px`;
+      el.style.left = `${vv.offsetLeft}px`;
+      el.style.width = `${vv.width}px`;
+      el.style.height = `${vv.height}px`;
+      el.style.bottom = 'auto';
+      el.style.right = 'auto';
+      el.style.setProperty('--sheet-max', `${vv.height - 24}px`);
+    };
+    fit();
+    vv.addEventListener('resize', fit);
+    vv.addEventListener('scroll', fit);
+    return () => {
+      vv.removeEventListener('resize', fit);
+      vv.removeEventListener('scroll', fit);
+    };
   }, []);
   return (
-    <div className="scrim" onMouseDown={e => e.target === e.currentTarget && close()}>
+    <div className="scrim" ref={scrim} onMouseDown={e => e.target === e.currentTarget && close()}>
       <div className="drawer" role="dialog" aria-modal="true" aria-label={label} ref={ref}>
         <div className="drawer-head">
           <h2>{title}</h2>

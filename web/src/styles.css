@@ -38,7 +38,7 @@
   --topbar-h: 58px;
   --bar-h: 64px;
   --safe-b: env(safe-area-inset-bottom, 0px);
-  color-scheme: light;
+  color-scheme: only light;
 }
 
 *,
@@ -1386,7 +1386,9 @@ button.buy:hover {
   flex-direction: column;
   width: 100%;
   max-width: 560px;
+  max-height: calc(100vh - 24px);
   max-height: calc(100dvh - 24px);
+  max-height: var(--sheet-max, calc(100dvh - 24px));
   background: var(--paper);
   border: 2px solid var(--ink);
   border-bottom: 0;
