@@ -20,7 +20,7 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   licences: [],
   cafe: {
     name: "LB's Hemp Cafe & Lounge",
-    address: '29 BJ, BJ Block, Sector 2, Bidhannagar, Kolkata, West Bengal 700091',
+    address: '29, BJ Block, Sector 2, Bidhannagar, Kolkata, West Bengal 700091',
     phone: '+91 98754 31882',
     email: 'lbsfrequency@gmail.com',
     gstin: '',
