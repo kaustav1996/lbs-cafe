@@ -1,3 +1,4 @@
+import { sfx } from './sound';
 import { buzz, CanvasGame, PALETTE, W, type CanvasGameDef } from './canvas';
 
 const H = 500;
@@ -103,6 +104,7 @@ export const game: CanvasGameDef<S> = {
   tap(s) {
     if (!s.stuck) return;
     s.stuck = false;
+    sfx('tick');
     const sp = speedFor(s.level);
     const a = -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
     s.vx = Math.cos(a) * sp;
@@ -141,6 +143,7 @@ export const game: CanvasGameDef<S> = {
         s.vx = Math.cos(a) * sp;
         s.vy = Math.sin(a) * sp;
         s.by = PAD_Y - BALL;
+        sfx('bounce');
       }
       for (const b of s.bricks) {
         if (b.hp <= 0) continue;
@@ -151,6 +154,7 @@ export const game: CanvasGameDef<S> = {
         if (Math.abs(s.bx - nx) > Math.abs(s.by - ny)) s.vx = -s.vx;
         else s.vy = -s.vy;
         b.hp--;
+        sfx(b.hp > 0 ? 'bounce' : 'break');
         if (b.hp <= 0) {
           s.score++;
           for (let k = 0; k < 8; k++) s.sparks.push({ x: b.x + BW / 2, y: b.y + BH / 2, vx: (Math.random() - 0.5) * 260, vy: (Math.random() - 0.8) * 220, life: 0.5, color: b.color });
@@ -168,6 +172,7 @@ export const game: CanvasGameDef<S> = {
     if (s.by > H + BALL) {
       s.lives--;
       buzz(90);
+      if (s.lives > 0) sfx('lose');
       if (s.lives <= 0) return false;
       reset(s);
     }

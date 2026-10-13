@@ -4374,3 +4374,6 @@ body.has-orderbar .toast-slot {
     bottom: 96px;
   }
 }
+.game-head .game-sound {
+  margin-left: auto;
+}

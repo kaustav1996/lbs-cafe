@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, type ComponentType } from 'react';
+import { SoundToggle } from '../games/sound';
 import { Link, useParams } from 'react-router-dom';
 import { Footer, Nav } from '../components/Chrome';
 import { Cassette } from '../components/Gear';
@@ -60,6 +61,8 @@ export default function Games() {
                 All games
               </Link>
               <h1>{pick.name}</h1>
+              {/* LB's Space has its own switch on the play screen; Brew Bandits is quiet. */}
+              {pick.id !== 'space' && pick.id !== 'brew' && <SoundToggle />}
             </header>
             <Suspense fallback={<p className="status-meta">Loading the game…</p>}>
               <Game />

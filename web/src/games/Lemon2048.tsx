@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { sfx } from './sound';
 import { readBest, saveBest, useSwipe, type Dir } from './shared';
 
 const SIZE = 4;
@@ -74,14 +75,22 @@ export default function Lemon2048() {
       const next = addTile(n);
       setFresh1(next.findIndex((v, i) => v && !n[i]));
       setBoard(next);
+      sfx(pts > 0 ? 'merge' : 'slide');
+      if (stuck(next)) setTimeout(() => sfx('over'), 150);
       const s = score + pts;
       setScore(s);
       setBest(saveBest('2048', s));
-      if (!won && next.includes(2048)) setWon(true);
+      if (!won && next.includes(2048)) {
+        setWon(true);
+        sfx('perfect');
+      }
       const lv = levelOf(next);
       if (lv > levelOf(board)) {
         saveBest('2048-level', lv);
-        if (lv !== 4) setBanner(Date.now()); // 2048 has its own cover
+        if (lv !== 4) {
+          setBanner(Date.now()); // 2048 has its own cover
+          sfx('level');
+        }
       }
     },
     [board, score, over, won, keepGoing],

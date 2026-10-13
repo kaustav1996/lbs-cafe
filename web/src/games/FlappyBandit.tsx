@@ -1,3 +1,4 @@
+import { sfx } from './sound';
 import { bandit, buzz, CanvasGame, W, type CanvasGameDef } from './canvas';
 
 const H = 520;
@@ -184,6 +185,7 @@ export const game: CanvasGameDef<S> = {
   tap(s) {
     s.vy = -390;
     s.flapAt = s.t;
+    sfx('flap');
   },
   step(s, dt) {
     s.t += dt;
@@ -196,6 +198,7 @@ export const game: CanvasGameDef<S> = {
       if (!t.passed && t.x + TOWER_W < BX - R) {
         t.passed = true;
         s.score++;
+        sfx('point');
         if (s.score % 10 === 0) buzz(40);
       }
     }

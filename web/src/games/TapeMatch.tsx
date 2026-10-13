@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { readBest, saveBest } from './shared';
+import { sfx } from './sound';
 
 const FACES = ['🍋', '☕', '🍕', '🍔', '🥤', '🍟', '🎧', '📼', '🍩', '🧁', '🎸', '🎷', '🎤', '🎹', '🍦'];
 type Card = { id: number; face: string; open: boolean; done: boolean };
@@ -31,13 +32,18 @@ export default function TapeMatch() {
   const [bestLevel, setBestLevel] = useState(() => Math.max(1, readBest('match-level')));
   const done = cards.every(c => c.done);
   const out = !done && spec.limit !== null && moves >= spec.limit && picked.length === 0;
+  useEffect(() => {
+    if (out) sfx('over');
+  }, [out]);
 
   useEffect(() => {
     if (picked.length !== 2) return;
     const [a, b] = picked.map(i => cards[i]);
     const same = a.face === b.face;
+    if (same) sfx('pair');
     const t = setTimeout(
       () => {
+        if (!same) sfx('bad');
         setCards(cs => cs.map((c, i) => (picked.includes(i) ? { ...c, open: same, done: same } : c)));
         setPicked([]);
       },
@@ -51,10 +57,12 @@ export default function TapeMatch() {
     // Best moves is for the first board, so it compares like with like; the best level is kept too.
     if (level === 1) setBest(saveBest('match', moves, true));
     setBestLevel(saveBest('match-level', level + 1));
+    sfx('level');
   }, [done, moves, level]);
 
   const flip = (i: number) => {
     if (out || picked.length === 2 || cards[i].open || cards[i].done) return;
+    sfx('flip');
     setCards(cs => cs.map((c, j) => (j === i ? { ...c, open: true } : c)));
     const next = [...picked, i];
     setPicked(next);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readBest, saveBest, useSwipe, type Dir } from './shared';
+import { sfx } from './sound';
 
 const N = 16; // cells per side
 type P = { x: number; y: number };
@@ -122,6 +123,7 @@ export default function Snake() {
     const body = eats ? g.snake : g.snake.slice(0, -1);
     if (n.x < 0 || n.y < 0 || n.x >= N || n.y >= N || body.some(s => s.x === n.x && s.y === n.y) || g.stools.some(s => s.x === n.x && s.y === n.y)) {
       setState('over');
+      sfx('over');
       setBest(saveBest('snake', g.score));
       saveBest('snake-level', levelOf(g.score));
       try {
@@ -134,6 +136,7 @@ export default function Snake() {
     g.snake = [n, ...body];
     if (eats) {
       g.score += 1;
+      sfx('eat');
       setScore(g.score);
       if (g.score % PER_LEVEL === 0) {
         // Next level: back to the start, new stools, a bit faster.
@@ -143,6 +146,7 @@ export default function Snake() {
         g.stools = stoolsFor(lv);
         setLevel(lv);
         setBanner(Date.now());
+        sfx('level');
         saveBest('snake-level', lv);
         try {
           navigator.vibrate?.([30, 50, 30]);
@@ -170,7 +174,10 @@ export default function Snake() {
   const turn = useCallback(
     (d: Dir) => {
       const g = game.current;
-      if (state === 'ready' || state === 'paused') setState('playing');
+      if (state === 'ready' || state === 'paused') {
+        if (state === 'ready') sfx('start');
+        setState('playing');
+      }
       if (state === 'over') return;
       if (d !== OPP[g.dir]) g.next = d;
     },

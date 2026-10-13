@@ -1,3 +1,4 @@
+import { sfx } from './sound';
 import { buzz, CanvasGame, PALETTE, W, type CanvasGameDef } from './canvas';
 
 const H = 520;
@@ -100,6 +101,7 @@ export const game: CanvasGameDef<S> = {
     if (right - left <= 0) {
       s.bits.push({ x: m.x, y, w: m.w, vy: 0, color: m.color });
       s.over = true;
+      sfx('cut');
       return;
     }
     let placed: Layer;
@@ -109,12 +111,15 @@ export const game: CanvasGameDef<S> = {
       placed = { x: centre, w: m.w, color: m.color };
       s.perfect = s.t;
       buzz(25);
+      sfx('perfect');
     } else {
       placed = { x: left, w: right - left, color: m.color };
+      sfx('cut');
       if (m.x < left) s.bits.push({ x: m.x, y, w: left - m.x, vy: 0, color: m.color });
       if (m.x + m.w > right) s.bits.push({ x: right, y, w: m.x + m.w - right, vy: 0, color: m.color });
     }
     s.stack.push(placed);
+    sfx('drop');
     s.score = s.stack.length - 1;
     s.speed = speedFor(s.score);
     s.dir = s.score % 2 ? -1 : 1;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { isMuted, sfx } from './sound';
 import { readBest, saveBest } from './shared';
 
 const PADS = [
@@ -18,6 +19,7 @@ export default function RecordSimon() {
   const audio = useRef<AudioContext | null>(null);
 
   const beep = (i: number, ms = 320) => {
+    if (isMuted()) return;
     try {
       const ctx = (audio.current ??= new AudioContext());
       void ctx.resume();
@@ -61,6 +63,7 @@ export default function RecordSimon() {
     if (seq[step] !== i) {
       beep(i, 600);
       setPhase('over');
+      sfx('over');
       setBest(saveBest('simon', seq.length - 1));
       try {
         navigator.vibrate?.(150);

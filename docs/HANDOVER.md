@@ -104,6 +104,8 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   Kolkata landmark, swaying towers from level 3); Cup stack every 10 layers (faster, narrower); Record breakout by
   wall; Whack-a-bandit rounds with a target score; Snake every 10 lemons (faster, more stools); Tape match 8/10/12/15
   pairs with move limits; Lemon 2048 by tile goal (512 to 8192); Record Simon by round.
+  Sound effects: `web/src/games/sound.tsx` (Web Audio synth, no files; `sfx('flap')` etc.), one Sound on/off
+  switch in the game header for every single-player game (`lbs.games.muted`), which also silences Simon's notes.
   Multiplayer: Brew Bandits and LB's Space.
 - **LB's card is claimed from a paid bill** (9 Oct 2026, migration 012): no sign-up from the card page any more. The
   guest's bill (/bill/<token>) shows Claim my LB's card once it's paid: the number given at the table (editable)

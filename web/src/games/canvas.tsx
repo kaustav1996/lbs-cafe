@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { asset } from '../state/ui';
 import { readBest, saveBest } from './shared';
+import { sfx } from './sound';
 
 /**
  * A small engine for the canvas mini games: a board of fixed logical size (360 wide) scaled to the screen,
@@ -91,6 +92,7 @@ export function CanvasGame<S>({ game }: { game: CanvasGameDef<S> }) {
           setBest(saveBest(game.id, sc));
           stateRef.current = 'over';
           setState('over');
+          sfx('over');
           buzz(140);
         }
       }
@@ -99,6 +101,7 @@ export function CanvasGame<S>({ game }: { game: CanvasGameDef<S> }) {
         if (lv > shownLevel && stateRef.current === 'playing') {
           setBanner({ n: lv, key: now });
           saveBest(`${game.id}-level`, lv);
+          sfx('level');
           buzz([30, 50, 30]);
         }
         shownLevel = lv;
@@ -128,6 +131,7 @@ export function CanvasGame<S>({ game }: { game: CanvasGameDef<S> }) {
   };
   const start = () => {
     if (stateRef.current === 'over') st.current = game.init();
+    sfx('start');
     setState('playing');
   };
   const down = (e: React.PointerEvent) => {

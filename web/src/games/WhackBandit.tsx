@@ -1,3 +1,4 @@
+import { sfx } from './sound';
 import { bandit, buzz, CanvasGame, W, type CanvasGameDef } from './canvas';
 
 const H = 490;
@@ -47,6 +48,7 @@ export const game: CanvasGameDef<S> = {
   init: () => ({ t: 0, pops: [], next: 0.6, score: 0, floats: [], chappal: null, level: 1, roundPts: 0, roundStart: 0 }),
   tap(s, x, y) {
     s.chappal = { x, y, at: s.t };
+    sfx('slide');
     for (const p of s.pops) {
       if (p.hit >= 0) continue;
       const sp = SPOTS[p.spot];
@@ -57,6 +59,7 @@ export const game: CanvasGameDef<S> = {
       s.roundPts = Math.max(0, s.roundPts + pts);
       s.floats.push({ x: sp.x, y: sp.y - 70, text: pts > 0 ? `+${pts}` : `${pts}`, born: s.t, good: pts > 0 });
       buzz(pts > 0 ? 20 : [40, 30, 40]);
+      sfx(pts < 0 ? 'bad' : pts > 1 ? 'coin' : 'bonk');
       return;
     }
   },
