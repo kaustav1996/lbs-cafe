@@ -8,6 +8,13 @@ import { nextReleaseAt, releaseDue } from './orders.js';
 import { ConsoleMessenger } from './messaging.js';
 import { Arcade } from './games/arcade.js';
 import { Space } from './games/space.js';
+import { pushEvent, type Vapid } from './push.js';
+
+/** Push keys, when both are set. The subject is who push services can contact about this sender. */
+function vapidOf(env: Env): Vapid | undefined {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return undefined;
+  return { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY, subject: 'mailto:lbsfrequency@gmail.com' };
+}
 
 export { Arcade, Space };
 
@@ -24,6 +31,9 @@ export interface Env {
   WHATSAPP_VERIFY_TOKEN?: string;
   /** Meta app secret (App settings, Basic), used to check webhook signatures. Set by Kaustav. */
   WHATSAPP_APP_SECRET?: string;
+  /** Web push (VAPID): the public key is a plain var, the private key a Worker secret. */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
   /** Local development only: print card sign-in codes in the log instead of sending them. */
   CARD_CODES_IN_LOG?: string;
 }
@@ -44,6 +54,7 @@ export default {
     const rt: Runtime = {
       sql,
       jwtSecret: env.JWT_SECRET,
+      vapid: vapidOf(env),
       corsOrigins: env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean),
       publish: e => ctx.waitUntil(hub.publish(e).catch(err => console.error('live feed publish failed', err))),
       allow: (key, max, windowMs) => hub.allow(key, max, windowMs),
@@ -100,7 +111,7 @@ export class LiveHub extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  publish(e: CafeEvent) {
+  async publish(e: CafeEvent) {
     const msg = JSON.stringify(e);
     for (const ws of this.ctx.getWebSockets()) {
       try {
@@ -108,6 +119,18 @@ export class LiveHub extends DurableObject<Env> {
       } catch {
         // Already closing; the admin reconnects on its own.
       }
+    }
+    // And to staff phones, even with the admin closed.
+    const vapid = vapidOf(this.env);
+    if (vapid) await this.push(e, vapid);
+  }
+
+  private async push(e: CafeEvent, vapid: Vapid) {
+    const sql = postgres(this.env.HYPERDRIVE.connectionString, { ...PG_OPTIONS, max: 2 });
+    try {
+      await pushEvent(sql, e, vapid);
+    } finally {
+      await sql.end();
     }
   }
 
@@ -124,7 +147,7 @@ export class LiveHub extends DurableObject<Env> {
       sql,
       jwtSecret: this.env.JWT_SECRET,
       corsOrigins: [],
-      publish: e => this.publish(e),
+      publish: e => this.ctx.waitUntil(this.publish(e)),
       allow: async () => true,
     };
     try {

@@ -34,7 +34,9 @@
     { "tag": "v3", "new_sqlite_classes": ["Space"] }
   ],
   "vars": {
-    "CORS_ORIGINS": "https://lbscafe.com,https://www.lbscafe.com,http://localhost:5173"
+    "CORS_ORIGINS": "https://lbscafe.com,https://www.lbscafe.com,http://localhost:5173",
+    // Web push (staff phone notifications). Public by design; the matching VAPID_PRIVATE_KEY is a Worker secret.
+    "VAPID_PUBLIC_KEY": "BBf5dL2Dmo8E2ShU3F0KDd4uYKw54rw3bd6BVwLshvsXhMlDO6g8LGxbtwhon-XnJu-GNgnG4R5P8oFGLO8pP1I"
   },
   // Cloudflare creates the DNS records and certificates for these. lbscafe.com's nameservers are on Cloudflare.
   "routes": [

@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { errText, ROLE_LABEL, useAuth, useOnEvent, type Role } from './core';
 import { Modal, PageHead, Toggle, toast } from './ui';
 import MusicCard from './MusicCard';
+import { PushPanel } from './push';
 
 interface SettingsShape {
   gst_rate: number;
@@ -25,6 +26,9 @@ export default function Settings() {
     <div className="a-page">
       <PageHead title="Settings" />
       <div className="a-settings">
+        <div className="a-card-panel">
+          <PushPanel />
+        </div>
         <OrderingSettings />
         <LoyaltyCard />
         <LicencesCard />

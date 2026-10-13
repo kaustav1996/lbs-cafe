@@ -69,6 +69,12 @@ wanted a card for the always-on plan; Kaustav chose Cloudflare). Remaining:
   table calls, serving, invoices and payments, bookings; can't move orders to preparing or ready), Server and kitchen
   (both, for quiet days; migration 010) and Manager/Owner (everything). Reports, offers
   and the customer list are managers only. Ready alerts go to servers and managers, not the kitchen.
+- **Staff phone notifications** (13 Oct 2026): add the admin to the Home Screen (iPhone: Safari, Share, Add to Home
+  Screen; Android: Chrome menu, Install app), open it, More (or Settings), Turn on notifications. New orders go
+  to everyone, tables calling, orders ready and booking requests to the floor (not chefs). They arrive with the
+  phone's own notification sound even with the admin closed; tapping one opens the admin. Web push needs iOS
+  16.4+ and only works from the Home Screen app on iPhone. Custom sounds aren't possible for web notifications.
+  A "Turn on" nudge shows at the top of the admin until it's done (or Not now).
 - **LB's Space** (11 Oct 2026): one shared space-shooter map for every table with games open, plus solo against
   bots on the phone. White matter = health and size (bigger ships are slower: top speed ~285 new, ~165 at 300 matter, ~100 at 1000), purple dark matter = weapon power (a shot with none costs
   health), cyan dark energy = boosts and gravity weapons (small ships boost free). Bigger ships eat smaller ones;

@@ -11,6 +11,7 @@ import { getInvoice, invoiceForOrder, payInvoice, publishInvoice, refuseInvoiced
 import { applyInvoiceDiscount, LOYALTY_DEFAULTS, linkInvoice, loyaltySettings, reapplyOpenBills, setManualDiscount, welcomesTaken } from '../loyalty.js';
 import { addLines, addPayment, createOrder, freeTableCheck, refuseHeld, releaseDue, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
 import { menuTree } from './public.js';
+import { sendPush } from '../push.js';
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const LineIn = z.object({ itemId: z.number().int().positive(), optionId: z.number().int().positive(), qty: z.number().int().min(1).max(99) });
@@ -23,6 +24,9 @@ const CHEF_ROUTES: [string, RegExp][] = [
   ['GET', /^\/menus?(\/live|\/\d+)?$/],
   ['PATCH', /^\/items\/\d+$/],
   ['GET', /^\/settings$/],
+  ['GET', /^\/push$/],
+  ['POST', /^\/push(\/test)?$/],
+  ['DELETE', /^\/push$/],
 ];
 /** Where a chef can move an order: back and forth in the kitchen, up to ready. Serving is the floor's job. */
 const KITCHEN_STATUSES = ['new', 'preparing', 'ready'];
@@ -57,6 +61,47 @@ export function adminRoutes() {
     const ok = CHEF_ROUTES.some(([method, re]) => method === c.req.method && re.test(path));
     if (!ok) throw new HttpError(403, 'Kitchen accounts can only see and move orders. Ask a manager.', 'forbidden');
     await next();
+  });
+
+  // ---------- Push notifications (this phone) ----------
+  const PushSub = z.object({
+    endpoint: z.string().url().max(1000).refine(u => u.startsWith('https://'), 'Push endpoints are https'),
+    keys: z.object({ p256dh: z.string().min(80).max(120), auth: z.string().min(16).max(40) }),
+  });
+  app.get('/push', c => c.json({ publicKey: runtime().vapid?.publicKey ?? null }));
+  app.post('/push', async c => {
+    if (!runtime().vapid) throw new HttpError(503, 'Phone notifications aren’t set up on the server yet.', 'push_off');
+    const b = PushSub.parse(await c.req.json());
+    await sql`
+      insert into push_subscriptions (staff_id, endpoint, p256dh, auth, user_agent)
+      values (${c.get('staff').sub}, ${b.endpoint}, ${b.keys.p256dh}, ${b.keys.auth}, ${(c.req.header('user-agent') ?? '').slice(0, 200)})
+      on conflict (endpoint) do update set staff_id = excluded.staff_id, p256dh = excluded.p256dh, auth = excluded.auth`;
+    return c.json({ ok: true });
+  });
+  app.delete('/push', async c => {
+    const b = z.object({ endpoint: z.string().max(1000) }).parse(await c.req.json());
+    await sql`delete from push_subscriptions where endpoint = ${b.endpoint} and staff_id = ${c.get('staff').sub}`;
+    return c.json({ ok: true });
+  });
+  app.post('/push/test', async c => {
+    const v = runtime().vapid;
+    if (!v) throw new HttpError(503, 'Phone notifications aren’t set up on the server yet.', 'push_off');
+    const b = z.object({ endpoint: z.string().max(1000) }).parse(await c.req.json());
+    const [s] = await sql<{ endpoint: string; p256dh: string; auth: string }[]>`
+      select endpoint, p256dh, auth from push_subscriptions where endpoint = ${b.endpoint} and staff_id = ${c.get('staff').sub}`;
+    if (!s) throw new HttpError(404, 'This phone isn’t signed up for notifications. Turn them on again.', 'not_subscribed');
+    let status: number;
+    try {
+      status = await sendPush(s, { title: 'Notifications are on', body: 'New orders, tables calling and orders ready will show up here.', tag: 'test', url: '/admin' }, v);
+    } catch {
+      throw new HttpError(502, 'Couldn’t reach the phone’s notification service. Check the internet connection and try again.', 'push_failed');
+    }
+    if (status === 404 || status === 410) {
+      await sql`delete from push_subscriptions where endpoint = ${b.endpoint}`;
+      throw new HttpError(410, 'This phone stopped accepting notifications. Turn them on again.', 'gone');
+    }
+    if (status >= 300) throw new HttpError(502, `The phone’s push service said no (${status}). Try again in a minute.`, 'push_failed');
+    return c.json({ ok: true });
   });
 
   // ---------- Orders ----------

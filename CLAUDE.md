@@ -25,6 +25,10 @@ repo owner (Kaustav). Read `docs/HANDOVER.md` for status, decisions and the next
     override prices. Exactly one menu is live; guests, pricing and staff order screens use it (`menuTree('live')`).
   - LB's card: `src/loyalty.ts` (the bill's one discount, stamps on payment, linking), `src/routes/card.ts` (guest card),
     `src/messaging.ts` (WhatsApp sender; none in production yet, `CARD_CODES_IN_LOG=yes` in `.dev.vars` prints codes locally).
+  - Staff phone notifications: `src/push.ts` (Web Push, RFC 8291/8292 with WebCrypto; `pushMessage()` decides who
+    hears what). LiveHub pushes every event to subscribed staff phones; subscriptions in `push_subscriptions`.
+    VAPID_PUBLIC_KEY is a var in wrangler.jsonc, VAPID_PRIVATE_KEY a Worker secret (and in `.dev.vars` locally).
+    Web side: `web/public/admin.webmanifest`, `web/public/admin-sw.js`, `web/src/admin/push.tsx`.
   - `test/flow.test.ts` end-to-end tests against a real Postgres (Hono app on Node). `scripts/smoke.ts` checks a running Worker.
 - `scripts/build-menu.mjs` regenerates `web/src/data/menu.ts` and `api/seed/menu.json` from `data/old-site-scrape.json`.
 

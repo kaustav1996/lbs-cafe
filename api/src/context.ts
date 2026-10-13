@@ -41,6 +41,8 @@ export interface Runtime {
   whatsapp?: { verifyToken?: string; appSecret?: string };
   /** WhatsApp sender for card sign-in codes. Missing until WhatsApp is set up: card sign-in is then off. */
   messenger?: Messenger;
+  /** Web push to staff phones (VAPID keys). Missing where push isn't set up. */
+  vapid?: import('./push.js').Vapid;
   /** Document storage. Missing where no bucket is bound. */
   files?: FileStore;
 }

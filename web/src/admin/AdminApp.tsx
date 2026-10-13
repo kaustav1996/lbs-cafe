@@ -14,9 +14,11 @@ import Offers from './Offers';
 import Settings from './Settings';
 import ReadyAlerts from './ReadyAlerts';
 import Kitchen from './Kitchen';
+import { PushNudge, PushPanel, useAdminApp } from './push';
 import './admin.css';
 
 export default function AdminApp() {
+  useAdminApp();
   useEffect(() => {
     document.title = "LB's admin";
     document.body.classList.add('admin-body');
@@ -190,6 +192,7 @@ function Shell() {
                 {me?.name}
                 <small>{ROLE_LABEL[role]}</small>
               </p>
+              <PushPanel />
               {extra.length > 0 && (
                 <ul>
                   {extra.map(n => (
@@ -244,6 +247,7 @@ function Shell() {
         </div>
       </aside>
       <main className="a-main">
+        <PushNudge />
         {!chef && <ReadyAlerts />}
         <Routes>
           <Route index element={chef ? <Kitchen /> : <Orders />} />
