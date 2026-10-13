@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { HAS_API } from '../lib/api';
 import { asset } from '../state/ui';
 import { AuthProvider, ROLE_LABEL, StreamProvider, errText, useAuth, useOnEvent, useStream, type Role } from './core';
@@ -117,6 +117,18 @@ function Shell() {
   const chef = role === 'chef';
   const nav = NAV.filter(n => n.roles.includes(role));
   const allowed = (path: string) => nav.some(n => n.to === `/admin/${path}`);
+  // Phones: the first four screens in the bottom bar, the rest (and signing out) under More.
+  // Ranked by how often they're used on the floor; the top four go in the bar.
+  const PHONE_TABS = 4;
+  const RANK = ['/admin', '/admin/pos', '/admin/kitchen', '/admin/menu', '/admin/bookings'];
+  const rank = (to: string) => (RANK.includes(to) ? RANK.indexOf(to) : RANK.length);
+  const phone = [...nav].sort((a, b) => rank(a.to) - rank(b.to));
+  const tabs = new Set(phone.slice(0, PHONE_TABS).map(n => n.to));
+  const extra = phone.slice(PHONE_TABS);
+  const [more, setMore] = useState(false);
+  const loc = useLocation();
+  useEffect(() => setMore(false), [loc.pathname]);
+  const extraActive = extra.some(n => (n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to)));
 
   useOnEvent(['order.created'], e => {
     chime('order');
@@ -149,7 +161,14 @@ function Shell() {
         </div>
         <nav className="a-nav" aria-label="Admin">
           {nav.map(n => (
-            <NavLink key={n.to} to={n.to} end={n.end} onClick={() => n.to.endsWith('bookings') && setBookingBadge(0)}>
+            <NavLink
+              key={n.to}
+              to={n.to}
+              end={n.end}
+              className={tabs.has(n.to) ? undefined : 'a-nav-extra'}
+              style={{ ['--phone-order' as string]: rank(n.to) }}
+              onClick={() => n.to.endsWith('bookings') && setBookingBadge(0)}
+            >
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
                 <path d={n.icon} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -157,11 +176,59 @@ function Shell() {
               {n.to.endsWith('bookings') && bookingBadge > 0 && <b className="a-badge">{bookingBadge}</b>}
             </NavLink>
           ))}
+          <button type="button" className={`a-nav-more ${more || extraActive ? 'active' : ''}`} aria-expanded={more} onClick={() => setMore(m => !m)}>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path d="M5 12h.01M12 12h.01M19 12h.01" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+            <span>More</span>
+          </button>
         </nav>
+        {more && (
+          <div className="a-more-scrim" onClick={e => e.target === e.currentTarget && setMore(false)}>
+            <div className="a-more" role="dialog" aria-modal="true" aria-label="More">
+              <p className="a-more-me">
+                {me?.name}
+                <small>{ROLE_LABEL[role]}</small>
+              </p>
+              {extra.length > 0 && (
+                <ul>
+                  {extra.map(n => (
+                    <li key={n.to}>
+                      <NavLink to={n.to} end={n.end}>
+                        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                          <path d={n.icon} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        {n.label}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="a-more-foot">
+                <button type="button" className="a-btn a-btn-block" onClick={signOut}>
+                  Sign out
+                </button>
+                <button type="button" className="a-btn a-btn-ghost a-btn-block" onClick={() => setMore(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="a-side-foot">
-          <button type="button" className={`a-sound ${soundOn ? 'on' : ''}`} onClick={() => setSoundOn(!soundOn)}>
+          <button type="button" className={`a-sound ${soundOn ? 'on' : ''}`} aria-pressed={soundOn} onClick={() => setSoundOn(!soundOn)}>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path
+                d={soundOn ? 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0' : 'M6 8a6 6 0 0 1 9.3-5M18 8c0 7 3 9 3 9H9M6.3 13c-.6 3-3.3 4-3.3 4h4M10.3 21a1.9 1.9 0 0 0 3.4 0M3 3l18 18'}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
             <span className="a-wide">{soundOn ? 'Sound and alerts on' : 'Turn on sound and alerts'}</span>
-            <span className="a-narrow">{soundOn ? 'Sound on' : 'Turn on sound'}</span>
+            <span className="a-narrow">{soundOn ? 'Alerts on' : 'Alerts off'}</span>
           </button>
           <p className={`a-conn ${connected ? 'ok' : ''}`}>
             <i aria-hidden="true" />
@@ -171,7 +238,7 @@ function Shell() {
             {me?.name}
             <small>{ROLE_LABEL[role]}</small>
           </p>
-          <button type="button" className="a-link" onClick={signOut}>
+          <button type="button" className="a-link a-signout" onClick={signOut}>
             Sign out
           </button>
         </div>

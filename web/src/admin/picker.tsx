@@ -72,7 +72,6 @@ export function ItemPicker({ menu, onPick }: { menu: ACategory[]; onPick: (l: Om
                 key={o.id}
                 type="button"
                 className={`a-pick ${i.available ? '' : 'out'}`}
-                style={{ borderLeftColor: i.color }}
                 onClick={() => onPick({ itemId: i.id, optionId: o.id, name: i.name, option: o.label, diet: o.diet, price: o.price_paise })}
               >
                 <span className="a-pick-name">

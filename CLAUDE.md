@@ -10,6 +10,7 @@ repo owner (Kaustav). Read `docs/HANDOVER.md` for status, decisions and the next
   - `src/admin/` the admin: `core.tsx` (auth, live event stream, helpers), `ui.tsx`, one file per screen.
   - `src/state/live.tsx` loads menu + settings from the API, falls back to `src/data/menu.ts` (generated).
   - `src/styles.css` customer design tokens; `src/admin/admin.css` admin styles. Plain CSS, no Tailwind.
+    Design rules (admin colour roles, one lime action per area, phone layout) are in `docs/DESIGN.md`; who it's for in `docs/PRODUCT.md`.
 - `api/` — Hono + TypeScript + `postgres` (porsager) on a Cloudflare Worker (`wrangler.jsonc`, entry `src/worker.ts`).
   Database is Supabase Postgres via Hyperdrive. The same Worker serves `web/dist`.
   - `src/context.ts` gives each request its own DB client; `sql` in `src/db.ts` resolves to it.

@@ -57,9 +57,14 @@ export default function MenuAdmin() {
         )}
       </PageHead>
       {menus && <MenuBar menus={menus} selected={selected} onSelect={setSelected} onChanged={() => void refresh()} />}
-      <p className="a-muted">
-        The first switch is stock: turn it off when a dish runs out and it shows as sold out everywhere straight away.
-        {detail && ` The second puts a dish on ${detail.name} or takes it off.`} {soldOut.length > 0 && <b>{soldOut.length} sold out right now.</b>}
+      <p className="a-hint">
+        Turn off <b>In stock</b> when a dish runs out: guests see it as sold out straight away.
+        {soldOut.length > 0 && (
+          <>
+            {' '}
+            <b className="a-soldout-count">{soldOut.length} sold out right now.</b>
+          </>
+        )}
       </p>
       {error && <p className="a-error">{error}</p>}
       {!menu && !error && <p className="a-muted">Loading menu…</p>}
@@ -77,7 +82,7 @@ export default function MenuAdmin() {
               </span>
               {can('manager') && (
                 <>
-                  <button type="button" className="a-link" onClick={() => setEditingCat(c)}>
+                  <button type="button" className="a-btn a-btn-sm a-btn-ghost" onClick={() => setEditingCat(c)}>
                     Edit section
                   </button>
                   <button type="button" className="a-btn a-btn-sm" onClick={() => setEditing({ categoryId: c.id })}>
@@ -87,21 +92,15 @@ export default function MenuAdmin() {
               )}
             </header>
             <ul className={detail ? 'a-menu-items with-menu' : 'a-menu-items'}>
-              {detail && items.length > 0 && (
-                <li className="a-menu-head" aria-hidden="true">
-                  <span>In stock</span>
-                  <span>On {detail.name}</span>
-                </li>
-              )}
               {items.map(i => (
                 <li key={i.id} className={`${i.active ? '' : 'hidden'} ${i.available ? '' : 'out'} ${detail && !onMenu.has(i.id) ? 'offmenu' : ''}`}>
-                  <Toggle id={`av-${i.id}`} checked={i.available} onChange={() => toggleAvailable(i)} label={<span className="a-sr">In stock</span>} />
+                  <Toggle id={`av-${i.id}`} checked={i.available} onChange={() => toggleAvailable(i)} label={<small className="a-toggle-cap">In stock</small>} />
                   {detail && (
                     <Toggle
                       id={`on-${i.id}`}
                       checked={onMenu.has(i.id)}
                       onChange={() => (can('manager') ? void toggleOnMenu(i) : toast('Only a manager can change what’s on a menu.', 'bad'))}
-                      label={<span className="a-sr">On {detail.name}</span>}
+                      label={<small className="a-toggle-cap">On {detail.name}</small>}
                     />
                   )}
                   <span className="a-menu-name">
@@ -109,6 +108,7 @@ export default function MenuAdmin() {
                     {!i.active && <span className="a-tag">Hidden</span>}
                     {i.featured && <span className="a-tag gold">Featured</span>}
                     {detail && !onMenu.has(i.id) && <span className="a-tag">Not on {detail.name}</span>}
+                    {i.description && <small className="a-menu-desc">{i.description}</small>}
                   </span>
                   <span className="a-menu-opts">
                     {i.options
@@ -133,11 +133,11 @@ export default function MenuAdmin() {
                   {can('manager') && (
                     <span className="a-menu-links">
                       {detail && onMenu.has(i.id) && (
-                        <button type="button" className="a-link" onClick={() => setPricing(i)}>
+                        <button type="button" className="a-btn a-btn-sm" onClick={() => setPricing(i)}>
                           Price on {detail.name}
                         </button>
                       )}
-                      <button type="button" className="a-link" onClick={() => setEditing({ item: i, categoryId: c.id })}>
+                      <button type="button" className="a-btn a-btn-sm" onClick={() => setEditing({ item: i, categoryId: c.id })}>
                         Edit
                       </button>
                     </span>
@@ -156,6 +156,9 @@ export default function MenuAdmin() {
     </div>
   );
 }
+
+/** Room for a line or two under the dish name. */
+const DESC_MAX = 160;
 
 interface OptDraft { id?: number; label: string; diet: string; price: string }
 
@@ -216,8 +219,18 @@ function ItemEditor({ menu, menuId, item, categoryId, onClose, onSaved }: { menu
           <input className="a-input" value={name} onChange={e => setName(e.target.value)} data-autofocus />
         </label>
         <label className="a-field">
-          <span>Description (optional)</span>
-          <textarea className="a-input" rows={2} value={description} onChange={e => setDescription(e.target.value)} placeholder="What's in it, in a line" />
+          <span>Short description (optional)</span>
+          <textarea
+            className="a-input"
+            rows={3}
+            maxLength={DESC_MAX}
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="For example: double espresso over hemp milk, with a little cardamom"
+          />
+          <small className="a-field-note">
+            Guests see this under the dish name on the menu. Keep it to a line or two. {description.length} of {DESC_MAX}
+          </small>
         </label>
         <label className="a-field">
           <span>Section</span>

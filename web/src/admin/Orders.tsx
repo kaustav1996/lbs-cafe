@@ -124,7 +124,7 @@ export default function Orders() {
           </button>
         </div>
         {view === 'day' && <input className="a-input a-input-date" type="date" value={day} max={todayIST()} onChange={e => setDay(e.target.value)} aria-label="Day" />}
-        <Link to="/admin/pos" className="a-btn a-btn-primary">
+        <Link to="/admin/pos" className="a-btn">
           New order
         </Link>
       </PageHead>

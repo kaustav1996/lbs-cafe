@@ -1,33 +1,67 @@
-/* LB's admin: the cafe's night palette, tuned for a counter screen in a dim room.
-   Lemon marks actions and live data; everything else stays quiet. */
+/* LB's admin, a work tool used mostly on phones. Follows the phone's light or dark setting, built from LB's ink,
+   paper and lime. Lime fills the one main action on a screen (and urgent alerts); status has its own colours:
+   amber = preparing or needs attention, green = ready or done, red = problems, cyan = a guest is calling.
+   See docs/DESIGN.md. */
 .admin-body {
-  --a-bg: #05191c;
-  --a-panel: #0a2629;
-  --a-raised: #10333a;
-  --a-line: #1f4d53;
-  --a-ink: #eefcfd;
-  --a-muted: #a0c8cb;
+  --a-bg: #f3f3ef;
+  --a-panel: #ffffff;
+  --a-raised: #f8f8f5;
+  --a-line: #e1e1da;
+  --a-line-strong: #c6c6bd;
+  --a-ink: #131313;
+  --a-muted: #5b5b55;
   --a-lemon: #d0ff00;
-  --a-amber: #00bcc8;
-  --a-good: #3fd17c;
-  --a-bad: #ff6b6b;
+  --a-on-accent: #111111;
+  --a-accent-text: #4b6b00;
+  --a-accent-soft: #f1ffc2;
+  --a-amber: #b25e00;
+  --a-amber-soft: #fff3e3;
+  --a-info: #00808a;
+  --a-info-soft: #e3f7f8;
+  --a-good: #1d8a4b;
+  --a-bad: #c4302b;
+  --a-bad-soft: #fde9e8;
   --a-veg: #18a33f;
   --a-nonveg: #c2462b;
+  --a-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
   background: var(--a-bg);
   color: var(--a-ink);
   font-size: 15px;
-  color-scheme: dark;
+  line-height: 1.45;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  .admin-body {
+    --a-bg: #0e0f11;
+    --a-panel: #17181b;
+    --a-raised: #1f2125;
+    --a-line: #2c2e33;
+    --a-line-strong: #43464d;
+    --a-ink: #f1f1ec;
+    --a-muted: #a6a69e;
+    --a-accent-text: #d0ff00;
+    --a-accent-soft: #2a3300;
+    --a-amber: #ffb04d;
+    --a-amber-soft: #33240f;
+    --a-info: #4fd1da;
+    --a-info-soft: #0f2c2f;
+    --a-good: #4fcf88;
+    --a-bad: #ff7b74;
+    --a-bad-soft: #3a1714;
+    --a-shadow: none;
+    color-scheme: dark;
+  }
 }
 .admin-boot {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  color: #a0c8cb;
-  background: #05191c;
+  color: var(--a-muted);
+  background: var(--a-bg);
 }
 .a-brand {
   font-family: var(--font-display);
-  color: var(--a-lemon);
+  color: var(--a-ink);
   font-size: 1.6rem;
   line-height: 1;
   margin: 0;
@@ -41,9 +75,9 @@
   margin: 0;
 }
 .a-error {
-  color: #ffd2d2;
-  background: rgba(255, 107, 107, 0.14);
-  border: 1px solid rgba(255, 107, 107, 0.5);
+  color: var(--a-bad);
+  background: var(--a-bad-soft);
+  border: 1px solid var(--a-bad);
   border-radius: 10px;
   padding: 10px 12px;
   margin: 0;
@@ -62,7 +96,7 @@
   display: grid;
   place-items: center;
   padding: 16px;
-  background: radial-gradient(80% 60% at 50% 0%, #10333a, #05191c);
+  background: var(--a-bg);
 }
 .a-login-card {
   width: min(380px, 100%);
@@ -117,13 +151,17 @@
   background: var(--a-raised);
 }
 .a-nav a.active {
-  color: var(--a-bg);
+  color: var(--a-on-accent);
   background: var(--a-lemon);
+}
+/* More is only for phones (laptops see every screen in the sidebar). */
+.a-nav-more {
+  display: none;
 }
 .a-badge {
   margin-left: auto;
-  background: var(--a-amber);
-  color: #000;
+  background: var(--a-bad);
+  color: #fff;
   border-radius: 999px;
   font-size: 12px;
   min-width: 20px;
@@ -138,18 +176,21 @@
   font-size: 13px;
 }
 .a-sound {
-  border: 1px dashed var(--a-line);
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--a-line-strong);
+  background: var(--a-panel);
   border-radius: 10px;
   padding: 8px 10px;
-  color: var(--a-ink);
+  color: var(--a-amber);
   cursor: pointer;
   text-align: left;
-  font-weight: 600;
+  font: inherit;
+  font-weight: 700;
 }
 .a-sound.on {
-  border-style: solid;
-  border-color: var(--a-good);
+  color: var(--a-good);
 }
 .a-conn {
   margin: 0;
@@ -166,7 +207,6 @@
 }
 .a-conn.ok i {
   background: var(--a-good);
-  box-shadow: 0 0 0 3px rgba(63, 209, 124, 0.2);
 }
 .a-me {
   margin: 0;
@@ -215,8 +255,8 @@
   min-height: 40px;
   padding: 0 16px;
   border-radius: 10px;
-  border: 1px solid var(--a-line);
-  background: var(--a-raised);
+  border: 1px solid var(--a-line-strong);
+  background: var(--a-panel);
   color: var(--a-ink);
   font-weight: 700;
   font-size: 14px;
@@ -225,7 +265,14 @@
   white-space: nowrap;
 }
 .a-btn:hover {
-  border-color: var(--a-muted);
+  border-color: var(--a-ink);
+}
+.a-btn:focus-visible,
+.a-link:focus-visible,
+.a-nav a:focus-visible,
+.a-nav-more:focus-visible {
+  outline: 2px solid var(--a-accent-text);
+  outline-offset: 2px;
 }
 .a-btn:disabled {
   opacity: 0.5;
@@ -233,7 +280,7 @@
 }
 .a-btn-primary {
   background: var(--a-lemon);
-  color: #05191c;
+  color: var(--a-on-accent);
   border-color: var(--a-lemon);
 }
 .a-btn-primary:hover {
@@ -242,10 +289,11 @@
 .a-btn-danger {
   background: var(--a-bad);
   border-color: var(--a-bad);
-  color: #05191c;
+  color: var(--a-on-accent);
 }
 .a-btn-ghost {
   background: transparent;
+  border-color: transparent;
 }
 .a-btn-sm {
   min-height: 34px;
@@ -263,7 +311,7 @@
   background: none;
   border: 0;
   padding: 0;
-  color: var(--a-lemon);
+  color: var(--a-accent-text);
   cursor: pointer;
   font-weight: 600;
   text-decoration: underline;
@@ -281,17 +329,17 @@
   cursor: pointer;
 }
 .a-input {
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 10px;
-  border: 1px solid var(--a-line);
-  background: var(--a-bg);
+  border: 1px solid var(--a-line-strong);
+  background: var(--a-panel);
   color: var(--a-ink);
   padding: 8px 12px;
   font-size: 15px;
   min-width: 0;
 }
 .a-input:focus {
-  outline: 2px solid var(--a-lemon);
+  outline: 2px solid var(--a-accent-text);
   outline-offset: 1px;
 }
 .a-input-date {
@@ -350,7 +398,7 @@ textarea.a-input {
 }
 .a-seg {
   display: inline-flex;
-  background: var(--a-bg);
+  background: var(--a-raised);
   border: 1px solid var(--a-line);
   border-radius: 10px;
   padding: 3px;
@@ -368,9 +416,9 @@ textarea.a-input {
   white-space: nowrap;
 }
 .a-seg button.on {
-  background: var(--a-raised);
+  background: var(--a-panel);
   color: var(--a-ink);
-  box-shadow: inset 0 0 0 1px var(--a-line);
+  box-shadow: 0 0 0 1px var(--a-line-strong);
 }
 .a-seg-full {
   display: flex;
@@ -396,7 +444,7 @@ textarea.a-input {
   width: 42px;
   height: 24px;
   border-radius: 12px;
-  background: var(--a-line);
+  background: var(--a-line-strong);
   position: relative;
   flex: none;
   transition: background 0.15s;
@@ -409,7 +457,8 @@ textarea.a-input {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--a-ink);
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
   transition: transform 0.15s;
 }
 .a-toggle input:checked + .a-switch {
@@ -419,7 +468,7 @@ textarea.a-input {
   transform: translateX(18px);
 }
 .a-toggle input:focus-visible + .a-switch {
-  outline: 2px solid var(--a-lemon);
+  outline: 2px solid var(--a-accent-text);
   outline-offset: 2px;
 }
 .a-tag {
@@ -434,8 +483,8 @@ textarea.a-input {
   text-transform: capitalize;
 }
 .a-tag.gold {
-  border-color: var(--a-lemon);
-  color: var(--a-lemon);
+  border-color: var(--a-accent-text);
+  color: var(--a-accent-text);
 }
 .a-diet {
   display: inline-block;
@@ -472,12 +521,12 @@ textarea.a-input {
   text-align: center;
 }
 .a-empty a {
-  color: var(--a-lemon);
+  color: var(--a-accent-text);
 }
 .a-banner {
   margin: 0;
-  background: rgba(208, 255, 0, 0.12);
-  border: 1px solid rgba(208, 255, 0, 0.45);
+  background: var(--a-accent-soft);
+  border: 1px solid var(--a-line-strong);
   border-radius: 12px;
   padding: 12px 14px;
   font-weight: 600;
@@ -498,11 +547,11 @@ textarea.a-input {
 }
 .a-toast {
   background: var(--a-ink);
-  color: #05191c;
+  color: var(--a-bg);
   padding: 12px 16px;
   border-radius: 12px;
   font-weight: 700;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
   border-left: 6px solid var(--a-good);
 }
 .a-toast.bad {
@@ -514,7 +563,7 @@ textarea.a-input {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(2, 14, 16, 0.7);
+  background: rgb(0 0 0 / 0.5);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -572,13 +621,14 @@ textarea.a-input {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(0, 188, 200, 0.15);
-  border: 1px solid var(--a-amber);
+  background: var(--a-info-soft);
+  border: 1px solid var(--a-info);
   border-radius: 12px;
   padding: 8px 8px 8px 14px;
 }
 .a-call small {
   color: var(--a-muted);
+  white-space: nowrap;
 }
 .a-board {
   display: grid;
@@ -597,32 +647,40 @@ textarea.a-input {
   }
 }
 .a-col {
-  background: var(--a-panel);
-  border: 1px solid var(--a-line);
-  border-radius: 14px;
-  padding: 12px;
+  padding: 0;
   display: grid;
   gap: 10px;
   min-width: 0;
 }
 .a-col h2 {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   display: flex;
-  justify-content: space-between;
-  color: var(--a-muted);
+  align-items: center;
+  gap: 8px;
+  color: var(--a-ink);
+}
+.a-col h2::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--a-line-strong);
+}
+.a-col h2 span {
+  margin-left: auto;
 }
 .a-col h2 span {
   color: var(--a-ink);
 }
-.a-col-new {
-  border-top: 3px solid var(--a-lemon);
+.a-col-new h2::before {
+  background: var(--a-ink);
 }
-.a-col-preparing {
-  border-top: 3px solid var(--a-amber);
+.a-col-preparing h2::before {
+  background: var(--a-amber);
 }
-.a-col-ready {
-  border-top: 3px solid var(--a-good);
+.a-col-ready h2::before {
+  background: var(--a-good);
 }
 .a-col-empty {
   color: var(--a-muted);
@@ -630,14 +688,16 @@ textarea.a-input {
   font-size: 13px;
 }
 .a-card {
-  background: var(--a-raised);
+  background: var(--a-panel);
   border: 1px solid var(--a-line);
   border-radius: 12px;
+  box-shadow: var(--a-shadow);
   overflow: hidden;
 }
+/* Waiting over 15 minutes: an amber edge all round (a status, so it earns the colour). */
 .a-card.late {
   border-color: var(--a-amber);
-  box-shadow: 0 0 0 1px var(--a-amber);
+  background: linear-gradient(var(--a-amber-soft), var(--a-amber-soft)) top / 100% 4px no-repeat, var(--a-panel);
 }
 .a-card-main {
   display: grid;
@@ -664,7 +724,12 @@ textarea.a-input {
 .a-card-main header small {
   margin-left: auto;
   color: var(--a-muted);
+  font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
+}
+.a-card.late .a-card-main header small {
+  color: var(--a-amber);
 }
 .a-card-main ul {
   margin: 0;
@@ -681,7 +746,10 @@ textarea.a-input {
 }
 .a-card-note {
   margin: 0;
-  color: var(--a-lemon);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--a-amber-soft);
+  color: var(--a-ink);
   font-weight: 600;
 }
 .a-card-main footer {
@@ -803,13 +871,13 @@ textarea.a-input {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--a-bg);
+  background: var(--a-panel);
   border: 1px solid var(--a-line);
   border-radius: 999px;
 }
 .a-step button {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   border: 0;
   background: transparent;
   color: var(--a-ink);
@@ -825,7 +893,7 @@ textarea.a-input {
   text-align: center;
 }
 .a-bill {
-  background: var(--a-bg);
+  background: var(--a-raised);
   border: 1px solid var(--a-line);
   border-radius: 12px;
   padding: 14px;
@@ -886,18 +954,20 @@ textarea.a-input {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 2px 2px 6px;
+  scrollbar-width: none;
 }
 .a-chips button {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--a-line);
-  background: transparent;
+  min-height: 38px;
+  border: 1px solid var(--a-line-strong);
+  background: var(--a-panel);
   color: var(--a-ink);
   border-radius: 999px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
@@ -929,8 +999,8 @@ textarea.a-input {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--a-line);
-  border-left: 5px solid var(--a-lemon);
-  background: var(--a-raised);
+  background: var(--a-panel);
+  box-shadow: var(--a-shadow);
   color: var(--a-ink);
   cursor: pointer;
   font-weight: 650;
@@ -944,7 +1014,7 @@ textarea.a-input {
   font-weight: 500;
 }
 .a-pick-price {
-  color: var(--a-lemon);
+  color: var(--a-ink);
   font-weight: 800;
 }
 .a-pick.out {
@@ -980,17 +1050,17 @@ textarea.a-input {
   gap: 6px;
 }
 .a-tables button {
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 8px;
-  border: 1px solid var(--a-line);
-  background: var(--a-bg);
+  border: 1px solid var(--a-line-strong);
+  background: var(--a-panel);
   color: var(--a-ink);
   font-weight: 800;
   cursor: pointer;
 }
 .a-tables button.on {
   background: var(--a-lemon);
-  color: #05191c;
+  color: var(--a-on-accent);
   border-color: var(--a-lemon);
 }
 
@@ -1117,7 +1187,7 @@ textarea.a-input {
   border-radius: 12px;
 }
 .a-book.pending {
-  border-color: var(--a-lemon);
+  border-color: var(--a-amber);
 }
 .a-book.cancelled,
 .a-book.rejected,
@@ -1147,8 +1217,8 @@ textarea.a-input {
   white-space: nowrap;
 }
 .a-book-status.pending {
-  color: var(--a-lemon);
-  border-color: var(--a-lemon);
+  color: var(--a-amber);
+  border-color: var(--a-amber);
 }
 .a-book-status.confirmed,
 .a-book-status.seated {
@@ -1252,7 +1322,7 @@ textarea.a-input {
   stroke: var(--a-line);
 }
 .a-chart .a-bar {
-  fill: var(--a-lemon);
+  fill: var(--a-accent-text);
   opacity: 0.85;
 }
 .a-chart .a-bar.on {
@@ -1274,7 +1344,7 @@ textarea.a-input {
   top: -6px;
   transform: translate(-50%, -100%);
   background: var(--a-ink);
-  color: #05191c;
+  color: var(--a-bg);
   padding: 6px 10px;
   border-radius: 8px;
   font-size: 12px;
@@ -1310,7 +1380,7 @@ textarea.a-input {
 .a-hbar-track i {
   display: block;
   height: 100%;
-  background: var(--a-lemon);
+  background: var(--a-accent-text);
   border-radius: 0 4px 4px 0;
 }
 .a-hbar-val {
@@ -1509,7 +1579,7 @@ textarea.a-input {
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: 0.18em;
-  color: var(--a-lemon);
+  color: var(--a-accent-text);
   min-width: 4.5ch;
 }
 .a-tablelist-seats {
@@ -1553,12 +1623,12 @@ textarea.a-input {
   padding-bottom: 10px;
 }
 .a-menubar-state.live {
-  color: var(--a-lemon);
+  color: var(--a-accent-text);
   font-weight: 700;
 }
 /* With a menu selected each row has two switches: stock, then on/off the menu. */
 .a-menu-items.with-menu li {
-  grid-template-columns: 56px 56px minmax(0, 1fr) auto auto;
+  grid-template-columns: 64px 64px minmax(0, 1fr) auto auto;
 }
 .a-menu-items li.a-menu-head {
   border-top: 0;
@@ -1577,7 +1647,7 @@ textarea.a-input {
 }
 @media (max-width: 760px) {
   .a-menu-items.with-menu li {
-    grid-template-columns: 56px 56px minmax(0, 1fr);
+    grid-template-columns: 64px 64px minmax(0, 1fr);
   }
   .a-menu-items.with-menu .a-menu-opts,
   .a-menu-items.with-menu .a-menu-links {
@@ -1618,7 +1688,7 @@ textarea.a-input {
   color: var(--a-good);
 }
 .a-offer-status.scheduled {
-  color: var(--a-amber);
+  color: var(--a-info);
 }
 .a-qr-one {
   display: grid;
@@ -1660,7 +1730,7 @@ textarea.a-input {
   padding: 12px 14px;
   border-radius: 10px;
   background: var(--a-lemon);
-  color: #05191c;
+  color: var(--a-on-accent);
   font-size: 16px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
 }
@@ -1670,13 +1740,13 @@ textarea.a-input {
 }
 .a-ready-row .a-btn:not(.a-btn-primary) {
   background: transparent;
-  color: #05191c;
-  border-color: #05191c;
+  color: var(--a-on-accent);
+  border-color: var(--a-on-accent);
 }
 .a-ready-row .a-btn-primary {
-  background: #05191c;
+  background: #111;
   color: var(--a-lemon);
-  border-color: #05191c;
+  border-color: #111;
 }
 
 /* Kitchen screen: bigger type, read from across the pass. */
@@ -1710,7 +1780,8 @@ textarea.a-input {
 @media (max-width: 900px) {
   .admin-body {
     --a-top-h: 56px;
-    --a-nav-h: calc(62px + env(safe-area-inset-bottom));
+    --a-nav-h: calc(64px + env(safe-area-inset-bottom));
+    font-size: 16px;
   }
   .a-shell {
     grid-template-columns: 1fr;
@@ -1747,12 +1818,23 @@ textarea.a-input {
     padding: 0 4px env(safe-area-inset-bottom);
     background: var(--a-panel);
     border-top: 1px solid var(--a-line);
-    overflow-x: auto;
-    scrollbar-width: none;
   }
-  .a-nav a {
+  .a-nav .a-nav-extra {
+    display: none;
+  }
+  .a-nav a,
+  .a-nav-more {
     position: relative;
-    flex: 1 0 58px;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    color: var(--a-muted);
+    background: none;
+    border: 0;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
     flex-direction: column;
     justify-content: center;
     gap: 3px;
@@ -1761,13 +1843,15 @@ textarea.a-input {
     font-size: 12.5px;
     white-space: nowrap;
   }
-  .a-nav a.active {
-    color: var(--a-lemon);
+  .a-nav a.active,
+  .a-nav-more.active {
+    color: var(--a-ink);
     background: transparent;
   }
-  .a-nav a.active svg {
+  .a-nav a.active svg,
+  .a-nav-more.active svg {
     background: var(--a-lemon);
-    color: var(--a-bg);
+    color: var(--a-on-accent);
     border-radius: 999px;
     padding: 2px 12px;
     box-sizing: content-box;
@@ -1786,8 +1870,15 @@ textarea.a-input {
     gap: 10px;
     padding: 0;
   }
-  .a-me {
+  .a-me,
+  .a-signout {
     display: none;
+  }
+  .a-side {
+    background: var(--a-panel);
+  }
+  .a-brand {
+    font-size: 1.35rem;
   }
   .a-wide {
     display: none;
@@ -1795,8 +1886,7 @@ textarea.a-input {
   .a-narrow {
     display: inline;
   }
-  .a-sound,
-  .a-side-foot .a-link {
+  .a-sound {
     min-height: 40px;
     white-space: nowrap;
   }
@@ -1871,12 +1961,12 @@ textarea.a-input {
   color: var(--a-ink);
 }
 .a-board-tabs button.on {
-  background: var(--a-lemon);
-  border-color: var(--a-lemon);
-  color: #05191c;
+  background: var(--a-ink);
+  border-color: var(--a-ink);
+  color: var(--a-bg);
 }
 .a-board-tabs button.on b {
-  color: #05191c;
+  color: var(--a-bg);
 }
 
 /* New order on phones: the dish list scrolls with the page, and a bar jumps to the order. */
@@ -1907,7 +1997,7 @@ textarea.a-input {
     border: 0;
     border-radius: 14px;
     background: var(--a-lemon);
-    color: #05191c;
+    color: var(--a-on-accent);
     font: inherit;
     font-weight: 800;
     font-size: 16px;
@@ -1961,6 +2051,152 @@ textarea.a-input {
   margin: 0 0 6px;
 }
 .a-btn.a-btn-on {
-  border-color: var(--a-lemon);
-  color: var(--a-lemon);
+  border-color: var(--a-accent-text);
+  color: var(--a-accent-text);
+}
+
+/* Phones: More opens a sheet with the other screens, who's signed in, and signing out. */
+@media (max-width: 900px) {
+  .a-nav a,
+  .a-nav-more {
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 2px;
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+}
+.a-more-scrim {
+  position: fixed;
+  inset: 0 0 var(--a-nav-h, 0px);
+  z-index: 55;
+  display: grid;
+  align-items: end;
+  background: rgb(0 0 0 / 0.45);
+}
+.a-more {
+  display: grid;
+  gap: 8px;
+  padding: 18px 16px 16px;
+  background: var(--a-panel);
+  border-radius: 16px 16px 0 0;
+  max-height: 85dvh;
+  overflow-y: auto;
+}
+.a-more-me {
+  display: grid;
+  margin: 0 4px 6px;
+  font-weight: 750;
+  font-size: 17px;
+}
+.a-more-me small {
+  color: var(--a-muted);
+  font-weight: 600;
+  font-size: 14px;
+}
+.a-more ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border-top: 1px solid var(--a-line);
+}
+.a-more li a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 54px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--a-line);
+  color: var(--a-ink);
+  text-decoration: none;
+  font-weight: 650;
+  font-size: 17px;
+}
+.a-more li a.active {
+  color: var(--a-accent-text);
+}
+.a-more-foot {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+@media (min-width: 901px) {
+  .a-more-scrim {
+    display: none;
+  }
+}
+
+/* Menu screen: each switch says what it does; the dish's description sits under its name. */
+.a-menu-items .a-toggle {
+  flex-direction: column;
+  gap: 4px;
+}
+.a-toggle-cap {
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.15;
+  color: var(--a-muted);
+  text-align: center;
+}
+.a-menu-items li {
+  padding: 12px 0;
+}
+.a-menu-name {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+.a-menu-name .a-tag {
+  margin-left: 0;
+}
+.a-menu-desc {
+  color: var(--a-muted);
+  font-size: 13.5px;
+  font-weight: 450;
+  line-height: 1.35;
+}
+.a-field-note {
+  color: var(--a-muted);
+  font-size: 13px;
+}
+.a-hint b.a-soldout-count {
+  color: var(--a-amber);
+}
+.a-menu-sec {
+  box-shadow: var(--a-shadow);
+}
+
+/* Phones: the bar shows the most-used screens first. */
+@media (max-width: 900px) {
+  .a-nav a {
+    order: var(--phone-order, 9);
+  }
+  .a-nav-more {
+    order: 99;
+  }
+}
+.a-menu-links {
+  gap: 8px;
+}
+/* Opening hours on phones: room for the whole time next to the picker icon. */
+@media (max-width: 560px) {
+  .a-hours-row {
+    grid-template-columns: minmax(0, 1fr) minmax(104px, 1.2fr) auto minmax(104px, 1.2fr);
+    gap: 6px;
+  }
+  .a-hours-row .a-input {
+    padding: 8px 6px;
+    font-size: 15px;
+  }
+}
+@media (max-width: 560px) {
+  /* Tapping the box opens the phone's own time picker, so the small icon only costs room. */
+  .a-hours-row input[type='time']::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+  .a-hours-row {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) auto minmax(0, 1.2fr);
+  }
 }
