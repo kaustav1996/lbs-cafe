@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BANDIT_IMG, CardBack, CupMark, DOES, PlayingCard, ICON } from './cards';
 import { CrowArt } from './art';
+import { sfx } from '../sound';
+import { useBrewSounds } from './sounds';
 import { brewPlan, INGREDIENTS, LABEL, TRADEABLE, type Card, type CardKind, type GameView, type Ing, type Move } from './engine';
 
 type Mode = null | { pick: 'bandit' | 'havaldar' | 'newspaper' } | { feed: number } | { trade: true } | { kirana: true } | { sheru: true };
@@ -41,6 +43,7 @@ function useFan(n: number) {
  * the bar under your hand shows what it does and what you can do with it. `coach` puts a tutorial tip on top.
  */
 export function Board({ view, act, coach, footer }: { view: GameView; act: (m: Move) => void; coach?: ReactNode; footer?: ReactNode }) {
+  useBrewSounds(view);
   const me = view.players.find(p => p.id === view.me)!;
   const others = view.players.filter(p => p.id !== view.me);
   const hand = useMemo(() => [...(me.hand ?? [])].sort((a, b) => order(a.kind) - order(b.kind) || a.id - b.id), [me.hand]);
@@ -121,6 +124,7 @@ export function Board({ view, act, coach, footer }: { view: GameView; act: (m: M
   };
 
   const tap = (c: Card) => {
+    sfx('tick');
     if (mode && 'trade' in mode) {
       if (!canTrade(c.kind)) return;
       return setSel(s => (s.includes(c.id) ? s.filter(x => x !== c.id) : s.length < 6 ? [...s, c.id] : s));

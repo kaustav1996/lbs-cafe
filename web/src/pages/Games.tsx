@@ -61,8 +61,8 @@ export default function Games() {
                 All games
               </Link>
               <h1>{pick.name}</h1>
-              {/* LB's Space has its own switch on the play screen; Brew Bandits is quiet. */}
-              {pick.id !== 'space' && pick.id !== 'brew' && <SoundToggle />}
+              {/* LB's Space has its own switch on the play screen. */}
+              {pick.id !== 'space' && <SoundToggle />}
             </header>
             <Suspense fallback={<p className="status-meta">Loading the game…</p>}>
               <Game />

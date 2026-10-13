@@ -149,6 +149,33 @@ const SOUNDS = {
   },
   /** A start. */
   start: () => arp([523, 784], 0.07, 'triangle', 0.12, 0.1),
+  /** Brew Bandits. */
+  yourTurn: () => arp([659, 988], 0.09, 'triangle', 0.14, 0.16),
+  draw: () => hiss(6000, 2500, 0.05, 0.07, 1),
+  brew: () => {
+    hiss(900, 400, 0.35, 0.1, 2);
+    arp([784, 1175], 0.12, 'triangle', 0.12, 0.2);
+  },
+  raid: () => {
+    tone('sawtooth', 520, 780, 0.12, 0.08);
+    tone('sawtooth', 780, 520, 0.12, 0.08, 0.13);
+    tone('sawtooth', 520, 780, 0.12, 0.08, 0.26);
+  },
+  whistle: () => {
+    tone('sine', 2000, 2300, 0.12, 0.12);
+    tone('sine', 2300, 1900, 0.2, 0.12, 0.14);
+  },
+  steal: () => hiss(5000, 900, 0.18, 0.12, 2),
+  caw: () => {
+    tone('sawtooth', 700, 380, 0.14, 0.09);
+    tone('sawtooth', 680, 360, 0.16, 0.09, 0.2);
+  },
+  bark: () => {
+    tone('square', 260, 160, 0.09, 0.14);
+    tone('square', 280, 170, 0.1, 0.14, 0.16);
+  },
+  rain: () => hiss(3500, 1800, 1.2, 0.12, 0.5),
+  win: () => arp([523, 659, 784, 1046, 1318], 0.1, 'square', 0.11, 0.2),
 } as const;
 export type SoundName = keyof typeof SOUNDS;
 
