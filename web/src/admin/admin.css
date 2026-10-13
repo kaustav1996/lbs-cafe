@@ -2240,3 +2240,44 @@ textarea.a-input {
   margin: 0;
   font-weight: 600;
 }
+
+/* Alert sounds: the tap banner (wanted on, needs a tap) and the one-time question. */
+.a-alerts-tap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--a-lemon);
+  color: var(--a-on-accent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.a-alerts-tap span {
+  display: grid;
+  gap: 2px;
+}
+.a-alerts-tap b {
+  font-size: 17px;
+}
+.a-alerts-tap small {
+  font-size: 13.5px;
+  font-weight: 550;
+}
+.a-alerts-ask {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--a-line-strong);
+  border-radius: 12px;
+  background: var(--a-panel);
+}
+.a-alerts-ask p {
+  margin: 0;
+  font-weight: 650;
+}

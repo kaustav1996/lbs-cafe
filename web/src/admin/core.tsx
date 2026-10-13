@@ -108,8 +108,15 @@ type Listener = (e: CafeEvent) => void;
 interface StreamApi {
   connected: boolean;
   subscribe: (fn: Listener) => () => void;
+  /** Alert sounds wanted on this phone (remembered). */
   soundOn: boolean;
   setSoundOn: (v: boolean) => void;
+  /** Wanted on, but the phone needs a tap before it can play sound (after opening, or waking up). */
+  soundNeedsTap: boolean;
+  /** Nobody has chosen on or off on this phone yet. */
+  soundUnchosen: boolean;
+  /** Starts sound from a tap. */
+  unlockSound: () => void;
   chime: (kind?: 'order' | 'call' | 'ready') => void;
   /** A system notification, for when this screen is in the background. Needs sound on (which asks for permission). */
   notify: (title: string, body: string) => void;
@@ -120,8 +127,46 @@ export function StreamProvider({ children }: { children: ReactNode }) {
   const { token } = useAuth();
   const [connected, setConnected] = useState(false);
   const listeners = useRef(new Set<Listener>());
-  const [soundOn, setSoundOnState] = useState(false);
+  const SOUND_KEY = 'lbs.admin.sound';
+  const [soundPref, setSoundPref] = useState<'on' | 'off' | null>(() => {
+    try {
+      const v = localStorage.getItem(SOUND_KEY);
+      return v === 'on' || v === 'off' ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  const soundOn = soundPref === 'on';
+  const [unlocked, setUnlocked] = useState(false);
   const audio = useRef<AudioContext | null>(null);
+
+  // Browsers only start sound from a tap. Make (or wake) the audio and note whether it's really running; it can
+  // be suspended again when the phone sleeps, which brings the tap banner back.
+  const unlockSound = useCallback(() => {
+    try {
+      if (!audio.current) {
+        const ctx = new AudioContext();
+        ctx.onstatechange = () => setUnlocked(ctx.state === 'running');
+        audio.current = ctx;
+      }
+      const ctx = audio.current;
+      void ctx.resume().then(() => setUnlocked(ctx.state === 'running'));
+      setUnlocked(ctx.state === 'running');
+    } catch {
+      /* no Web Audio: the banners and notifications still show */
+    }
+  }, []);
+  // With alerts wanted on, the first tap anywhere starts the sound.
+  useEffect(() => {
+    if (!soundOn || unlocked) return;
+    const go = () => unlockSound();
+    document.addEventListener('pointerdown', go, true);
+    document.addEventListener('keydown', go, true);
+    return () => {
+      document.removeEventListener('pointerdown', go, true);
+      document.removeEventListener('keydown', go, true);
+    };
+  }, [soundOn, unlocked, unlockSound]);
 
   const chime = useCallback(
     (kind: 'order' | 'call' | 'ready' = 'order') => {
@@ -145,12 +190,19 @@ export function StreamProvider({ children }: { children: ReactNode }) {
     [soundOn],
   );
 
-  const setSoundOn = useCallback((v: boolean) => {
-    if (v && !audio.current) audio.current = new AudioContext();
-    if (v) void audio.current?.resume();
-    if (v && 'Notification' in window && Notification.permission === 'default') void Notification.requestPermission().catch(() => {});
-    setSoundOnState(v);
-  }, []);
+  const setSoundOn = useCallback(
+    (v: boolean) => {
+      if (v) unlockSound();
+      if (v && 'Notification' in window && Notification.permission === 'default') void Notification.requestPermission().catch(() => {});
+      try {
+        localStorage.setItem(SOUND_KEY, v ? 'on' : 'off');
+      } catch {
+        /* remembered for this visit only */
+      }
+      setSoundPref(v ? 'on' : 'off');
+    },
+    [unlockSound],
+  );
 
   useEffect(() => {
     if (!token || !HAS_API) return;
@@ -198,7 +250,12 @@ export function StreamProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const value = useMemo(() => ({ connected, subscribe, soundOn, setSoundOn, chime, notify }), [connected, subscribe, soundOn, setSoundOn, chime, notify]);
+  const soundNeedsTap = soundOn && !unlocked;
+  const soundUnchosen = soundPref === null;
+  const value = useMemo(
+    () => ({ connected, subscribe, soundOn, setSoundOn, soundNeedsTap, soundUnchosen, unlockSound, chime, notify }),
+    [connected, subscribe, soundOn, setSoundOn, soundNeedsTap, soundUnchosen, unlockSound, chime, notify],
+  );
   return <StreamCtx.Provider value={value}>{children}</StreamCtx.Provider>;
 }
 

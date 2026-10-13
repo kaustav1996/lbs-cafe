@@ -111,9 +111,45 @@ const NAV: { to: string; label: string; end?: boolean; icon: string; roles: Role
   { to: '/admin/settings', label: 'Settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z', roles: FLOOR },
 ];
 
+/**
+ * Alert sounds: once someone turns them on, the phone remembers. Phones still need one tap after opening (or
+ * waking) before a page can make sound, so until then this banner asks for it (any tap anywhere also works).
+ * A phone that has never chosen gets asked once; choosing off is respected.
+ */
+function AlertsBanner() {
+  const { soundNeedsTap, soundUnchosen, setSoundOn, unlockSound } = useStream();
+  if (soundNeedsTap)
+    return (
+      <button type="button" className="a-alerts-tap" onClick={unlockSound}>
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span>
+          <b>Tap to turn on alert sounds</b>
+          <small>Phones need one tap after opening before they can play the order chime.</small>
+        </span>
+      </button>
+    );
+  if (soundUnchosen)
+    return (
+      <div className="a-alerts-ask" role="region" aria-label="Alert sounds">
+        <p>Play a chime on this phone for new orders, tables calling and orders ready?</p>
+        <div className="a-actions">
+          <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={() => setSoundOn(true)}>
+            Turn on alert sounds
+          </button>
+          <button type="button" className="a-btn a-btn-ghost a-btn-sm" onClick={() => setSoundOn(false)}>
+            Not on this phone
+          </button>
+        </div>
+      </div>
+    );
+  return null;
+}
+
 function Shell() {
   const { me, signOut } = useAuth();
-  const { connected, soundOn, setSoundOn, chime, notify } = useStream();
+  const { connected, soundOn, setSoundOn, soundNeedsTap, soundUnchosen, chime, notify } = useStream();
   const [bookingBadge, setBookingBadge] = useState(0);
   const role: Role = me?.role ?? 'staff';
   const chef = role === 'chef';
@@ -219,7 +255,12 @@ function Shell() {
           </div>
         )}
         <div className="a-side-foot">
-          <button type="button" className={`a-sound ${soundOn ? 'on' : ''}`} aria-pressed={soundOn} onClick={() => setSoundOn(!soundOn)}>
+          <button
+            type="button"
+            className={`a-sound ${soundOn && !soundNeedsTap ? 'on' : ''}`}
+            aria-pressed={soundOn}
+            onClick={() => setSoundOn(!soundOn || soundNeedsTap)}
+          >
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path
                 d={soundOn ? 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0' : 'M6 8a6 6 0 0 1 9.3-5M18 8c0 7 3 9 3 9H9M6.3 13c-.6 3-3.3 4-3.3 4h4M10.3 21a1.9 1.9 0 0 0 3.4 0M3 3l18 18'}
@@ -230,8 +271,8 @@ function Shell() {
                 strokeLinejoin="round"
               />
             </svg>
-            <span className="a-wide">{soundOn ? 'Sound and alerts on' : 'Turn on sound and alerts'}</span>
-            <span className="a-narrow">{soundOn ? 'Alerts on' : 'Alerts off'}</span>
+            <span className="a-wide">{soundNeedsTap ? 'Tap to start alert sounds' : soundOn ? 'Sound and alerts on' : 'Turn on sound and alerts'}</span>
+            <span className="a-narrow">{soundNeedsTap ? 'Tap for sound' : soundOn ? 'Alerts on' : 'Alerts off'}</span>
           </button>
           <p className={`a-conn ${connected ? 'ok' : ''}`}>
             <i aria-hidden="true" />
@@ -247,7 +288,8 @@ function Shell() {
         </div>
       </aside>
       <main className="a-main">
-        <PushNudge />
+        <AlertsBanner />
+        {!soundUnchosen && <PushNudge />}
         {!chef && <ReadyAlerts />}
         <Routes>
           <Route index element={chef ? <Kitchen /> : <Orders />} />
