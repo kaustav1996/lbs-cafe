@@ -4377,3 +4377,14 @@ body.has-orderbar .toast-slot {
 .game-head .game-sound {
   margin-left: auto;
 }
+
+/* Games: no browser gestures on any control (touch-action isn't inherited, so every element needs it). */
+.sp,
+.sp * {
+  touch-action: none;
+}
+html.no-zoom,
+html.no-zoom body {
+  touch-action: pan-y;
+  overscroll-behavior: none;
+}

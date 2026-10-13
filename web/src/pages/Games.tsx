@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Footer, Nav } from '../components/Chrome';
 import { Cassette } from '../components/Gear';
 import { useGames } from '../state/games';
-import { readBest } from '../games/shared';
+import { readBest, useNoZoom } from '../games/shared';
 
 const GAMES: { id: string; name: string; blurb: string; best: (n: number) => string; color: string; load: () => Promise<{ default: ComponentType }> }[] = [
   { id: 'brew', name: 'Brew Bandits', blurb: 'Race other tables to brew hemp coffee. With people or bots; there’s a tutorial.', best: () => '', color: '#ffd84d', load: () => import('../games/brew/BrewBandits') },
@@ -29,6 +29,7 @@ export default function Games() {
   const { on, table } = useGames();
   const pick = GAMES.find(g => g.id === game);
   const Game = pick ? LOADED[pick.id] : null;
+  useNoZoom(!!(on && pick));
 
   useEffect(() => {
     document.title = `${pick ? pick.name : 'Games'} | LB's`;

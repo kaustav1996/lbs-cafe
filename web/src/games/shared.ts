@@ -66,3 +66,37 @@ export function useSwipe(el: React.RefObject<HTMLElement | null>, onDir: (d: Dir
     };
   }, [el]);
 }
+
+/**
+ * While a game is open: no pinch or double-tap zoom. Two thumbs on the screen (steer and fire) look like a pinch
+ * to iPhones, and touch-action alone doesn't stop Safari, so this also blocks its gesture events and pins the
+ * page scale at 1 (which also undoes a zoom that already happened). Everything is put back on leaving.
+ */
+export function useNoZoom(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const meta = document.querySelector('meta[name="viewport"]');
+    const before = meta?.getAttribute('content') ?? null;
+    meta?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+    const stop = (e: Event) => e.preventDefault();
+    const multi = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
+    const opts: AddEventListenerOptions = { passive: false };
+    document.addEventListener('gesturestart', stop, opts);
+    document.addEventListener('gesturechange', stop, opts);
+    document.addEventListener('gestureend', stop, opts);
+    document.addEventListener('touchmove', multi, opts);
+    document.addEventListener('dblclick', stop, opts);
+    document.documentElement.classList.add('no-zoom');
+    return () => {
+      if (meta && before !== null) meta.setAttribute('content', before);
+      document.removeEventListener('gesturestart', stop);
+      document.removeEventListener('gesturechange', stop);
+      document.removeEventListener('gestureend', stop);
+      document.removeEventListener('touchmove', multi);
+      document.removeEventListener('dblclick', stop);
+      document.documentElement.classList.remove('no-zoom');
+    };
+  }, [active]);
+}
