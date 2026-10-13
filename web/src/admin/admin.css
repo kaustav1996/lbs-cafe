@@ -2281,3 +2281,38 @@ textarea.a-input {
   margin: 0;
   font-weight: 650;
 }
+
+/* To settle: one card per table. */
+.a-table-orders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border-top: 1px solid var(--a-line);
+}
+.a-table-order {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--a-line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.a-table-order-items {
+  color: var(--a-muted);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.a-table-card .a-card-main {
+  cursor: default;
+}

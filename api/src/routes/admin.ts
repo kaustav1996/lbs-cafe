@@ -198,9 +198,21 @@ export function adminRoutes() {
         throw new HttpError(409, `Set the discount on invoice ${i.number}.`, 'use_invoice');
       }
       if (b.table !== undefined && b.table !== o.table_label) await refuseInvoiced(tx, id, 'move');
+      let alsoClosed: number[] = [];
       if (b.status) {
         const closing = b.status === 'completed' || b.status === 'cancelled';
         await tx`update orders set status = ${b.status}, closed_at = ${closing ? new Date() : null}, updated_at = now() where id = ${id}`;
+        // Closing one order of a paid table closes the rest of it too: every other order on the same bill or table
+        // that's been served and fully paid. (Orders still in the kitchen, or not paid, stay open.)
+        if (b.status === 'completed' && (o.invoice_id || o.table_label)) {
+          const rows = await tx<{ id: number }[]>`
+            update orders set status = 'completed', closed_at = now(), updated_at = now()
+            where id <> ${id} and status = 'served' and payment_status = 'paid'
+              and ((${o.invoice_id}::int is not null and invoice_id = ${o.invoice_id})
+                or (${o.table_label}::text is not null and table_label = ${o.table_label}))
+            returning id`;
+          alsoClosed = rows.map(r => r.id);
+        }
       }
       if (b.note !== undefined) await tx`update orders set note = ${b.note}, updated_at = now() where id = ${id}`;
       if (b.table !== undefined) await tx`update orders set table_label = ${b.table}, updated_at = now() where id = ${id}`;
@@ -212,11 +224,12 @@ export function adminRoutes() {
       if (o.invoice_id && b.status === 'cancelled') await applyInvoiceDiscount(tx, o.invoice_id);
       await settleInvoiceCheck(tx, o.invoice_id);
       // Closing, paying off or moving the order may free its (old) table.
-      return { freed: await freeTableCheck(tx, label, wasBusy), invoice: o.invoice_id };
+      return { freed: await freeTableCheck(tx, label, wasBusy), invoice: o.invoice_id, alsoClosed };
     });
     publishTable(freed.freed);
     publishInvoice(freed.invoice);
-    return c.json({ order: await publishUpdate(id) });
+    for (const other of freed.alsoClosed) await publishUpdate(other);
+    return c.json({ order: await publishUpdate(id), alsoClosed: freed.alsoClosed.length });
   });
 
   app.post('/orders/:id/lines', async c => {

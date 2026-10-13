@@ -13,6 +13,8 @@ export interface AOrder {
   invoice_status?: 'open' | 'paid' | null;
   source: 'table' | 'takeaway' | 'counter';
   table_label: string | null;
+  /** Which visit at the table (a new sitting starts once the table's settled). */
+  sitting?: number | null;
   customer_name: string | null;
   customer_phone: string | null;
   status: 'new' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled';
@@ -95,7 +97,11 @@ export default function Orders() {
 
   const move = async (o: AOrder, to: AOrder['status']) => {
     try {
-      await call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: to } });
+      const r = await call<{ alsoClosed?: number }>(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: to } });
+      if (to === 'completed') {
+        const n = 1 + (r.alsoClosed ?? 0);
+        toast(o.table_label ? `Table ${o.table_label} closed (${n} ${n === 1 ? 'order' : 'orders'})` : 'Order closed');
+      }
       void load();
     } catch (e) {
       toast(errText(e), 'bad');
@@ -160,7 +166,11 @@ export default function Orders() {
       {!orders && !error && <p className="a-muted">Loading orders…</p>}
 
       {orders && view === 'open' && orders.length > 0 && (
-        <BoardTabs tabs={COLUMNS.map(c => ({ key: c.key, title: c.short, count: orders.filter(c.match).length }))} value={tab} onChange={setTab} />
+        <BoardTabs
+          tabs={COLUMNS.map(c => ({ key: c.key, title: c.short, count: c.key === 'settle' ? settleGroups(orders.filter(c.match)).length : orders.filter(c.match).length }))}
+          value={tab}
+          onChange={setTab}
+        />
       )}
       {orders && view === 'open' && (
         <div className="a-board">
@@ -169,12 +179,18 @@ export default function Orders() {
             return (
               <section key={col.key} className={`a-col a-col-${col.key} ${tab === col.key ? 'is-current' : ''}`} aria-label={col.title}>
                 <h2>
-                  {col.title} <span>{list.length}</span>
+                  {col.title} <span>{col.key === 'settle' ? settleGroups(list).length : list.length}</span>
                 </h2>
                 {list.length === 0 && <p className="a-col-empty">Nothing here.</p>}
-                {list.map(o => (
-                  <OrderCard key={o.id} o={o} onOpen={() => setOpenId(o.id)} onMove={to => move(o, to)} onInvoice={() => setBillFor(o.id)} />
-                ))}
+                {col.key === 'settle'
+                  ? settleGroups(list).map(g =>
+                      g.table ? (
+                        <TableCard key={g.key} table={g.table} orders={g.orders} onOpen={setOpenId} onInvoice={setBillFor} onClose={o => move(o, 'completed')} />
+                      ) : (
+                        <OrderCard key={g.key} o={g.orders[0]} onOpen={() => setOpenId(g.orders[0].id)} onMove={to => move(g.orders[0], to)} onInvoice={() => setBillFor(g.orders[0].id)} />
+                      ),
+                    )
+                  : list.map(o => <OrderCard key={o.id} o={o} onOpen={() => setOpenId(o.id)} onMove={to => move(o, to)} onInvoice={() => setBillFor(o.id)} />)}
               </section>
             );
           })}
@@ -193,6 +209,86 @@ export default function Orders() {
       {openId && <OrderDetail id={openId} onClose={() => setOpenId(null)} onChanged={load} />}
       {billFor && <InvoiceModal orderId={billFor} onClose={() => setBillFor(null)} onChanged={load} />}
     </div>
+  );
+}
+
+/** To settle, one card per table visit (its orders billed together); takeaway and counter orders on their own. */
+function settleGroups(list: AOrder[]) {
+  const groups = new Map<string, { key: string; table: string | null; orders: AOrder[] }>();
+  for (const o of list) {
+    const key = o.source === 'table' && o.table_label ? `t:${o.table_label}:${o.sitting ?? ''}` : `o:${o.id}`;
+    const g = groups.get(key) ?? { key, table: o.source === 'table' ? o.table_label : null, orders: [] };
+    g.orders.push(o);
+    groups.set(key, g);
+  }
+  return [...groups.values()].sort((a, b) =>
+    a.table && b.table ? a.table.localeCompare(b.table, undefined, { numeric: true }) : a.table ? -1 : b.table ? 1 : 0,
+  );
+}
+
+/** A table's served orders as one bill: what each came to, what's still due, and one way to pay and close. */
+function TableCard({
+  table,
+  orders,
+  onOpen,
+  onInvoice,
+  onClose,
+}: {
+  table: string;
+  orders: AOrder[];
+  onOpen: (id: number) => void;
+  onInvoice: (orderId: number) => void;
+  onClose: (o: AOrder) => void;
+}) {
+  const total = orders.reduce((a, o) => a + o.total_paise, 0);
+  const due = orders.reduce((a, o) => a + Math.max(o.total_paise - o.paid_paise, 0), 0);
+  const firstUnpaid = orders.find(o => o.payment_status !== 'paid') ?? orders[0];
+  const closable = orders.find(o => o.status === 'served' && o.payment_status === 'paid');
+  const oldest = orders.reduce((a, o) => (o.created_at < a ? o.created_at : a), orders[0].created_at);
+  const items = orders.reduce((a, o) => a + o.lines.reduce((b, l) => b + l.qty, 0), 0);
+  return (
+    <article className="a-card a-table-card">
+      <div className="a-card-main">
+        <header>
+          <b>Table {table}</b>
+          <span>
+            {orders.length} {orders.length === 1 ? 'order' : 'orders'}, {items} {items === 1 ? 'item' : 'items'}
+          </span>
+          <small>{ago(oldest)}</small>
+        </header>
+        <ul className="a-table-orders">
+          {orders.map(o => (
+            <li key={o.id}>
+              <button type="button" className="a-table-order" onClick={() => onOpen(o.id)}>
+                <b>#{o.number}</b>
+                <span className="a-table-order-items">{o.lines.map(l => `${l.qty}× ${l.name}`).join(', ')}</span>
+                <span className="num">{rs(o.total_paise)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <footer>
+          <span className="num">Total {rs(total)}</span>
+          <span className={`a-pay ${due === 0 ? 'paid' : due < total ? 'partial' : 'unpaid'}`}>{due === 0 ? 'Paid' : `${rs(due)} due`}</span>
+        </footer>
+      </div>
+      <div className="a-card-actions">
+        {due > 0 ? (
+          <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={() => onInvoice(firstUnpaid.id)}>
+            Take payment
+          </button>
+        ) : (
+          <button type="button" className="a-btn a-btn-sm" onClick={() => onInvoice(orders[0].id)}>
+            Invoice
+          </button>
+        )}
+        {due === 0 && closable && (
+          <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={() => onClose(closable)}>
+            Close table {table}
+          </button>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -374,7 +470,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
             {o.invoice_number ? `Invoice ${o.invoice_number}` : 'Invoice'}
           </button>
           {o.status === 'served' && o.payment_status === 'paid' && (
-            <button type="button" className="a-btn a-btn-primary" disabled={busy} onClick={() => act(() => call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: 'completed' } }), 'Order closed')}>
+            <button type="button" className="a-btn a-btn-primary" disabled={busy} onClick={() => act(() => call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: 'completed' } }), o.table_label ? `Table ${o.table_label} closed` : 'Order closed')}>
               Close order
             </button>
           )}

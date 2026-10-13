@@ -1191,3 +1191,22 @@ test('games: a table order opens them, staff close or open them, and the default
   assert.equal(await games(), true);
   await app.inject({ method: 'PUT', url: '/api/admin/settings', headers: auth(), payload: { games_default: false } });
 });
+
+test('closing a paid table closes all of its served orders, not just the one tapped', async () => {
+  const latte = find('Cafe Latte');
+  const a = await placeAt('6', [{ ...latte, qty: 1 }]);
+  const b = await placeAt('6', [{ ...latte, qty: 2 }]);
+  const c = await placeAt('6', [{ ...latte, qty: 1 }]);
+  const move = (id: number, status: string) => app.inject({ method: 'PATCH', url: `/api/admin/orders/${id}`, headers: auth(), payload: { status } });
+  for (const id of [a, b]) for (const s of ['preparing', 'ready', 'served']) assert.equal((await move(id, s)).statusCode, 200);
+  // Order c is still in the kitchen when the table pays for a and b.
+  const inv = await invoiceFor(a);
+  const dueNow = inv.totals.due;
+  assert.equal((await payInv(inv.id, { method: 'upi', amountPaise: dueNow, reference: 'T6CLOSE' })).statusCode, 200);
+  const status = async () => Object.fromEntries((await sql<{ id: number; status: string }[]>`select id, status from orders where id in (${a}, ${b}, ${c})`).map(r => [r.id, r.status]));
+  // Closing a closes b too (served and paid), but not c, which is still being made.
+  const r = await move(a, 'completed');
+  assert.equal(r.statusCode, 200, r.body);
+  assert.equal(r.json().alsoClosed, 1);
+  assert.deepEqual(await status(), { [a]: 'completed', [b]: 'completed', [c]: 'new' });
+});
