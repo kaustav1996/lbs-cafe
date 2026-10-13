@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { errText, ROLE_LABEL, useAuth, useOnEvent, type Role } from './core';
 import { Modal, PageHead, Toggle, toast } from './ui';
@@ -20,28 +21,70 @@ interface Staff { id: number; name: string; email: string; role: Role; active: b
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined) ?? 'https://lbscafe.com';
 
+const TABS = [
+  { key: 'service', label: 'Service' },
+  { key: 'tables', label: 'Tables' },
+  { key: 'bill', label: 'Bill and card' },
+  { key: 'staff', label: 'Staff' },
+  { key: 'phone', label: 'This phone' },
+  { key: 'music', label: 'Music' },
+  { key: 'licences', label: 'Licences' },
+] as const;
+type Tab = (typeof TABS)[number]['key'];
+
+/** Settings in tabs, one topic at a time; the open tab is kept in the address (?tab=) so a reload stays there. */
 export default function Settings() {
   const { can } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const tab = (TABS.some(t => t.key === params.get('tab')) ? params.get('tab') : 'service') as Tab;
+  // Keep the chosen tab in view on the strip (it scrolls sideways on phones).
+  useEffect(() => {
+    document.querySelector('.a-tabs button.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
   return (
     <div className="a-page">
       <PageHead title="Settings" />
+      <nav className="a-tabs" aria-label="Settings sections">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            type="button"
+            className={tab === t.key ? 'on' : ''}
+            aria-current={tab === t.key ? 'page' : undefined}
+            onClick={() => setParams({ tab: t.key }, { replace: true })}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
       <div className="a-settings">
-        <div className="a-card-panel">
-          <PushPanel />
-        </div>
-        <OrderingSettings />
-        <LoyaltyCard />
-        <LicencesCard />
-        <MusicCard />
-        <TablesCard />
-        {can('manager') && <StaffCard />}
-        <PasswordCard />
+        {tab === 'service' && <OrderingSettings part="service" />}
+        {tab === 'tables' && <TablesCard />}
+        {tab === 'bill' && (
+          <>
+            <OrderingSettings part="bill" />
+            <LoyaltyCard />
+          </>
+        )}
+        {tab === 'staff' && (
+          <>
+            {can('manager') && <StaffCard />}
+            <PasswordCard />
+          </>
+        )}
+        {tab === 'phone' && (
+          <div className="a-card-panel">
+            <PushPanel />
+          </div>
+        )}
+        {tab === 'music' && <MusicCard />}
+        {tab === 'licences' && <LicencesCard />}
       </div>
     </div>
   );
 }
 
-function OrderingSettings() {
+function OrderingSettings({ part }: { part: 'service' | 'bill' }) {
   const { call, can } = useAuth();
   const [s, setS] = useState<SettingsShape | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,6 +107,7 @@ function OrderingSettings() {
     }
   };
 
+  if (part === 'bill') return <BillDetails s={s} setS={setS} save={save} busy={busy} readOnly={readOnly} />;
   return (
     <>
       <section className="a-card-panel">
@@ -105,52 +149,70 @@ function OrderingSettings() {
         </form>
       </section>
 
-      <section className="a-card-panel">
-        <h2>Bill details</h2>
-        <form
-          className="a-form"
-          onSubmit={(e: FormEvent) => {
-            e.preventDefault();
-            void save({ cafe: s.cafe, gst_rate: s.gst_rate }, 'Bill details saved');
-          }}
-        >
-          <label className="a-field">
-            <span>Cafe name</span>
-            <input className="a-input" value={s.cafe.name} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, name: e.target.value } })} />
-          </label>
-          <label className="a-field">
-            <span>Address</span>
-            <input className="a-input" value={s.cafe.address} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, address: e.target.value } })} />
-          </label>
-          <div className="a-row2">
-            <label className="a-field">
-              <span>Phone</span>
-              <input className="a-input" value={s.cafe.phone} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, phone: e.target.value } })} />
-            </label>
-            <label className="a-field">
-              <span>Email</span>
-              <input className="a-input" value={s.cafe.email} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, email: e.target.value } })} />
-            </label>
-          </div>
-          <div className="a-row2">
-            <label className="a-field">
-              <span>GSTIN</span>
-              <input className="a-input" value={s.cafe.gstin} maxLength={15} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, gstin: e.target.value.toUpperCase() } })} placeholder="15 characters" />
-            </label>
-            <label className="a-field">
-              <span>GST rate (%)</span>
-              <input className="a-input" inputMode="decimal" value={Math.round(s.gst_rate * 1000) / 10} disabled={readOnly} onChange={e => setS({ ...s, gst_rate: Number(e.target.value.replace(/[^\d.]/g, '')) / 100 })} />
-            </label>
-          </div>
-          <p className="a-hint">The rate applies to new orders only. Bills already made keep the rate they were made with.</p>
-          {!readOnly && (
-            <button className="a-btn a-btn-primary" disabled={busy}>
-              Save bill details
-            </button>
-          )}
-        </form>
-      </section>
     </>
+  );
+}
+
+/** The cafe's details printed on every bill. */
+function BillDetails({
+  s,
+  setS,
+  save,
+  busy,
+  readOnly,
+}: {
+  s: SettingsShape;
+  setS: (s: SettingsShape) => void;
+  save: (patch: Partial<SettingsShape>, msg?: string) => Promise<void>;
+  busy: boolean;
+  readOnly: boolean;
+}) {
+  return (
+    <section className="a-card-panel">
+      <h2>Bill details</h2>
+      <form
+        className="a-form"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          void save({ cafe: s.cafe, gst_rate: s.gst_rate }, 'Bill details saved');
+        }}
+      >
+        <label className="a-field">
+          <span>Cafe name</span>
+          <input className="a-input" value={s.cafe.name} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, name: e.target.value } })} />
+        </label>
+        <label className="a-field">
+          <span>Address</span>
+          <input className="a-input" value={s.cafe.address} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, address: e.target.value } })} />
+        </label>
+        <div className="a-row2">
+          <label className="a-field">
+            <span>Phone</span>
+            <input className="a-input" value={s.cafe.phone} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, phone: e.target.value } })} />
+          </label>
+          <label className="a-field">
+            <span>Email</span>
+            <input className="a-input" value={s.cafe.email} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, email: e.target.value } })} />
+          </label>
+        </div>
+        <div className="a-row2">
+          <label className="a-field">
+            <span>GSTIN</span>
+            <input className="a-input" value={s.cafe.gstin} maxLength={15} disabled={readOnly} onChange={e => setS({ ...s, cafe: { ...s.cafe, gstin: e.target.value.toUpperCase() } })} placeholder="15 characters" />
+          </label>
+          <label className="a-field">
+            <span>GST rate (%)</span>
+            <input className="a-input" inputMode="decimal" value={Math.round(s.gst_rate * 1000) / 10} disabled={readOnly} onChange={e => setS({ ...s, gst_rate: Number(e.target.value.replace(/[^\d.]/g, '')) / 100 })} />
+          </label>
+        </div>
+        <p className="a-hint">The rate applies to new orders only. Bills already made keep the rate they were made with.</p>
+        {!readOnly && (
+          <button className="a-btn a-btn-primary" disabled={busy}>
+            Save bill details
+          </button>
+        )}
+      </form>
+    </section>
   );
 }
 

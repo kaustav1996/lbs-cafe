@@ -2180,26 +2180,6 @@ textarea.a-input {
 .a-menu-links {
   gap: 8px;
 }
-/* Opening hours on phones: room for the whole time next to the picker icon. */
-@media (max-width: 560px) {
-  .a-hours-row {
-    grid-template-columns: minmax(0, 1fr) minmax(104px, 1.2fr) auto minmax(104px, 1.2fr);
-    gap: 6px;
-  }
-  .a-hours-row .a-input {
-    padding: 8px 6px;
-    font-size: 15px;
-  }
-}
-@media (max-width: 560px) {
-  /* Tapping the box opens the phone's own time picker, so the small icon only costs room. */
-  .a-hours-row input[type='time']::-webkit-calendar-picker-indicator {
-    display: none;
-  }
-  .a-hours-row {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) auto minmax(0, 1.2fr);
-  }
-}
 
 /* Notifications on this phone (More sheet, Settings) and the nudge at the top until they're on. */
 .a-push {
@@ -2315,4 +2295,74 @@ textarea.a-input {
 }
 .a-table-card .a-card-main {
   cursor: default;
+}
+
+/* Phones: every box at 16px or more, or iPhones zoom the page when it's tapped (which pulls the fixed bars
+   into the middle of the screen). No double-tap zoom either. */
+.admin-body {
+  touch-action: manipulation;
+}
+@media (max-width: 900px) {
+  .admin-body input,
+  .admin-body select,
+  .admin-body textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* Opening hours on phones: the day on its own line, then opens and closes side by side. */
+@media (max-width: 560px) {
+  .a-hours-row {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 4px 8px;
+  }
+  .a-hours-row > span:first-child {
+    grid-column: 1 / -1;
+    font-weight: 700;
+    margin-top: 6px;
+  }
+  .a-hours-row .a-input {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 10px;
+  }
+}
+
+/* Settings tabs: one topic at a time; scrolls sideways on phones. */
+.a-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 2px 6px;
+  margin: -6px 0 2px;
+}
+.a-tabs button {
+  flex: none;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--a-line-strong);
+  border-radius: 999px;
+  background: var(--a-panel);
+  color: var(--a-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.a-tabs button.on {
+  background: var(--a-ink);
+  border-color: var(--a-ink);
+  color: var(--a-bg);
+}
+@media (max-width: 900px) {
+  .a-tabs {
+    position: sticky;
+    top: var(--a-top-h);
+    z-index: 20;
+    margin: -8px -12px 0;
+    padding: 8px 12px;
+    background: var(--a-bg);
+  }
 }
