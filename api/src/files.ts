@@ -69,8 +69,21 @@ export function musicKey(name: string, type: string): MusicFile['key'] {
   return `music/${randomBytes(4).toString('hex')}-${base}.${kind.ext}`;
 }
 
-/** The public file paths: licence scans and the music. */
-export const PUBLIC_FILE = /^(licences\/[a-z0-9-]+\.(pdf|jpg|png|webp)|music\/[a-z0-9-]+\.(mp3|m4a))$/;
+/** Dish photos: JPG, PNG or WebP up to 8 MB (the admin shrinks phone photos before sending, so they're small). */
+export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+export const PHOTO_PATH = /^\/files\/menu\/[a-z0-9-]+\.(jpg|png|webp)$/;
+
+/** Checks a dish photo and returns where to keep it. */
+export function checkPhoto(type: string, bytes: Uint8Array) {
+  const kind = type === 'application/pdf' ? undefined : KINDS[type as FileKind];
+  if (!kind || !kind.magic(bytes)) throw new HttpError(400, 'Upload a photo (JPG, PNG or WebP).', 'bad_file_type');
+  if (bytes.length > MAX_PHOTO_BYTES) throw new HttpError(413, 'That photo is over 8 MB. Pick a smaller one.', 'too_large');
+  if (bytes.length === 0) throw new HttpError(400, 'That photo is empty. Pick it again.', 'empty_file');
+  return { key: `menu/${randomBytes(8).toString('hex')}.${kind.ext}`, type: type as FileKind };
+}
+
+/** The public file paths: licence scans, dish photos and the music. */
+export const PUBLIC_FILE = /^(licences\/[a-z0-9-]+\.(pdf|jpg|png|webp)|menu\/[a-z0-9-]+\.(jpg|png|webp)|music\/[a-z0-9-]+\.(mp3|m4a))$/;
 
 /**
  * An MP3 often starts with an ID3 tag holding cover art, sometimes megabytes of it, which a browser downloads

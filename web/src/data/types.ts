@@ -11,6 +11,8 @@ export interface MenuItem {
   id: string;
   name: string;
   description?: string;
+  /** A photo of the dish (uploaded in the admin), if there is one. */
+  imageUrl?: string;
   hasVariants?: boolean;
   available?: boolean; // false = sold out today
   dbId?: number;

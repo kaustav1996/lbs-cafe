@@ -6,7 +6,7 @@ import { bus } from '../events.js';
 import { atLeast, cooks, isManager, requireStaff, type AppEnv } from '../auth.js';
 import { hashPassword } from '../password.js';
 import { runtime } from '../context.js';
-import { audioKind, audioMagic, checkUpload, FileRef, MAX_AUDIO_BYTES, musicKey, id3Length, type MusicFile } from '../files.js';
+import { audioKind, audioMagic, checkPhoto, checkUpload, FileRef, MAX_AUDIO_BYTES, musicKey, id3Length, PHOTO_PATH, type MusicFile } from '../files.js';
 import { getInvoice, invoiceForOrder, payInvoice, publishInvoice, refuseInvoiced, settleInvoiceCheck } from '../invoices.js';
 import { applyInvoiceDiscount, LOYALTY_DEFAULTS, linkInvoice, loyaltySettings, reapplyOpenBills, setManualDiscount, welcomesTaken } from '../loyalty.js';
 import { addLines, addPayment, createOrder, freeTableCheck, refuseHeld, releaseDue, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
@@ -548,7 +548,13 @@ export function adminRoutes() {
     active: z.boolean().optional(),
     available: z.boolean().optional(),
     featured: z.boolean().optional(),
-    imageUrl: z.string().url().max(500).nullable().optional(),
+    // A photo uploaded here (/files/menu/...) or, as before, a link to one elsewhere.
+    imageUrl: z
+      .string()
+      .max(500)
+      .refine(v => PHOTO_PATH.test(v) || /^https:\/\//.test(v), 'Use the photo upload, or an https link.')
+      .nullable()
+      .optional(),
     sort: z.number().int().optional(),
     options: z.array(OptionIn).min(1).max(8),
     menuId: z.number().int().positive().optional(),
@@ -944,6 +950,41 @@ export function adminRoutes() {
               on conflict (key) do update set value = excluded.value`;
     bus.publish({ type: 'menu.updated' });
     return c.json({ settings: await getSettings() });
+  });
+
+  // ---------- Dish photos ----------
+  const dropPhoto = async (url: string | null) => {
+    if (!url || !PHOTO_PATH.test(url)) return;
+    await runtime()
+      .files?.delete(url.slice('/files/'.length))
+      .catch(() => {});
+  };
+  app.post('/items/:id/photo', atLeast('manager'), async c => {
+    const store = runtime().files;
+    if (!store) throw new HttpError(503, 'Photo uploads aren’t switched on yet.', 'no_storage');
+    const id = Number(c.req.param('id'));
+    const [item] = await sql<{ image_url: string | null }[]>`select image_url from items where id = ${id}`;
+    if (!item) throw new HttpError(404, 'That dish isn’t on the menu any more.', 'not_found');
+    const form = await c.req.formData().catch(() => null);
+    const file = form?.get('file');
+    if (!file || typeof file === 'string') throw new HttpError(400, 'Pick a photo to upload.', 'no_file');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const p = checkPhoto(file.type, bytes);
+    await store.put(p.key, bytes.buffer as ArrayBuffer, p.type);
+    const url = `/files/${p.key}`;
+    await sql`update items set image_url = ${url}, updated_at = now() where id = ${id}`;
+    await dropPhoto(item.image_url);
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ imageUrl: url }, 201);
+  });
+  app.delete('/items/:id/photo', atLeast('manager'), async c => {
+    const id = Number(c.req.param('id'));
+    const [item] = await sql<{ image_url: string | null }[]>`select image_url from items where id = ${id}`;
+    if (!item) throw new HttpError(404, 'That dish isn’t on the menu any more.', 'not_found');
+    await sql`update items set image_url = null, updated_at = now() where id = ${id}`;
+    await dropPhoto(item.image_url);
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ imageUrl: null });
   });
 
   // ---------- Documents (licences) ----------

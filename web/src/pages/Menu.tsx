@@ -293,7 +293,8 @@ export function Track({ item }: { item: MenuItem }) {
   const paired = item.options.length > 1;
   const soldOut = item.available === false;
   return (
-    <li className={`track ${paired ? 'track-pair' : ''} ${soldOut ? 'track-out' : ''}`}>
+    <li className={`track ${paired ? 'track-pair' : ''} ${soldOut ? 'track-out' : ''} ${item.imageUrl ? 'track-photo' : ''}`}>
+      {item.imageUrl && <img className="track-img" src={item.imageUrl} alt="" loading="lazy" decoding="async" width="72" height="72" />}
       <div className="track-main">
         <span className="track-name">{item.name}</span>
         {item.description && <span className="track-desc">{item.description}</span>}

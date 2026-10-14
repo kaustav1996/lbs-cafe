@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { errText, rs, useAuth, useOnEvent } from './core';
 import { DietDot, Modal, PageHead, Toggle, toast } from './ui';
 import { useAdminMenu, type ACategory, type AItem } from './picker';
@@ -104,6 +104,7 @@ export default function MenuAdmin() {
                     />
                   )}
                   <span className="a-menu-name">
+                    {i.image_url && <img className="a-menu-thumb" src={i.image_url} alt="" loading="lazy" width="44" height="44" />}
                     {i.name}
                     {!i.active && <span className="a-tag">Hidden</span>}
                     {i.featured && <span className="a-tag gold">Featured</span>}
@@ -169,7 +170,24 @@ function ItemEditor({ menu, menuId, item, categoryId, onClose, onSaved }: { menu
   const [cat, setCat] = useState(categoryId);
   const [active, setActive] = useState(item?.active ?? true);
   const [featured, setFeatured] = useState(item?.featured ?? false);
-  const [imageUrl, setImageUrl] = useState(item?.image_url ?? '');
+  // The saved photo, a newly picked one (already shrunk) waiting for Save, or a request to remove it.
+  const [photo, setPhoto] = useState<string | null>(item?.image_url ?? null);
+  const [picked, setPicked] = useState<{ blob: Blob; preview: string } | null>(null);
+  const [shrinking, setShrinking] = useState(false);
+  useEffect(() => () => void (picked && URL.revokeObjectURL(picked.preview)), [picked]);
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    setShrinking(true);
+    setError('');
+    try {
+      const blob = await shrinkPhoto(f);
+      setPicked({ blob, preview: URL.createObjectURL(blob) });
+    } catch {
+      setError('That photo couldn’t be read. Try a JPG or PNG.');
+    } finally {
+      setShrinking(false);
+    }
+  };
   const [opts, setOpts] = useState<OptDraft[]>(
     item?.options.filter(o => o.active).map(o => ({ id: o.id, label: o.label, diet: o.diet, price: String(o.price_paise / 100) })) ?? [{ label: '', diet: 'veg', price: '' }],
   );
@@ -184,9 +202,15 @@ function ItemEditor({ menu, menuId, item, categoryId, onClose, onSaved }: { menu
     if (options.length > 1 && options.some(o => !o.label)) return setError('With more than one price, label each one (for example Veg and Non-veg).');
     setBusy(true);
     try {
-      const body = { categoryId: cat, name: name.trim(), description: description.trim() || null, active, featured, imageUrl: imageUrl.trim() || null, options };
+      const body = { categoryId: cat, name: name.trim(), description: description.trim() || null, active, featured, options };
+      let id = item?.id;
       if (item) await call(`/api/admin/items/${item.id}`, { method: 'PATCH', json: body });
-      else await call('/api/admin/items', { method: 'POST', json: { ...body, menuId } });
+      else id = (await call<{ id: number }>('/api/admin/items', { method: 'POST', json: { ...body, menuId } })).id;
+      if (id && picked) {
+        const form = new FormData();
+        form.set('file', new File([picked.blob], `dish.${picked.blob.type.split('/')[1] ?? 'jpg'}`, { type: picked.blob.type }));
+        await call(`/api/admin/items/${id}/photo`, { method: 'POST', body: form });
+      } else if (id && item?.image_url && !photo) await call(`/api/admin/items/${id}/photo`, { method: 'DELETE' });
       toast(item ? 'Item saved' : 'Item added');
       onSaved();
       onClose();
@@ -266,10 +290,40 @@ function ItemEditor({ menu, menuId, item, categoryId, onClose, onSaved }: { menu
             </button>
           )}
         </fieldset>
-        <label className="a-field">
-          <span>Photo URL (optional)</span>
-          <input className="a-input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://…" />
-        </label>
+        <div className="a-field">
+          <span>Photo (optional)</span>
+          <div className="a-photo">
+            {picked || photo ? (
+              <img src={picked?.preview ?? photo!} alt={`${name || 'Dish'} photo`} />
+            ) : (
+              <div className="a-photo-empty" aria-hidden="true">
+                No photo
+              </div>
+            )}
+            <div className="a-photo-actions">
+              <label className="a-btn a-btn-sm">
+                {shrinking ? 'Getting it ready…' : picked || photo ? 'Change photo' : 'Add a photo'}
+                <input type="file" accept="image/*" className="a-sr" disabled={shrinking} onChange={e => void pick(e.target.files?.[0])} />
+              </label>
+              {(picked || photo) && (
+                <button
+                  type="button"
+                  className="a-btn a-btn-sm a-btn-ghost"
+                  onClick={() => {
+                    setPicked(null);
+                    setPhoto(null);
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+          <small className="a-field-note">
+            Take one with the phone or pick from the gallery. It’s made smaller before it’s sent, and guests see it on the menu. Saved when you tap
+            {item ? ' Save item' : ' Add item'}.
+          </small>
+        </div>
         <Toggle id="it-active" checked={active} onChange={setActive} label="Show on the menu" />
         <Toggle id="it-featured" checked={featured} onChange={setFeatured} label="Featured" />
         {error && <p className="a-error">{error}</p>}
@@ -342,4 +396,32 @@ function CategoryEditor({ cat, onClose, onSaved }: { cat: ACategory | null; onCl
       </div>
     </Modal>
   );
+}
+
+/** Phone photos are several MB; send at most 1200 px on the long side, as WebP (or JPEG where WebP can't be made). */
+async function shrinkPhoto(file: File): Promise<Blob> {
+  const MAX = 1200;
+  let src: ImageBitmap | HTMLImageElement;
+  try {
+    src = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    const url = URL.createObjectURL(file);
+    src = await new Promise<HTMLImageElement>((ok, bad) => {
+      const img = new Image();
+      img.onload = () => ok(img);
+      img.onerror = bad;
+      img.src = url;
+    });
+  }
+  const scale = Math.min(1, MAX / Math.max(src.width, src.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(src.width * scale);
+  canvas.height = Math.round(src.height * scale);
+  canvas.getContext('2d')!.drawImage(src, 0, 0, canvas.width, canvas.height);
+  const make = (type: string, q: number) => new Promise<Blob | null>(ok => canvas.toBlob(ok, type, q));
+  const webp = await make('image/webp', 0.82);
+  if (webp && webp.type === 'image/webp') return webp;
+  const jpeg = await make('image/jpeg', 0.85);
+  if (!jpeg) throw new Error('could not encode');
+  return jpeg;
 }

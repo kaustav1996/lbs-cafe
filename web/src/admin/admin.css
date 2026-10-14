@@ -2366,3 +2366,43 @@ textarea.a-input {
     background: var(--a-bg);
   }
 }
+
+/* Dish photos: the picker in the dish form and a thumbnail in the list. */
+.a-photo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.a-photo img,
+.a-photo-empty {
+  width: 96px;
+  height: 96px;
+  flex: none;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid var(--a-line-strong);
+  background: var(--a-raised);
+}
+.a-photo-empty {
+  display: grid;
+  place-items: center;
+  color: var(--a-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.a-photo-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.a-photo-actions label.a-btn {
+  position: relative;
+  cursor: pointer;
+}
+.a-menu-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--a-line);
+}

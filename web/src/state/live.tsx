@@ -36,7 +36,7 @@ const FALLBACK_SETTINGS: LiveSettings = {
 };
 
 interface ApiOption { id: number; label: string; diet: Diet; price_paise: number }
-interface ApiItem { id: number; slug: string; name: string; description: string | null; available: boolean; options: ApiOption[] }
+interface ApiItem { id: number; slug: string; name: string; description: string | null; image_url?: string | null; available: boolean; options: ApiOption[] }
 interface ApiCategory { id: number; slug: string; name: string; color: string; kind: 'food' | 'drink'; items: ApiItem[] }
 
 function fromApi(cats: ApiCategory[]): MenuCategory[] {
@@ -46,6 +46,7 @@ function fromApi(cats: ApiCategory[]): MenuCategory[] {
       dbId: i.id,
       name: i.name,
       description: i.description ?? undefined,
+      imageUrl: i.image_url ?? undefined,
       available: i.available,
       options: i.options.map(o => ({ dbId: o.id, label: o.label, diet: o.diet, price: o.price_paise / 100 })),
     }));

@@ -4388,3 +4388,29 @@ html.no-zoom body {
   touch-action: pan-y;
   overscroll-behavior: none;
 }
+
+/* Dishes with a photo: a small square on the left. */
+.track.track-photo {
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+}
+.track-img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+.track-out .track-img {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+@media (max-width: 380px) {
+  .track.track-photo {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+  }
+  .track-img {
+    width: 56px;
+    height: 56px;
+  }
+}

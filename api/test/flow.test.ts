@@ -1210,3 +1210,42 @@ test('closing a paid table closes all of its served orders, not just the one tap
   assert.equal(r.json().alsoClosed, 1);
   assert.deepEqual(await status(), { [a]: 'completed', [b]: 'completed', [c]: 'new' });
 });
+
+test('dish photos: upload, show on the menu, replace (old file removed), remove; staff can’t', async () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  const [item] = await sql<{ id: number }[]>`select id from items where name = 'Americano' limit 1`;
+  const send = (bytes: Uint8Array, type: string, headers = auth()) => {
+    const form = new FormData();
+    form.set('file', new File([bytes], 'dish', { type }));
+    return app.inject({ method: 'POST', url: `/api/admin/items/${item.id}/photo`, headers, form });
+  };
+  const first = await send(PNG, 'image/png');
+  assert.equal(first.statusCode, 201, first.body);
+  const url1 = first.json().imageUrl as string;
+  assert.match(url1, /^\/files\/menu\/[a-f0-9]{16}\.png$/);
+  // On the public menu, and served.
+  const menu = (await app.inject({ method: 'GET', url: '/api/public/menu' })).json();
+  const pub = menu.categories.flatMap((c: any) => c.items).find((i: any) => i.id === item.id);
+  assert.equal(pub.image_url, url1);
+  const served = await app.inject({ method: 'GET', url: url1 });
+  assert.equal(served.statusCode, 200);
+  assert.equal(served.headers['content-type'], 'image/png');
+  // Replacing it removes the old file.
+  const second = await send(JPG, 'image/jpeg');
+  assert.equal(second.statusCode, 201, second.body);
+  assert.match(second.json().imageUrl, /\.jpg$/);
+  assert.equal((await app.inject({ method: 'GET', url: url1 })).statusCode, 404);
+  // Not a photo, or not a manager: refused.
+  assert.equal((await send(PDF, 'application/pdf')).statusCode, 400);
+  assert.equal((await send(new Uint8Array([1, 2, 3, 4]), 'image/png')).statusCode, 400);
+  await app.inject({ method: 'POST', url: '/api/admin/staff', headers: auth(), payload: { name: 'Photo server', email: 'photos@lbscafe.test', password: 'photo-pass-1', role: 'staff' } });
+  hits.clear(); // an earlier test trips the sign-in limit on purpose
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'photos@lbscafe.test', password: 'photo-pass-1' } });
+  assert.equal(login.statusCode, 200, login.body);
+  assert.equal((await send(PNG, 'image/png', { authorization: `Bearer ${login.json().token}` })).statusCode, 403);
+  // Removing it.
+  const gone = await app.inject({ method: 'DELETE', url: `/api/admin/items/${item.id}/photo`, headers: auth() });
+  assert.equal(gone.statusCode, 200);
+  assert.equal((await sql<{ image_url: string | null }[]>`select image_url from items where id = ${item.id}`)[0].image_url, null);
+});
