@@ -4414,3 +4414,72 @@ html.no-zoom body {
     height: 56px;
   }
 }
+
+/* Tapping a dish with a photo: a bigger look, with its add buttons. */
+.track-img-btn,
+.track-main-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: zoom-in;
+}
+.track-img-btn {
+  display: block;
+  border-radius: var(--radius-sm);
+}
+.dish-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.6);
+  overscroll-behavior: contain;
+  animation: fade 0.18s ease;
+}
+.dish-card {
+  position: relative;
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  animation: sheet-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.dish-photo {
+  display: block;
+  width: 100%;
+  max-height: 62dvh;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-bottom: 2px solid var(--ink);
+  background: var(--ink);
+}
+.dish-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+.dish-body {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+.dish-body h2 {
+  font-size: var(--t-xl);
+  font-weight: 800;
+}
+.dish-body p {
+  margin: 0;
+  color: var(--muted);
+}
+.dish-buy {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}

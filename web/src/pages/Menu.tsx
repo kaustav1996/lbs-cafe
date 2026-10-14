@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import type { MenuCategory, MenuItem } from '../data/types';
 import { Footer, Nav } from '../components/Chrome';
@@ -289,55 +290,112 @@ export default function Menu() {
 }
 
 export function Track({ item }: { item: MenuItem }) {
-  const cart = useCart();
   const paired = item.options.length > 1;
   const soldOut = item.available === false;
+  const [big, setBig] = useState(false);
   return (
     <li className={`track ${paired ? 'track-pair' : ''} ${soldOut ? 'track-out' : ''} ${item.imageUrl ? 'track-photo' : ''}`}>
-      {item.imageUrl && <img className="track-img" src={item.imageUrl} alt="" loading="lazy" decoding="async" width="72" height="72" />}
-      <div className="track-main">
-        <span className="track-name">{item.name}</span>
-        {item.description && <span className="track-desc">{item.description}</span>}
-      </div>
-      <span className="leader" aria-hidden="true" />
-      {soldOut ? (
-        <span className="sold-out">Sold out today</span>
+      {item.imageUrl ? (
+        <>
+          <button type="button" className="track-img-btn" onClick={() => setBig(true)} aria-label={`See a bigger photo of ${item.name}`}>
+            <img className="track-img" src={item.imageUrl} alt="" loading="lazy" decoding="async" width="72" height="72" />
+          </button>
+          <button type="button" className="track-main track-main-btn" onClick={() => setBig(true)}>
+            <span className="track-name">{item.name}</span>
+            {item.description && <span className="track-desc">{item.description}</span>}
+          </button>
+        </>
       ) : (
-      <div className="track-buy">
-        {item.options.map(o => {
-          const key = `${item.id}|${o.label}`;
-          const qty = cart.qtyOf(key);
-          const what = `${item.name}${o.label ? `, ${o.label.toLowerCase()}` : ''}`;
-          return qty > 0 ? (
-            <span key={key} className="buy buy-on">
-              <DietMark diet={o.diet} />
-              {o.label && <span className="buy-opt">{o.label}</span>}
-              <Stepper
-                qty={qty}
-                name={what}
-                onMinus={() => cart.dispatch({ type: 'qty', key, delta: -1 })}
-                onPlus={() => cart.dispatch({ type: 'add', item, option: o })}
-              />
-            </span>
-          ) : (
-            <button
-              key={key}
-              type="button"
-              className="buy"
-              onClick={() => cart.dispatch({ type: 'add', item, option: o })}
-              aria-label={`Add ${what}, ${inr(o.price)}`}
-            >
-              <DietMark diet={o.diet} />
-              {o.label && <span className="buy-opt">{o.label}</span>}
-              <span className="num buy-price">{inr(o.price)}</span>
-              <span className="buy-plus" aria-hidden="true">
-                +
-              </span>
-            </button>
-          );
-        })}
-      </div>
+        <div className="track-main">
+          <span className="track-name">{item.name}</span>
+          {item.description && <span className="track-desc">{item.description}</span>}
+        </div>
       )}
+      <span className="leader" aria-hidden="true" />
+      <Buy item={item} />
+      {big && <DishPhoto item={item} onClose={() => setBig(false)} />}
     </li>
+  );
+}
+
+/** The add buttons for a dish (one per price), or "Sold out today". */
+function Buy({ item }: { item: MenuItem }) {
+  const cart = useCart();
+  const soldOut = item.available === false;
+  return (
+    <>
+        {soldOut ? (
+          <span className="sold-out">Sold out today</span>
+        ) : (
+        <div className="track-buy">
+          {item.options.map(o => {
+            const key = `${item.id}|${o.label}`;
+            const qty = cart.qtyOf(key);
+            const what = `${item.name}${o.label ? `, ${o.label.toLowerCase()}` : ''}`;
+            return qty > 0 ? (
+              <span key={key} className="buy buy-on">
+                <DietMark diet={o.diet} />
+                {o.label && <span className="buy-opt">{o.label}</span>}
+                <Stepper
+                  qty={qty}
+                  name={what}
+                  onMinus={() => cart.dispatch({ type: 'qty', key, delta: -1 })}
+                  onPlus={() => cart.dispatch({ type: 'add', item, option: o })}
+                />
+              </span>
+            ) : (
+              <button
+                key={key}
+                type="button"
+                className="buy"
+                onClick={() => cart.dispatch({ type: 'add', item, option: o })}
+                aria-label={`Add ${what}, ${inr(o.price)}`}
+              >
+                <DietMark diet={o.diet} />
+                {o.label && <span className="buy-opt">{o.label}</span>}
+                <span className="num buy-price">{inr(o.price)}</span>
+                <span className="buy-plus" aria-hidden="true">
+                  +
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        )}
+    </>
+  );
+}
+
+/** A bigger look at a dish: the photo, what's in it, and its add buttons. */
+function DishPhoto({ item, onClose }: { item: MenuItem; onClose: () => void }) {
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', key);
+    document.documentElement.classList.add('locked');
+    return () => {
+      window.removeEventListener('keydown', key);
+      document.documentElement.classList.remove('locked');
+    };
+  }, [onClose]);
+  // Rendered at the top of the page: the menu sections animate with transforms, which would trap a fixed overlay.
+  return createPortal(
+    <div className="dish-scrim" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="dish-card" role="dialog" aria-modal="true" aria-label={item.name}>
+        <img className="dish-photo" src={item.imageUrl} alt={item.name} />
+        <button type="button" className="icon-btn dish-close" onClick={onClose} aria-label="Close" autoFocus>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+          </svg>
+        </button>
+        <div className="dish-body">
+          <h2>{item.name}</h2>
+          {item.description && <p>{item.description}</p>}
+          <div className="dish-buy">
+            <Buy item={item} />
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
