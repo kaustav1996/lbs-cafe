@@ -145,7 +145,15 @@ export interface World {
   events: { to?: string; text: string }[];
   /** This tick's sights and sounds (shots, hits, explosions); cleared at the start of every step. */
   fx: Fx[];
+  /**
+   * The shared map: bots are just small, harmless prey (they stay small, never level up or shoot, run from bigger
+   * ships without boosting, and never eat people). Solo play leaves this off for tougher practice bots.
+   */
+  weakBots?: boolean;
 }
+
+/** How big a weak bot can get: about twice a new ship, so anyone can eat one. */
+export const WEAK_BOT_MAX = 45;
 
 /** Effect kinds, for sound and small animations on the phones. */
 export const FX = { hitShip: 0, hitRock: 1, hitPlanet: 2, rockBreak: 3, shipDown: 4, shot: 5, missile: 6, reflect: 7, eaten: 8, gamma: 9 } as const;
@@ -683,7 +691,8 @@ export function step(w: World, dt: number, rng: Rng = Math.random) {
       const ny = (b.y - a.y) / d;
       const [big, small] = a.mass >= b.mass ? [a, b] : [b, a];
       const shielded = w.now < small.shieldUntil;
-      if (big.mass > small.mass * 1.15 && !shielded && w.now >= small.safeUntil && d < radius(big.mass) - radius(small.mass) * 0.3) {
+      const botBite = w.weakBots && big.bot && !small.bot; // weak bots never eat people
+      if (!botBite && big.mass > small.mass * 1.15 && !shielded && w.now >= small.safeUntil && d < radius(big.mass) - radius(small.mass) * 0.3) {
         big.mass += small.mass * 0.8;
         big.dm += small.dm * 0.5;
         big.de += small.de * 0.5;
@@ -709,8 +718,10 @@ export function step(w: World, dt: number, rng: Rng = Math.random) {
       b.vx += nx * kick;
       b.vy += ny * kick;
       if (!shielded) {
-        hurt(w, a, 1.5, b.id, rng);
-        hurt(w, b, 1.5, a.id, rng);
+        // Weak bots on the shared map can't hurt people; bumping one only hurts the bot.
+        const harmless = (x: Ship, y: Ship) => w.weakBots && y.bot && !x.bot;
+        if (!harmless(a, b)) hurt(w, a, 1.5, b.id, rng);
+        if (!harmless(b, a)) hurt(w, b, 1.5, a.id, rng);
       }
     }
 
@@ -804,6 +815,15 @@ export function step(w: World, dt: number, rng: Rng = Math.random) {
   }
 
   w.beams = w.beams.filter(b => b.until > w.now);
+  // Weak bots (shared map) never grow past prey size or level up.
+  if (w.weakBots)
+    for (const b of ships) {
+      if (!b.bot) continue;
+      b.mass = Math.min(b.mass, WEAK_BOT_MAX);
+      b.xp = 0;
+      b.dm = Math.min(b.dm, 2);
+      b.de = Math.min(b.de, 2);
+    }
   // Level-ups.
   for (const s of ships) {
     const lv = levelFor(s.xp);
@@ -831,6 +851,11 @@ function botThink(w: World, b: Ship) {
     if (s.id === b.id || !s.alive) continue;
     const d2 = dist2(s.x, s.y, b.x, b.y);
     if (d2 > 700 * 700) continue;
+    if (w.weakBots) {
+      // Prey: keep away from people and bigger bots, never hunt.
+      if ((!s.bot || s.mass > b.mass) && d2 < 300 * 300) flee = s;
+      continue;
+    }
     if (s.mass > b.mass * 1.15 && d2 < 380 * 380) flee = s;
     else if (s.mass * 1.15 < b.mass && d2 < best) {
       best = d2;
@@ -879,8 +904,8 @@ function botThink(w: World, b: Ship) {
     ...b.input,
     ax: dx / len,
     ay: dy / len,
-    fire: !!fireAt && b.dm > 3 && best < 500 * 500,
-    boost: !!flee,
+    fire: !w.weakBots && !!fireAt && b.dm > 3 && best < 500 * 500,
+    boost: !w.weakBots && !!flee,
     weapon: b.level >= UNLOCK.missile && b.dm > 20 ? 'missile' : 'blaster',
   };
 }

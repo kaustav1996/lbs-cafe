@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addShip, FX, levelFor, newWorld, radius, respawn, setInput, snapshot, step, TICK_MS, UNLOCK, WORLD } from '../src/games/cosmos.js';
+import { addShip, FX, levelFor, newWorld, WEAK_BOT_MAX, radius, respawn, setInput, snapshot, step, TICK_MS, UNLOCK, WORLD } from '../src/games/cosmos.js';
 
 const seeded = (s: number) => () => ((s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
 
@@ -139,4 +139,32 @@ test('shots, hits and breaks show up as effects for the players who can see them
   setInput(w, 'a', { fire: false });
   for (let i = 0; i < 30; i++) step(w, TICK_MS);
   assert.equal(snapshot(w, 'a').f.length, 0);
+});
+
+test('on the shared map bots are small prey: they stay small, never shoot, never level up and never eat people', () => {
+  const w = newWorld();
+  w.weakBots = true;
+  for (const n of ['A', 'B', 'C', 'D', 'E', 'F']) addShip(w, { id: `bot-${n}`, name: n, table: null, bot: true });
+  addShip(w, { id: 'me', name: 'Me', table: '1', bot: false });
+  const me = w.ships.get('me')!;
+  let botShots = 0;
+  let maxBot = 0;
+  let maxLevel = 1;
+  for (let i = 0; i < 20 * 180; i++) {
+    // A new pilot sitting still, right where the bots are.
+    const near = [...w.ships.values()].find(s => s.bot && s.alive);
+    if (near && i % 40 === 0) Object.assign(me, { x: near.x + 40, y: near.y, vx: 0, vy: 0, safeUntil: 0 });
+    step(w, TICK_MS);
+    for (const f of w.fx) if (f.k === FX.shot && f.by?.startsWith('bot-')) botShots++;
+    for (const s of w.ships.values())
+      if (s.bot) {
+        maxBot = Math.max(maxBot, s.mass);
+        maxLevel = Math.max(maxLevel, s.level);
+      }
+    assert.ok(!(me.killedBy ?? '').startsWith('bot-') || me.alive, `eaten by ${me.killedBy}`);
+  }
+  assert.equal(botShots, 0, 'bots never fire');
+  assert.ok(maxBot <= WEAK_BOT_MAX, `bots stay small (biggest ${maxBot})`);
+  assert.equal(maxLevel, 1, 'bots never level up');
+  assert.ok(!w.events.some(e => /consumed Me/.test(e.text) && /^(A|B|C|D|E|F) /.test(e.text)), 'no bot ate the player');
 });

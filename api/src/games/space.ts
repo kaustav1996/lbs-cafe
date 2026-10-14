@@ -42,6 +42,8 @@ export class Space extends DurableObject {
   private ensureWorld() {
     if (this.world) return this.world;
     const w = newWorld();
+    // Bots on the shared map are small, harmless prey, so people only fight people.
+    w.weakBots = true;
     for (const name of BOTS) addShip(w, { id: `bot-${name}`, name, table: null, bot: true });
     this.world = w;
     return w;
