@@ -4,6 +4,8 @@ import type { MenuCategory } from '../data/types';
 import { inr } from '../lib/format';
 
 const FLIP_MS = 650;
+/** How long a flip holds the tape before the next one may start (the turn itself can be overtaken smoothly). */
+const HOLD_MS = 480;
 const parity = (n: number) => ((n % 2) + 2) % 2;
 
 /**
@@ -19,14 +21,24 @@ export function TapeFlip({ cats }: { cats: MenuCategory[] }) {
   const [turns, setTurns] = useState(0); // half turns so far; odd = the back face is showing
   const nav = useNavigate();
   const busy = useRef(false);
+  // Swipes made while the tape is still turning: played one after another as each turn finishes, instead of
+  // being dropped. Positive = forward, negative = back; a swipe the other way cancels what's waiting.
+  const queued = useRef(0);
+  const [spinning, setSpinning] = useState(false);
   const tape = useRef<HTMLButtonElement>(null);
   const moved = useRef(false);
 
   const flip = useCallback(
     (dir: 1 | -1) => {
       const target = index + dir;
-      if (busy.current || target < 0 || target >= cats.length) return false;
+      if (target < 0 || target >= cats.length) return false;
+      if (busy.current) {
+        const q = queued.current;
+        queued.current = Math.sign(q) === -dir ? 0 : Math.max(-3, Math.min(3, q + dir));
+        return true;
+      }
       busy.current = true;
+      setSpinning(true);
       const hidden = parity(turns + 1);
       setFaces(f => (hidden === 0 ? [target, f[1]] : [f[0], target]));
       // Let the back face take its new section before it turns into view.
@@ -34,7 +46,16 @@ export function TapeFlip({ cats }: { cats: MenuCategory[] }) {
         setTurns(t => t + dir);
         setIndex(target);
       }, 30);
-      setTimeout(() => (busy.current = false), FLIP_MS);
+      setTimeout(() => {
+        busy.current = false;
+        const q = queued.current;
+        if (q) {
+          const d = q > 0 ? 1 : -1;
+          queued.current = q - d;
+          if (!flipRef.current(d)) queued.current = 0; // reached the first or last section
+        }
+      }, HOLD_MS);
+      setTimeout(() => !busy.current && setSpinning(false), FLIP_MS);
       return true;
     },
     [index, turns, cats.length],
@@ -122,7 +143,7 @@ export function TapeFlip({ cats }: { cats: MenuCategory[] }) {
   };
 
   return (
-    <div className="tapeflip">
+    <div className={`tapeflip ${spinning ? 'is-turning' : ''}`}>
       <div className="tape-stage">
         <button
           ref={tape}

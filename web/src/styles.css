@@ -4483,3 +4483,21 @@ html.no-zoom body {
   justify-content: flex-end;
   margin-top: 4px;
 }
+
+/* The cassette's reels turn slowly, and wind fast while the tape flips to another section. */
+.tape-reel {
+  animation: reel-turn 3.2s linear infinite;
+}
+.tapeflip.is-turning .tape-reel {
+  animation-duration: 0.45s;
+}
+@keyframes reel-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tape-reel {
+    animation: none;
+  }
+}
