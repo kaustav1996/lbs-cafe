@@ -2406,3 +2406,76 @@ textarea.a-input {
   object-fit: cover;
   border: 1px solid var(--a-line);
 }
+
+/* Order cards: cancel (managers), its confirmation, and each order's stage in a table card. */
+.a-card-actions .a-cancel {
+  margin-left: auto;
+  color: var(--a-bad);
+}
+.a-card-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--a-line);
+  background: var(--a-bad-soft);
+  font-weight: 650;
+}
+.a-table-order-row {
+  border-bottom: 1px solid var(--a-line);
+}
+.a-table-order-row .a-table-order {
+  border-bottom: 0;
+}
+.a-table-order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+}
+.a-table-order-meta .a-cancel {
+  margin-left: auto;
+  color: var(--a-bad);
+  min-height: 30px;
+}
+.a-stage {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--a-line-strong);
+  color: var(--a-muted);
+}
+.a-stage.is-new {
+  color: var(--a-ink);
+  border-color: var(--a-ink);
+}
+.a-stage.is-preparing {
+  color: var(--a-amber);
+  border-color: var(--a-amber);
+}
+.a-stage.is-ready,
+.a-stage.is-served {
+  color: var(--a-good);
+  border-color: var(--a-good);
+}
+.a-tables-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.a-tables-others {
+  grid-column: 1 / -1;
+}
+.a-tables-others h2 {
+  margin: 8px 0;
+  font-size: 15px;
+}
+@media (max-width: 640px) {
+  .a-tables-view {
+    grid-template-columns: 1fr;
+  }
+}

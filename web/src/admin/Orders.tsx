@@ -65,7 +65,7 @@ export default function Orders() {
   const { call } = useAuth();
   const [orders, setOrders] = useState<AOrder[] | null>(null);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
-  const [view, setView] = useState<'open' | 'day'>('open');
+  const [view, setView] = useState<'open' | 'tables' | 'day'>('open');
   const [day, setDay] = useState(todayIST());
   const [openId, setOpenId] = useState<number | null>(null);
   const [billFor, setBillFor] = useState<number | null>(null);
@@ -75,7 +75,7 @@ export default function Orders() {
 
   const load = useCallback(async () => {
     try {
-      const q = view === 'open' ? 'view=open' : `view=day&date=${day}`;
+      const q = view === 'day' ? `view=day&date=${day}` : 'view=open';
       const [o, s] = await Promise.all([
         call<{ orders: AOrder[] }>(`/api/admin/orders?${q}`),
         call<{ requests: ServiceRequest[] }>('/api/admin/service-requests'),
@@ -108,6 +108,16 @@ export default function Orders() {
     }
   };
 
+  const cancel = async (o: AOrder) => {
+    try {
+      await call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: 'cancelled' } });
+      toast(`Order #${o.number} cancelled`);
+      void load();
+    } catch (e) {
+      toast(errText(e), 'bad');
+    }
+  };
+
   const handled = async (r: ServiceRequest) => {
     setRequests(rs => rs.filter(x => x.id !== r.id));
     try {
@@ -120,10 +130,13 @@ export default function Orders() {
 
   return (
     <div className="a-page">
-      <PageHead title={view === 'open' ? 'Live orders' : 'Orders by day'}>
+      <PageHead title={view === 'open' ? 'Live orders' : view === 'tables' ? 'Tables' : 'Orders by day'}>
         <div className="a-seg">
           <button type="button" className={view === 'open' ? 'on' : ''} onClick={() => setView('open')}>
             Live
+          </button>
+          <button type="button" className={view === 'tables' ? 'on' : ''} onClick={() => setView('tables')}>
+            Tables
           </button>
           <button type="button" className={view === 'day' ? 'on' : ''} onClick={() => setView('day')}>
             By day
@@ -185,22 +198,25 @@ export default function Orders() {
                 {col.key === 'settle'
                   ? settleGroups(list).map(g =>
                       g.table ? (
-                        <TableCard key={g.key} table={g.table} orders={g.orders} onOpen={setOpenId} onInvoice={setBillFor} onClose={o => move(o, 'completed')} />
+                        <TableCard key={g.key} table={g.table} orders={g.orders} onOpen={setOpenId} onInvoice={setBillFor} onClose={o => move(o, 'completed')} onCancel={cancel} />
                       ) : (
-                        <OrderCard key={g.key} o={g.orders[0]} onOpen={() => setOpenId(g.orders[0].id)} onMove={to => move(g.orders[0], to)} onInvoice={() => setBillFor(g.orders[0].id)} />
+                        <OrderCard key={g.key} o={g.orders[0]} onOpen={() => setOpenId(g.orders[0].id)} onMove={to => move(g.orders[0], to)} onInvoice={() => setBillFor(g.orders[0].id)} onCancel={() => cancel(g.orders[0])} />
                       ),
                     )
-                  : list.map(o => <OrderCard key={o.id} o={o} onOpen={() => setOpenId(o.id)} onMove={to => move(o, to)} onInvoice={() => setBillFor(o.id)} />)}
+                  : list.map(o => <OrderCard key={o.id} o={o} onOpen={() => setOpenId(o.id)} onMove={to => move(o, to)} onInvoice={() => setBillFor(o.id)} onCancel={() => cancel(o)} />)}
               </section>
             );
           })}
         </div>
       )}
 
+      {orders && view === 'tables' && (
+        <TablesView orders={orders} onOpen={setOpenId} onInvoice={setBillFor} onClose={o => move(o, 'completed')} onCancel={cancel} />
+      )}
       {orders && view === 'day' && (
         <DayList orders={orders} onOpen={setOpenId} />
       )}
-      {orders && view === 'open' && orders.length === 0 && (
+      {orders && view !== 'day' && orders.length === 0 && (
         <Empty>
           No open orders. New QR and takeaway orders appear here with a chime. Use <Link to="/admin/pos">New order</Link> for walk-ins.
         </Empty>
@@ -216,7 +232,7 @@ export default function Orders() {
 function settleGroups(list: AOrder[]) {
   const groups = new Map<string, { key: string; table: string | null; orders: AOrder[] }>();
   for (const o of list) {
-    const key = o.source === 'table' && o.table_label ? `t:${o.table_label}:${o.sitting ?? ''}` : `o:${o.id}`;
+    const key = o.source === 'table' && o.table_label ? `t:${o.table_label}` : `o:${o.id}`;
     const g = groups.get(key) ?? { key, table: o.source === 'table' ? o.table_label : null, orders: [] };
     g.orders.push(o);
     groups.set(key, g);
@@ -227,19 +243,29 @@ function settleGroups(list: AOrder[]) {
 }
 
 /** A table's served orders as one bill: what each came to, what's still due, and one way to pay and close. */
+const STAGE: Record<string, string> = { new: 'New', preparing: 'Preparing', ready: 'Ready', served: 'Served', completed: 'Closed' };
+
 function TableCard({
   table,
   orders,
   onOpen,
   onInvoice,
   onClose,
+  onCancel,
+  showStage = false,
 }: {
   table: string;
   orders: AOrder[];
   onOpen: (id: number) => void;
   onInvoice: (orderId: number) => void;
   onClose: (o: AOrder) => void;
+  onCancel: (o: AOrder) => void;
+  /** The Tables view shows each order's stage; To settle only has served ones. */
+  showStage?: boolean;
 }) {
+  const { can } = useAuth();
+  const [confirm, setConfirm] = useState<number | null>(null);
+  const allServed = orders.every(o => o.status === 'served' || o.status === 'completed');
   const total = orders.reduce((a, o) => a + o.total_paise, 0);
   const due = orders.reduce((a, o) => a + Math.max(o.total_paise - o.paid_paise, 0), 0);
   const firstUnpaid = orders.find(o => o.payment_status !== 'paid') ?? orders[0];
@@ -258,12 +284,34 @@ function TableCard({
         </header>
         <ul className="a-table-orders">
           {orders.map(o => (
-            <li key={o.id}>
+            <li key={o.id} className="a-table-order-row">
               <button type="button" className="a-table-order" onClick={() => onOpen(o.id)}>
                 <b>#{o.number}</b>
                 <span className="a-table-order-items">{o.lines.map(l => `${l.qty}× ${l.name}`).join(', ')}</span>
                 <span className="num">{rs(o.total_paise)}</span>
               </button>
+              {(showStage || can('manager')) && (
+                <div className="a-table-order-meta">
+                  {showStage && <span className={`a-stage is-${o.status}`}>{STAGE[o.status] ?? o.status}</span>}
+                  {can('manager') &&
+                    o.status !== 'completed' &&
+                    (confirm === o.id ? (
+                      <span className="a-confirm">
+                        Cancel #{o.number}?
+                        <button type="button" className="a-btn a-btn-danger a-btn-sm" onClick={() => (setConfirm(null), onCancel(o))}>
+                          Yes, cancel
+                        </button>
+                        <button type="button" className="a-btn a-btn-sm" onClick={() => setConfirm(null)}>
+                          Keep
+                        </button>
+                      </span>
+                    ) : (
+                      <button type="button" className="a-btn a-btn-ghost a-btn-sm a-cancel" onClick={() => setConfirm(o.id)}>
+                        Cancel
+                      </button>
+                    ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -273,27 +321,41 @@ function TableCard({
         </footer>
       </div>
       <div className="a-card-actions">
-        {due > 0 ? (
+        {due > 0 && allServed ? (
           <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={() => onInvoice(firstUnpaid.id)}>
             Take payment
           </button>
-        ) : (
-          <button type="button" className="a-btn a-btn-sm" onClick={() => onInvoice(orders[0].id)}>
-            Invoice
-          </button>
-        )}
-        {due === 0 && closable && (
+        ) : due === 0 && closable ? (
           <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={() => onClose(closable)}>
             Close table {table}
           </button>
-        )}
+        ) : null}
+        <button type="button" className="a-btn a-btn-sm" onClick={() => onInvoice(firstUnpaid.id)}>
+          View bill
+        </button>
       </div>
     </article>
   );
 }
 
-function OrderCard({ o, onOpen, onMove, onInvoice }: { o: AOrder; onOpen: () => void; onMove: (to: AOrder['status']) => void; onInvoice: () => void }) {
-  const { me } = useAuth();
+function OrderCard({
+  o,
+  onOpen,
+  onMove,
+  onInvoice,
+  onCancel,
+}: {
+  o: AOrder;
+  onOpen: () => void;
+  onMove: (to: AOrder['status']) => void;
+  onInvoice: () => void;
+  onCancel: () => void;
+}) {
+  const { me, can } = useAuth();
+  const [confirm, setConfirm] = useState(false);
+  const served = o.status === 'served' || o.status === 'completed';
+  // A table's orders are paid together on the table's bill, never one by one.
+  const ownBill = o.source !== 'table';
   // Servers leave preparing and ready to the kitchen; they take over once it's ready.
   const kitchenStep = o.status === 'new' || o.status === 'preparing';
   const next = kitchenStep && !cooks(me?.role) ? undefined : NEXT[o.status];
@@ -329,21 +391,89 @@ function OrderCard({ o, onOpen, onMove, onInvoice }: { o: AOrder; onOpen: () => 
             {o.source === 'takeaway' && next.to === 'served' ? 'Picked up' : next.label}
           </button>
         )}
-        {(o.status === 'served' || o.status === 'completed') && o.payment_status !== 'paid' && (
+        {served && ownBill && o.payment_status !== 'paid' && (
           <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={o.invoice_id ? onInvoice : onOpen}>
             Take payment
           </button>
         )}
-        <button type="button" className="a-btn a-btn-sm" onClick={onInvoice}>
-          Invoice
-        </button>
+        {served && ownBill && (
+          <button type="button" className="a-btn a-btn-sm" onClick={onInvoice}>
+            Invoice
+          </button>
+        )}
         {o.status === 'served' && o.payment_status === 'paid' && (
           <button type="button" className="a-btn a-btn-sm" onClick={() => onMove('completed')}>
             Close order
           </button>
         )}
+        {can('manager') && o.status !== 'completed' && !confirm && (
+          <button type="button" className="a-btn a-btn-ghost a-btn-sm a-cancel" onClick={() => setConfirm(true)}>
+            Cancel
+          </button>
+        )}
       </div>
+      {confirm && (
+        <div className="a-card-confirm">
+          <span>Cancel order #{o.number}?</span>
+          <button type="button" className="a-btn a-btn-danger a-btn-sm" onClick={() => (setConfirm(false), onCancel())}>
+            Yes, cancel
+          </button>
+          <button type="button" className="a-btn a-btn-sm" onClick={() => setConfirm(false)}>
+            Keep
+          </button>
+        </div>
+      )}
     </article>
+  );
+}
+
+/** Every table with orders open: each order's stage, what the table owes, its bill. Takeaway and counter below. */
+function TablesView({
+  orders,
+  onOpen,
+  onInvoice,
+  onClose,
+  onCancel,
+}: {
+  orders: AOrder[];
+  onOpen: (id: number) => void;
+  onInvoice: (orderId: number) => void;
+  onClose: (o: AOrder) => void;
+  onCancel: (o: AOrder) => void;
+}) {
+  const groups = settleGroups(orders.filter(o => o.status !== 'cancelled'));
+  const tables = groups.filter(g => g.table);
+  const others = groups.filter(g => !g.table);
+  if (!groups.length) return null;
+  return (
+    <div className="a-tables-view">
+      {tables.length === 0 && <p className="a-muted">No tables have open orders.</p>}
+      {tables.map(g => (
+        <TableCard key={g.key} table={g.table!} orders={g.orders} onOpen={onOpen} onInvoice={onInvoice} onClose={onClose} onCancel={onCancel} showStage />
+      ))}
+      {others.length > 0 && (
+        <section className="a-tables-others" aria-label="Takeaway and counter">
+          <h2>Takeaway and counter</h2>
+          <ul className="a-table-orders">
+            {others.map(g => {
+              const o = g.orders[0];
+              return (
+                <li key={o.id} className="a-table-order-row">
+                  <button type="button" className="a-table-order" onClick={() => onOpen(o.id)}>
+                    <b>#{o.number}</b>
+                    <span className="a-table-order-items">{where(o)}</span>
+                    <span className="num">{rs(o.total_paise)}</span>
+                  </button>
+                  <div className="a-table-order-meta">
+                    <span className={`a-stage is-${o.status}`}>{STAGE[o.status] ?? o.status}</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -467,7 +597,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
           )}
           <span className="a-spacer" />
           <button type="button" className="a-btn" onClick={() => setInvoiceOpen(true)}>
-            {o.invoice_number ? `Invoice ${o.invoice_number}` : 'Invoice'}
+            {o.source === 'table' && o.table_label ? `Table ${o.table_label} bill` : o.invoice_number ? `Invoice ${o.invoice_number}` : 'Invoice'}
           </button>
           {o.status === 'served' && o.payment_status === 'paid' && (
             <button type="button" className="a-btn a-btn-primary" disabled={busy} onClick={() => act(() => call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: 'completed' } }), o.table_label ? `Table ${o.table_label} closed` : 'Order closed')}>
@@ -557,15 +687,19 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
             </form>
           )}
 
-          {due > 0 && o.status !== 'cancelled' && o.invoice_id && (
+          {due > 0 && o.status !== 'cancelled' && (o.invoice_id || o.source === 'table') && (
             <div className="a-pay-form">
-              <p className="a-hint">This order is on invoice {o.invoice_number}. Take payment on the invoice so the whole bill is settled together.</p>
+              <p className="a-hint">
+                {o.source === 'table' && o.table_label
+                  ? `Table ${o.table_label} pays for all its orders together, on the table's bill.`
+                  : `This order is on invoice ${o.invoice_number}. Take payment on the invoice so the whole bill is settled together.`}
+              </p>
               <button type="button" className="a-btn a-btn-primary a-btn-lg" onClick={() => setInvoiceOpen(true)}>
-                Open invoice {o.invoice_number}
+                {o.source === 'table' && o.table_label ? `Open table ${o.table_label}'s bill` : `Open invoice ${o.invoice_number}`}
               </button>
             </div>
           )}
-          {due > 0 && o.status !== 'cancelled' && !o.invoice_id && (
+          {due > 0 && o.status !== 'cancelled' && !o.invoice_id && o.source !== 'table' && (
             <form
               className="a-pay-form"
               onSubmit={e => {
