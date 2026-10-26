@@ -263,7 +263,6 @@ function TableCard({
   /** The Tables view shows each order's stage; To settle only has served ones. */
   showStage?: boolean;
 }) {
-  const { can } = useAuth();
   const [confirm, setConfirm] = useState<number | null>(null);
   const allServed = orders.every(o => o.status === 'served' || o.status === 'completed');
   const total = orders.reduce((a, o) => a + o.total_paise, 0);
@@ -290,11 +289,10 @@ function TableCard({
                 <span className="a-table-order-items">{o.lines.map(l => `${l.qty}× ${l.name}`).join(', ')}</span>
                 <span className="num">{rs(o.total_paise)}</span>
               </button>
-              {(showStage || can('manager')) && (
+              {(showStage || o.status !== 'completed') && (
                 <div className="a-table-order-meta">
                   {showStage && <span className={`a-stage is-${o.status}`}>{STAGE[o.status] ?? o.status}</span>}
-                  {can('manager') &&
-                    o.status !== 'completed' &&
+                  {o.status !== 'completed' &&
                     (confirm === o.id ? (
                       <span className="a-confirm">
                         Cancel #{o.number}?
@@ -351,7 +349,7 @@ function OrderCard({
   onInvoice: () => void;
   onCancel: () => void;
 }) {
-  const { me, can } = useAuth();
+  const { me } = useAuth();
   const [confirm, setConfirm] = useState(false);
   const served = o.status === 'served' || o.status === 'completed';
   // A table's orders are paid together on the table's bill, never one by one.
@@ -406,7 +404,7 @@ function OrderCard({
             Close order
           </button>
         )}
-        {can('manager') && o.status !== 'completed' && !confirm && (
+        {o.status !== 'completed' && !confirm && (
           <button type="button" className="a-btn a-btn-ghost a-btn-sm a-cancel" onClick={() => setConfirm(true)}>
             Cancel
           </button>
@@ -578,7 +576,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
       wide
       footer={
         <>
-          {!closed && can('manager') && (
+          {!closed && (
             confirmCancel ? (
               <span className="a-confirm">
                 Cancel this order?

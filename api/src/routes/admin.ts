@@ -176,12 +176,12 @@ export function adminRoutes() {
       })
       .parse(await c.req.json());
     const role = c.get('staff').role;
-    if ((b.status === 'cancelled' || b.discountPaise !== undefined) && !isManager(role))
-      throw new HttpError(403, 'Only a manager can cancel an order or give a discount.', 'forbidden');
+    // Anyone on staff can cancel an order (a chef only while it's still in the kitchen); discounts need a manager.
+    if (b.discountPaise !== undefined && !isManager(role)) throw new HttpError(403, 'Only a manager can give a discount.', 'forbidden');
     if (b.status && KITCHEN_STATUSES.includes(b.status) && !cooks(role))
       throw new HttpError(403, 'Only the kitchen moves orders to preparing or ready. The owner can give you the Server and kitchen role.', 'forbidden');
-    if (role === 'chef' && (Object.keys(b).some(k => k !== 'status') || !KITCHEN_STATUSES.includes(b.status ?? '')))
-      throw new HttpError(403, 'The kitchen can move orders to preparing or ready. A server marks them served.', 'forbidden');
+    if (role === 'chef' && (Object.keys(b).some(k => k !== 'status') || !(KITCHEN_STATUSES.includes(b.status ?? '') || b.status === 'cancelled')))
+      throw new HttpError(403, 'The kitchen can move orders to preparing or ready, or cancel them. A server marks them served.', 'forbidden');
     const freed = await sql.begin(async tx => {
       const [{ table_label: label } = { table_label: null }] = await tx<{ table_label: string | null }[]>`select table_label from orders where id = ${id}`;
       const wasBusy = await lockTable(tx, label);

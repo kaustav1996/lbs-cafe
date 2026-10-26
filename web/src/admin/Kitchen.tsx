@@ -25,6 +25,7 @@ export default function Kitchen() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
   const [tab, setTab] = useState<string>('new');
+  const [confirm, setConfirm] = useState<number | null>(null);
   useTick(30000);
 
   const load = useCallback(async () => {
@@ -49,8 +50,10 @@ export default function Kitchen() {
     setOrders(xs => xs && xs.map(x => (x.id === o.id ? { ...x, status: to } : x)));
     try {
       await call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: to } });
+      return true;
     } catch (e) {
       toast(errText(e), 'bad');
+      return false;
     } finally {
       setBusy(null);
       void load();
@@ -111,7 +114,30 @@ export default function Kitchen() {
                               {col.back.label}
                             </button>
                           )}
+                          {confirm !== o.id && (
+                            <button type="button" className="a-btn a-btn-ghost a-btn-sm a-cancel" disabled={busy === o.id} onClick={() => setConfirm(o.id)}>
+                              Cancel
+                            </button>
+                          )}
                         </div>
+                        {confirm === o.id && (
+                          <div className="a-card-confirm">
+                            <span>Cancel order #{o.number}?</span>
+                            <button
+                              type="button"
+                              className="a-btn a-btn-danger a-btn-sm"
+                              onClick={() => {
+                                setConfirm(null);
+                                void move(o, 'cancelled').then(ok => ok && toast(`Order #${o.number} cancelled`));
+                              }}
+                            >
+                              Yes, cancel
+                            </button>
+                            <button type="button" className="a-btn a-btn-sm" onClick={() => setConfirm(null)}>
+                              Keep
+                            </button>
+                          </div>
+                        )}
                       </article>
                     );
                   })}

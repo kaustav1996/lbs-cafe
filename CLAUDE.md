@@ -67,7 +67,8 @@ The test suite wipes the database it points at. Only run it against a throwaway 
   and status moves up to ready. Only chefs, server_kitchen, managers and owners move orders to preparing/ready
   (`cooks()`); a plain server serves and bills. Servers get orders, new order, billing, bookings and settings
   (read-only); server_kitchen also gets the Kitchen screen. Reports, offers and customers need
-  manager. Discounts, cancelling orders, menu edits and settings changes need manager. Chefs and servers may only
+  manager. Discounts, menu edits and settings changes need manager. Anyone on staff can cancel an order (a chef only
+  while it's still in the kitchen); an order on a paid bill can't be cancelled. Chefs and servers may only
   toggle `available` (sold out) on items. Screens per role are in `NAV` (`web/src/admin/AdminApp.tsx`).
 - Migrations are append-only: add `003_*.sql`, never edit an applied one.
 - Copy style on the site: plain, sentence case, no ALL-CAPS labels, no middle-dot meta strings, no arrows on buttons.

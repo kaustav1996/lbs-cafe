@@ -242,7 +242,7 @@ test('reports: sales summary and GST export add up', async () => {
   assert.match(csv.body, /CGST 9%/);
 });
 
-test('staff accounts cannot give discounts or cancel', async () => {
+test('staff accounts cannot give discounts or edit dishes (they can cancel: see below)', async () => {
   await app.inject({ method: 'POST', url: '/api/admin/staff', headers: auth(), payload: { name: 'Server', email: 'server@lbscafe.test', password: 'server-pass-1', role: 'staff' } });
   const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } });
   const st = { authorization: `Bearer ${login.json().token}` };
@@ -1248,4 +1248,33 @@ test('dish photos: upload, show on the menu, replace (old file removed), remove;
   const gone = await app.inject({ method: 'DELETE', url: `/api/admin/items/${item.id}/photo`, headers: auth() });
   assert.equal(gone.statusCode, 200);
   assert.equal((await sql<{ image_url: string | null }[]>`select image_url from items where id = ${item.id}`)[0].image_url, null);
+});
+
+test('servers and chefs can cancel orders; a chef only while the order is in the kitchen', async () => {
+  await app.inject({ method: 'POST', url: '/api/admin/staff', headers: auth(), payload: { name: 'Cancel server', email: 'cancel-server@lbscafe.test', password: 'cancel-pass-1', role: 'staff' } });
+  await app.inject({ method: 'POST', url: '/api/admin/staff', headers: auth(), payload: { name: 'Cancel chef', email: 'cancel-chef@lbscafe.test', password: 'cancel-pass-2', role: 'chef' } });
+  hits.clear(); // an earlier test trips the sign-in limit on purpose
+  const as = async (email: string, password: string) => {
+    const r = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email, password } });
+    assert.equal(r.statusCode, 200, r.body);
+    return { authorization: `Bearer ${r.json().token}` };
+  };
+  const server = await as('cancel-server@lbscafe.test', 'cancel-pass-1');
+  const chef = await as('cancel-chef@lbscafe.test', 'cancel-pass-2');
+  const latte = find('Cafe Latte');
+  const place = async () => placeAt('8', [{ ...latte, qty: 1 }]);
+  const patch = (id: number, status: string, headers: Record<string, string>) => app.inject({ method: 'PATCH', url: `/api/admin/orders/${id}`, headers, payload: { status } });
+  // A server cancels a served order.
+  const a = await place();
+  for (const s of ['preparing', 'ready', 'served']) assert.equal((await patch(a, s, auth())).statusCode, 200);
+  assert.equal((await patch(a, 'cancelled', server)).statusCode, 200);
+  // A chef cancels one still being made, but not one that has left the kitchen.
+  const b = await place();
+  assert.equal((await patch(b, 'preparing', chef)).statusCode, 200);
+  assert.equal((await patch(b, 'cancelled', chef)).statusCode, 200);
+  const c = await place();
+  for (const s of ['preparing', 'ready', 'served']) await patch(c, s, auth());
+  assert.equal((await patch(c, 'cancelled', chef)).statusCode, 409);
+  const st = Object.fromEntries((await sql<{ id: number; status: string }[]>`select id, status from orders where id in (${a}, ${b}, ${c})`).map(r => [r.id, r.status]));
+  assert.deepEqual(st, { [a]: 'cancelled', [b]: 'cancelled', [c]: 'served' });
 });
