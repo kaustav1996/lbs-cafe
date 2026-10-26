@@ -287,8 +287,9 @@ export async function publishUpdate(orderId: number) {
 
 export async function getOrder(id: number) {
   const [o] = await sql<({ id: number; number: number | null; token: string; status: string; invoice_id: number | null; invoice_number: string | null; invoice_status: string | null; source: string; table_label: string | null } & Record<string, any>)[]>`
-    select o.*, i.number as invoice_number, i.status as invoice_status
-    from orders o left join invoices i on i.id = o.invoice_id where o.id = ${id}`;
+    select o.*, i.number as invoice_number, i.status as invoice_status, cs.name as cancelled_by_name
+    from orders o left join invoices i on i.id = o.invoice_id left join staff cs on cs.id = o.cancelled_by
+    where o.id = ${id}`;
   if (!o) return null;
   const lines = await sql`select id, item_id, option_id, name, option_label, diet, unit_paise, qty, line_paise
                           from order_lines where order_id = ${id} order by id`;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ago, errText, useAuth, useOnEvent, useTick } from './core';
-import { BoardTabs, DietDot, Empty, PageHead, toast } from './ui';
+import { BoardTabs, CancelConfirm, DietDot, Empty, PageHead, toast } from './ui';
 import { where, type AOrder } from './Orders';
 
 const COLUMNS: {
@@ -45,11 +45,11 @@ export default function Kitchen() {
   }, [load]);
   useOnEvent(['order.created', 'order.updated'], () => void load());
 
-  const move = async (o: AOrder, to: AOrder['status']) => {
+  const move = async (o: AOrder, to: AOrder['status'], reason?: string) => {
     setBusy(o.id);
     setOrders(xs => xs && xs.map(x => (x.id === o.id ? { ...x, status: to } : x)));
     try {
-      await call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: to } });
+      await call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: to === 'cancelled' ? { status: to, cancelReason: reason || null } : { status: to } });
       return true;
     } catch (e) {
       toast(errText(e), 'bad');
@@ -122,20 +122,14 @@ export default function Kitchen() {
                         </div>
                         {confirm === o.id && (
                           <div className="a-card-confirm">
-                            <span>Cancel order #{o.number}?</span>
-                            <button
-                              type="button"
-                              className="a-btn a-btn-danger a-btn-sm"
-                              onClick={() => {
+                            <CancelConfirm
+                              number={o.number}
+                              onConfirm={r => {
                                 setConfirm(null);
-                                void move(o, 'cancelled').then(ok => ok && toast(`Order #${o.number} cancelled`));
+                                void move(o, 'cancelled', r).then(ok => ok && toast(`Order #${o.number} cancelled`));
                               }}
-                            >
-                              Yes, cancel
-                            </button>
-                            <button type="button" className="a-btn a-btn-sm" onClick={() => setConfirm(null)}>
-                              Keep
-                            </button>
+                              onKeep={() => setConfirm(null)}
+                            />
                           </div>
                         )}
                       </article>

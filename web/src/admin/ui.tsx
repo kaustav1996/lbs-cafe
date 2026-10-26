@@ -98,3 +98,34 @@ export function BoardTabs({ tabs, value, onChange }: { tabs: { key: string; titl
     </div>
   );
 }
+
+const CANCEL_REASONS = ['Guest changed their mind', 'Out of stock', 'Ordered twice', 'Wrong order'];
+
+/**
+ * "Cancel order #N?" with a reason: tap a common one or type a short note. The reason is optional, so a busy
+ * floor can still cancel in two taps. The order keeps who cancelled it, when and why.
+ */
+export function CancelConfirm({ number, busy, onConfirm, onKeep }: { number: number | null; busy?: boolean; onConfirm: (reason: string) => void; onKeep: () => void }) {
+  const [reason, setReason] = useState('');
+  return (
+    <div className="a-cancel-confirm" role="group" aria-label={`Cancel order ${number ?? ''}`}>
+      <b>Cancel order #{number}?</b>
+      <div className="a-cancel-reasons">
+        {CANCEL_REASONS.map(r => (
+          <button key={r} type="button" className={reason === r ? 'on' : ''} aria-pressed={reason === r} onClick={() => setReason(reason === r ? '' : r)}>
+            {r}
+          </button>
+        ))}
+      </div>
+      <input className="a-input" value={reason} maxLength={200} onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" aria-label="Reason (optional)" />
+      <div className="a-actions">
+        <button type="button" className="a-btn a-btn-danger a-btn-sm" disabled={busy} onClick={() => onConfirm(reason.trim())}>
+          Yes, cancel
+        </button>
+        <button type="button" className="a-btn a-btn-sm" onClick={onKeep}>
+          Keep
+        </button>
+      </div>
+    </div>
+  );
+}

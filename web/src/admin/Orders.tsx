@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ago, cooks, errText, rs, timeIST, todayIST, useAuth, useOnEvent, useTick } from './core';
-import { BoardTabs, DietDot, Empty, Modal, PageHead, toast } from './ui';
+import { BoardTabs, CancelConfirm, DietDot, Empty, Modal, PageHead, toast } from './ui';
 import { ItemPicker, useAdminMenu, type PickedLine } from './picker';
 import { InvoiceModal, METHODS, needsReference } from './Invoice';
 
@@ -15,6 +15,10 @@ export interface AOrder {
   table_label: string | null;
   /** Which visit at the table (a new sitting starts once the table's settled). */
   sitting?: number | null;
+  /** The cancel record. */
+  cancelled_by_name?: string | null;
+  cancel_reason?: string | null;
+  closed_at?: string | null;
   customer_name: string | null;
   customer_phone: string | null;
   status: 'new' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled';
@@ -108,9 +112,9 @@ export default function Orders() {
     }
   };
 
-  const cancel = async (o: AOrder) => {
+  const cancel = async (o: AOrder, reason = '') => {
     try {
-      await call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: 'cancelled' } });
+      await call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: 'cancelled', cancelReason: reason || null } });
       toast(`Order #${o.number} cancelled`);
       void load();
     } catch (e) {
@@ -200,10 +204,10 @@ export default function Orders() {
                       g.table ? (
                         <TableCard key={g.key} table={g.table} orders={g.orders} onOpen={setOpenId} onInvoice={setBillFor} onClose={o => move(o, 'completed')} onCancel={cancel} />
                       ) : (
-                        <OrderCard key={g.key} o={g.orders[0]} onOpen={() => setOpenId(g.orders[0].id)} onMove={to => move(g.orders[0], to)} onInvoice={() => setBillFor(g.orders[0].id)} onCancel={() => cancel(g.orders[0])} />
+                        <OrderCard key={g.key} o={g.orders[0]} onOpen={() => setOpenId(g.orders[0].id)} onMove={to => move(g.orders[0], to)} onInvoice={() => setBillFor(g.orders[0].id)} onCancel={r => cancel(g.orders[0], r)} />
                       ),
                     )
-                  : list.map(o => <OrderCard key={o.id} o={o} onOpen={() => setOpenId(o.id)} onMove={to => move(o, to)} onInvoice={() => setBillFor(o.id)} onCancel={() => cancel(o)} />)}
+                  : list.map(o => <OrderCard key={o.id} o={o} onOpen={() => setOpenId(o.id)} onMove={to => move(o, to)} onInvoice={() => setBillFor(o.id)} onCancel={r => cancel(o, r)} />)}
               </section>
             );
           })}
@@ -259,7 +263,7 @@ function TableCard({
   onOpen: (id: number) => void;
   onInvoice: (orderId: number) => void;
   onClose: (o: AOrder) => void;
-  onCancel: (o: AOrder) => void;
+  onCancel: (o: AOrder, reason: string) => void;
   /** The Tables view shows each order's stage; To settle only has served ones. */
   showStage?: boolean;
 }) {
@@ -292,24 +296,14 @@ function TableCard({
               {(showStage || o.status !== 'completed') && (
                 <div className="a-table-order-meta">
                   {showStage && <span className={`a-stage is-${o.status}`}>{STAGE[o.status] ?? o.status}</span>}
-                  {o.status !== 'completed' &&
-                    (confirm === o.id ? (
-                      <span className="a-confirm">
-                        Cancel #{o.number}?
-                        <button type="button" className="a-btn a-btn-danger a-btn-sm" onClick={() => (setConfirm(null), onCancel(o))}>
-                          Yes, cancel
-                        </button>
-                        <button type="button" className="a-btn a-btn-sm" onClick={() => setConfirm(null)}>
-                          Keep
-                        </button>
-                      </span>
-                    ) : (
-                      <button type="button" className="a-btn a-btn-ghost a-btn-sm a-cancel" onClick={() => setConfirm(o.id)}>
-                        Cancel
-                      </button>
-                    ))}
+                  {o.status !== 'completed' && confirm !== o.id && (
+                    <button type="button" className="a-btn a-btn-ghost a-btn-sm a-cancel" onClick={() => setConfirm(o.id)}>
+                      Cancel
+                    </button>
+                  )}
                 </div>
               )}
+              {confirm === o.id && <CancelConfirm number={o.number} onConfirm={r => (setConfirm(null), onCancel(o, r))} onKeep={() => setConfirm(null)} />}
             </li>
           ))}
         </ul>
@@ -347,7 +341,7 @@ function OrderCard({
   onOpen: () => void;
   onMove: (to: AOrder['status']) => void;
   onInvoice: () => void;
-  onCancel: () => void;
+  onCancel: (reason: string) => void;
 }) {
   const { me } = useAuth();
   const [confirm, setConfirm] = useState(false);
@@ -412,13 +406,7 @@ function OrderCard({
       </div>
       {confirm && (
         <div className="a-card-confirm">
-          <span>Cancel order #{o.number}?</span>
-          <button type="button" className="a-btn a-btn-danger a-btn-sm" onClick={() => (setConfirm(false), onCancel())}>
-            Yes, cancel
-          </button>
-          <button type="button" className="a-btn a-btn-sm" onClick={() => setConfirm(false)}>
-            Keep
-          </button>
+          <CancelConfirm number={o.number} onConfirm={r => (setConfirm(false), onCancel(r))} onKeep={() => setConfirm(false)} />
         </div>
       )}
     </article>
@@ -437,7 +425,7 @@ function TablesView({
   onOpen: (id: number) => void;
   onInvoice: (orderId: number) => void;
   onClose: (o: AOrder) => void;
-  onCancel: (o: AOrder) => void;
+  onCancel: (o: AOrder, reason: string) => void;
 }) {
   const groups = settleGroups(orders.filter(o => o.status !== 'cancelled'));
   const tables = groups.filter(g => g.table);
@@ -507,7 +495,15 @@ function DayList({ orders, onOpen }: { orders: AOrder[]; onOpen: (id: number) =>
               <td>{timeIST(o.created_at)}</td>
               <td>{where(o)}</td>
               <td>{o.lines.reduce((a, l) => a + l.qty, 0)}</td>
-              <td className={`a-status ${o.status}`}>{o.status}</td>
+              <td className={`a-status ${o.status}`}>
+                {o.status}
+                {o.status === 'cancelled' && (o.cancelled_by_name || o.cancel_reason) && (
+                  <small className="a-cancel-why">
+                    {o.cancelled_by_name ? `by ${o.cancelled_by_name}` : ''}
+                    {o.cancel_reason ? `${o.cancelled_by_name ? ': ' : ''}${o.cancel_reason}` : ''}
+                  </small>
+                )}
+              </td>
               <td>{o.payment_status}</td>
               <td className="r num">{rs(o.total_paise)}</td>
             </tr>
@@ -576,22 +572,10 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
       wide
       footer={
         <>
-          {!closed && (
-            confirmCancel ? (
-              <span className="a-confirm">
-                Cancel this order?
-                <button type="button" className="a-btn a-btn-danger a-btn-sm" disabled={busy} onClick={() => act(() => call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: 'cancelled' } }), 'Order cancelled')}>
-                  Yes, cancel it
-                </button>
-                <button type="button" className="a-btn a-btn-sm" onClick={() => setConfirmCancel(false)}>
-                  Keep it
-                </button>
-              </span>
-            ) : (
-              <button type="button" className="a-btn a-btn-ghost" onClick={() => setConfirmCancel(true)}>
-                Cancel order
-              </button>
-            )
+          {!closed && !confirmCancel && (
+            <button type="button" className="a-btn a-btn-ghost a-cancel" onClick={() => setConfirmCancel(true)}>
+              Cancel order
+            </button>
           )}
           <span className="a-spacer" />
           <button type="button" className="a-btn" onClick={() => setInvoiceOpen(true)}>
@@ -605,6 +589,26 @@ export function OrderDetail({ id, onClose, onChanged }: { id: number; onClose: (
         </>
       }
     >
+      {confirmCancel && !closed && (
+        <div className="a-card-confirm a-detail-confirm">
+          <CancelConfirm
+            number={o.number}
+            busy={busy}
+            onConfirm={r =>
+              act(() => call(`/api/admin/orders/${o.id}`, { method: 'PATCH', json: { status: 'cancelled', cancelReason: r || null } }), `Order #${o.number} cancelled`).then(() =>
+                setConfirmCancel(false),
+              )
+            }
+            onKeep={() => setConfirmCancel(false)}
+          />
+        </div>
+      )}
+      {o.status === 'cancelled' && (
+        <p className="a-cancel-record">
+          Cancelled{o.cancelled_by_name ? ` by ${o.cancelled_by_name}` : ''}
+          {o.closed_at ? `, ${timeIST(o.closed_at)}` : ''}. {o.cancel_reason ? `Reason: ${o.cancel_reason}` : 'No reason given.'}
+        </p>
+      )}
       <div className="a-detail">
         <div>
           <p className="a-muted">

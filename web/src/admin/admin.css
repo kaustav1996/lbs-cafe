@@ -2479,3 +2479,59 @@ textarea.a-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* Cancel with a reason, and the record on a cancelled order. */
+.a-cancel-confirm {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+.a-cancel-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.a-cancel-reasons button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--a-line-strong);
+  border-radius: 999px;
+  background: var(--a-panel);
+  color: var(--a-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.a-cancel-reasons button.on {
+  background: var(--a-ink);
+  border-color: var(--a-ink);
+  color: var(--a-bg);
+}
+.a-table-order-row .a-cancel-confirm {
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: var(--a-bad-soft);
+}
+.a-detail-confirm {
+  margin: 0 0 14px;
+  border: 1px solid var(--a-bad);
+  border-radius: 12px;
+}
+.a-cancel-record {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--a-bad-soft);
+  color: var(--a-ink);
+  font-weight: 600;
+}
+.a-cancel-why {
+  display: block;
+  text-transform: none;
+  color: var(--a-muted);
+  font-size: 12px;
+  white-space: normal;
+  max-width: 220px;
+}

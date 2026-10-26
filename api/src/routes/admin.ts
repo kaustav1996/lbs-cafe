@@ -123,9 +123,10 @@ export function adminRoutes() {
     const { start, end } = dayRange(q.date ?? todayIST(), q.date ?? todayIST());
     const s = q.search ? `%${q.search}%` : null;
     const rows = await sql`
-      select o.*, (select coalesce(json_agg(json_build_object('name', l.name, 'option', l.option_label, 'qty', l.qty, 'diet', l.diet) order by l.id), '[]')
+      select o.*, cs.name as cancelled_by_name,
+             (select coalesce(json_agg(json_build_object('name', l.name, 'option', l.option_label, 'qty', l.qty, 'diet', l.diet) order by l.id), '[]')
                    from order_lines l where l.order_id = o.id) as lines
-      from orders o
+      from orders o left join staff cs on cs.id = o.cancelled_by
       where o.created_at >= ${start} and o.created_at < ${end} and o.status <> 'held'
         and (${s}::text is null or o.number::text like ${s} or o.customer_name ilike ${s} or o.customer_phone like ${s} or o.table_label = ${q.search ?? ''})
       order by o.created_at desc`;
@@ -169,6 +170,8 @@ export function adminRoutes() {
     const b = z
       .object({
         status: z.enum(['new', 'preparing', 'ready', 'served', 'completed', 'cancelled']).optional(),
+        /** Why it was cancelled (optional, with status: 'cancelled'). */
+        cancelReason: z.string().trim().max(200).nullable().optional(),
         discountPaise: z.number().int().min(0).optional(),
         discountNote: z.string().trim().max(80).nullable().optional(),
         note: z.string().trim().max(280).nullable().optional(),
@@ -180,7 +183,7 @@ export function adminRoutes() {
     if (b.discountPaise !== undefined && !isManager(role)) throw new HttpError(403, 'Only a manager can give a discount.', 'forbidden');
     if (b.status && KITCHEN_STATUSES.includes(b.status) && !cooks(role))
       throw new HttpError(403, 'Only the kitchen moves orders to preparing or ready. The owner can give you the Server and kitchen role.', 'forbidden');
-    if (role === 'chef' && (Object.keys(b).some(k => k !== 'status') || !(KITCHEN_STATUSES.includes(b.status ?? '') || b.status === 'cancelled')))
+    if (role === 'chef' && (Object.keys(b).some(k => k !== 'status' && k !== 'cancelReason') || !(KITCHEN_STATUSES.includes(b.status ?? '') || b.status === 'cancelled')))
       throw new HttpError(403, 'The kitchen can move orders to preparing or ready, or cancel them. A server marks them served.', 'forbidden');
     const freed = await sql.begin(async tx => {
       const [{ table_label: label } = { table_label: null }] = await tx<{ table_label: string | null }[]>`select table_label from orders where id = ${id}`;
@@ -202,6 +205,9 @@ export function adminRoutes() {
       if (b.status) {
         const closing = b.status === 'completed' || b.status === 'cancelled';
         await tx`update orders set status = ${b.status}, closed_at = ${closing ? new Date() : null}, updated_at = now() where id = ${id}`;
+        // The cancel record: who, and why (the time is closed_at).
+        if (b.status === 'cancelled')
+          await tx`update orders set cancelled_by = ${c.get('staff').sub}, cancel_reason = ${b.cancelReason || null} where id = ${id}`;
         // Closing one order of a paid table closes the rest of it too: every other order on the same bill or table
         // that's been served and fully paid. (Orders still in the kitchen, or not paid, stay open.)
         if (b.status === 'completed' && (o.invoice_id || o.table_label)) {

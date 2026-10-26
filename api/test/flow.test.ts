@@ -1267,11 +1267,21 @@ test('servers and chefs can cancel orders; a chef only while the order is in the
   // A server cancels a served order.
   const a = await place();
   for (const s of ['preparing', 'ready', 'served']) assert.equal((await patch(a, s, auth())).statusCode, 200);
-  assert.equal((await patch(a, 'cancelled', server)).statusCode, 200);
+  const cancelled = await app.inject({ method: 'PATCH', url: `/api/admin/orders/${a}`, headers: server, payload: { status: 'cancelled', cancelReason: 'Guest changed their mind' } });
+  assert.equal(cancelled.statusCode, 200, cancelled.body);
+  // The record: who and why, on the order and in the day's list.
+  const rec = cancelled.json().order;
+  assert.equal(rec.cancelled_by_name, 'Cancel server');
+  assert.equal(rec.cancel_reason, 'Guest changed their mind');
+  assert.ok(rec.closed_at);
+  const day = (await app.inject({ method: 'GET', url: '/api/admin/orders?view=day', headers: auth() })).json().orders;
+  assert.equal(day.find((o: any) => o.id === a).cancelled_by_name, 'Cancel server');
   // A chef cancels one still being made, but not one that has left the kitchen.
   const b = await place();
   assert.equal((await patch(b, 'preparing', chef)).statusCode, 200);
-  assert.equal((await patch(b, 'cancelled', chef)).statusCode, 200);
+  const chefCancel = await app.inject({ method: 'PATCH', url: `/api/admin/orders/${b}`, headers: chef, payload: { status: 'cancelled', cancelReason: 'Out of stock' } });
+  assert.equal(chefCancel.statusCode, 200, chefCancel.body);
+  assert.equal(chefCancel.json().order.cancel_reason, 'Out of stock');
   const c = await place();
   for (const s of ['preparing', 'ready', 'served']) await patch(c, s, auth());
   assert.equal((await patch(c, 'cancelled', chef)).statusCode, 409);
