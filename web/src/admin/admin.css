@@ -108,6 +108,10 @@
   gap: 16px;
   justify-items: start;
 }
+.a-login-card > .a-field,
+.a-login-card > .a-btn {
+  justify-self: stretch;
+}
 
 /* Shell */
 .a-shell {
