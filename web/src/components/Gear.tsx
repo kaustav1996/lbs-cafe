@@ -200,6 +200,11 @@ export function Deck() {
           <span className="sr-only">{music.available ? 'Play LB’s set' : 'Record player'}</span>
         </button>
       </div>
+      {music.failed && (
+        <p className="deck-note" role="status">
+          The music won’t load right now. Try again later.
+        </p>
+      )}
     </div>
   );
 }

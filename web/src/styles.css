@@ -742,6 +742,11 @@ mark {
 .deck-45 {
   --rpm: 1.33s;
 }
+.deck-note {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: var(--t-sm);
+}
 .deck-body {
   position: relative;
   aspect-ratio: 1;

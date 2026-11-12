@@ -17,11 +17,13 @@ interface MusicApi {
   loading: boolean;
   /** Played at least once on this visit, so the pause control stays in reach. */
   started: boolean;
+  /** The file couldn't be loaded on this visit (missing, or the file store is down). */
+  failed: boolean;
   toggle: () => void;
   pause: () => void;
 }
 
-const Ctx = createContext<MusicApi>({ available: false, playing: false, loading: false, started: false, toggle: () => {}, pause: () => {} });
+const Ctx = createContext<MusicApi>({ available: false, playing: false, loading: false, started: false, failed: false, toggle: () => {}, pause: () => {} });
 const POS_KEY = 'lbs.music.pos';
 
 function readPos(url: string): number | null {
@@ -48,6 +50,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [started, setStarted] = useState(false);
+  const [failed, setFailed] = useState(false);
   const win = useRef({ start: 0, end: null as number | null });
   win.current = { start: music?.start ?? 0, end: music?.end ?? null };
 
@@ -76,6 +79,13 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     a.addEventListener('playing', () => {
       setLoading(false);
       setPlaying(true);
+    });
+    // The file didn't come (a server error, or it's gone): stop trying on this visit, so the players go back
+    // to just spinning instead of flipping to Off on every tap.
+    a.addEventListener('error', () => {
+      setLoading(false);
+      setPlaying(false);
+      setFailed(true);
     });
     a.addEventListener('pause', () => {
       setLoading(false);
@@ -114,6 +124,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setPlaying(false);
       setLoading(false);
     }
+    setFailed(false);
   }, [src]);
 
   const toggle = useCallback(() => {
@@ -130,7 +141,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [get]);
   const pause = useCallback(() => audio.current?.pause(), []);
 
-  const value = useMemo(() => ({ available: !!src, playing, loading, started, toggle, pause }), [src, playing, loading, started, toggle, pause]);
+  const value = useMemo(
+    () => ({ available: !!src && !failed, playing, loading, started, failed, toggle, pause }),
+    [src, failed, playing, loading, started, toggle, pause],
+  );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
