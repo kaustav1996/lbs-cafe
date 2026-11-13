@@ -32,6 +32,12 @@ export async function menuTree(mode: 'live' | 'all' = 'live') {
         from item_options o
         left join menu_prices mp on mp.option_id = o.id and mp.menu_id = (select id from menus where live)
         where o.active order by o.sort, o.id`;
+  const links = await sql<{ item_id: number; ingredient_id: number }[]>`select item_id, ingredient_id from item_ingredients`;
+  const ingByItem = new Map<number, number[]>();
+  for (const l of links) {
+    if (!ingByItem.has(l.item_id)) ingByItem.set(l.item_id, []);
+    ingByItem.get(l.item_id)!.push(l.ingredient_id);
+  }
   const optsByItem = new Map<number, any[]>();
   for (const o of opts) {
     if (!optsByItem.has(o.item_id)) optsByItem.set(o.item_id, []);
@@ -42,11 +48,29 @@ export async function menuTree(mode: 'live' | 'all' = 'live') {
     const options = optsByItem.get(i.id) ?? [];
     if (!all && !options.length) continue;
     if (!itemsByCat.has(i.category_id)) itemsByCat.set(i.category_id, []);
-    itemsByCat.get(i.category_id)!.push({ ...i, options });
+    itemsByCat.get(i.category_id)!.push({ ...i, options, ingredients: ingByItem.get(i.id) ?? [] });
   }
   return cats
     .map(c => ({ ...c, items: itemsByCat.get(c.id) ?? [] }))
     .filter(c => all || c.items.length > 0);
+}
+
+/**
+ * The ingredient list. `live`: only ones a dish on the live menu has (what the guest filter offers).
+ * `all`: every one, with how many dishes use it, for the menu editor.
+ */
+export async function ingredientList(mode: 'live' | 'all' = 'live') {
+  if (mode === 'all')
+    return sql`
+      select g.id, g.name, g.allergen, (select count(*)::int from item_ingredients ii where ii.ingredient_id = g.id) as dishes
+      from ingredients g order by g.allergen desc, lower(g.name)`;
+  return sql`
+    select g.id, g.name, g.allergen from ingredients g
+    where exists (
+      select 1 from item_ingredients ii join items i on i.id = ii.item_id
+      join menu_items mi on mi.item_id = i.id join menus m on m.id = mi.menu_id and m.live
+      where ii.ingredient_id = g.id and i.active)
+    order by g.allergen desc, lower(g.name)`;
 }
 
 const OrderBody = z.object({
@@ -97,7 +121,10 @@ function publicOrder(o: any) {
 export function publicRoutes() {
   const app = new Hono();
 
-  app.get('/menu', async c => c.json({ categories: await menuTree('live') }));
+  app.get('/menu', async c => {
+    const [categories, ingredients] = await Promise.all([menuTree('live'), ingredientList('live')]);
+    return c.json({ categories, ingredients });
+  });
 
   app.get('/settings', async c => {
     const s = await getSettings();

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { errText, rs, useAuth, useOnEvent } from './core';
 import { DietDot, Modal, PageHead, Toggle, toast } from './ui';
-import { useAdminMenu, type ACategory, type AItem } from './picker';
+import { useAdminMenu, type ACategory, type AIngredient, type AItem } from './picker';
 import { MenuBar, MenuPriceEditor, useMenus } from './Menus';
 
 export default function MenuAdmin() {
   const { call, can } = useAuth();
-  const { menu, error, reload, setMenu } = useAdminMenu('all');
+  const { menu, ingredients, error, reload, setMenu } = useAdminMenu('all');
+  const [managing, setManaging] = useState(false);
+  const ingName = new Map(ingredients.map(g => [g.id, g.name]));
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<{ item?: AItem; categoryId: number } | null>(null);
   const [editingCat, setEditingCat] = useState<ACategory | 'new' | null>(null);
@@ -51,9 +53,14 @@ export default function MenuAdmin() {
       <PageHead title="Menu">
         <input className="a-input" type="search" placeholder="Find an item" value={q} onChange={e => setQ(e.target.value)} aria-label="Find an item" />
         {can('manager') && (
-          <button type="button" className="a-btn" onClick={() => setEditingCat('new')}>
-            Add section
-          </button>
+          <>
+            <button type="button" className="a-btn" onClick={() => setManaging(true)}>
+              Ingredients
+            </button>
+            <button type="button" className="a-btn" onClick={() => setEditingCat('new')}>
+              Add section
+            </button>
+          </>
         )}
       </PageHead>
       {menus && <MenuBar menus={menus} selected={selected} onSelect={setSelected} onChanged={() => void refresh()} />}
@@ -110,6 +117,9 @@ export default function MenuAdmin() {
                     {i.featured && <span className="a-tag gold">Featured</span>}
                     {detail && !onMenu.has(i.id) && <span className="a-tag">Not on {detail.name}</span>}
                     {i.description && <small className="a-menu-desc">{i.description}</small>}
+                    {!!i.ingredients?.length && (
+                      <small className="a-menu-desc">Has {i.ingredients.map(id => ingName.get(id)).filter(Boolean).join(', ').toLowerCase()}</small>
+                    )}
                   </span>
                   <span className="a-menu-opts">
                     {i.options
@@ -150,9 +160,17 @@ export default function MenuAdmin() {
         );
       })}
       {editing && menu && (
-        <ItemEditor menu={menu} menuId={detail?.id} {...editing} onClose={() => setEditing(null)} onSaved={() => void (reload(), refresh())} />
+        <ItemEditor
+          menu={menu}
+          ingredients={ingredients}
+          menuId={detail?.id}
+          {...editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => void (reload(), refresh())}
+        />
       )}
       {pricing && detail && <MenuPriceEditor menu={detail} item={pricing} onClose={() => setPricing(null)} onSaved={() => void refresh()} />}
+      {managing && <IngredientsEditor ingredients={ingredients} onClose={() => setManaging(false)} onChanged={reload} />}
       {editingCat && <CategoryEditor cat={editingCat === 'new' ? null : editingCat} onClose={() => setEditingCat(null)} onSaved={reload} />}
     </div>
   );
@@ -163,8 +181,26 @@ const DESC_MAX = 160;
 
 interface OptDraft { id?: number; label: string; diet: string; price: string }
 
-function ItemEditor({ menu, menuId, item, categoryId, onClose, onSaved }: { menu: ACategory[]; menuId?: number; item?: AItem; categoryId: number; onClose: () => void; onSaved: () => void }) {
+function ItemEditor({
+  menu,
+  ingredients,
+  menuId,
+  item,
+  categoryId,
+  onClose,
+  onSaved,
+}: {
+  menu: ACategory[];
+  ingredients: AIngredient[];
+  menuId?: number;
+  item?: AItem;
+  categoryId: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { call } = useAuth();
+  const [has, setHas] = useState<number[]>(item?.ingredients ?? []);
+  const [extra, setExtra] = useState<AIngredient[]>([]); // added from this editor, before the list reloads
   const [name, setName] = useState(item?.name ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
   const [cat, setCat] = useState(categoryId);
@@ -202,7 +238,7 @@ function ItemEditor({ menu, menuId, item, categoryId, onClose, onSaved }: { menu
     if (options.length > 1 && options.some(o => !o.label)) return setError('With more than one price, label each one (for example Veg and Non-veg).');
     setBusy(true);
     try {
-      const body = { categoryId: cat, name: name.trim(), description: description.trim() || null, active, featured, options };
+      const body = { categoryId: cat, name: name.trim(), description: description.trim() || null, active, featured, options, ingredientIds: has };
       let id = item?.id;
       if (item) await call(`/api/admin/items/${item.id}`, { method: 'PATCH', json: body });
       else id = (await call<{ id: number }>('/api/admin/items', { method: 'POST', json: { ...body, menuId } })).id;
@@ -290,6 +326,15 @@ function ItemEditor({ menu, menuId, item, categoryId, onClose, onSaved }: { menu
             </button>
           )}
         </fieldset>
+        <IngredientPicker
+          all={[...ingredients, ...extra.filter(x => !ingredients.some(g => g.id === x.id))]}
+          has={has}
+          onChange={setHas}
+          onAdded={g => {
+            setExtra(xs => [...xs, g]);
+            setHas(h => [...h, g.id]);
+          }}
+        />
         <div className="a-field">
           <span>Photo (optional)</span>
           <div className="a-photo">
@@ -327,6 +372,162 @@ function ItemEditor({ menu, menuId, item, categoryId, onClose, onSaved }: { menu
         <Toggle id="it-active" checked={active} onChange={setActive} label="Show on the menu" />
         <Toggle id="it-featured" checked={featured} onChange={setFeatured} label="Featured" />
         {error && <p className="a-error">{error}</p>}
+      </div>
+    </Modal>
+  );
+}
+
+/** What's in a dish: tap to tick from the shared list, or add one that isn't there yet. */
+function IngredientPicker({ all, has, onChange, onAdded }: { all: AIngredient[]; has: number[]; onChange: (ids: number[]) => void; onAdded: (g: AIngredient) => void }) {
+  const { call } = useAuth();
+  const [name, setName] = useState('');
+  const [allergen, setAllergen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const on = new Set(has);
+  const flip = (id: number) => onChange(on.has(id) ? has.filter(x => x !== id) : [...has, id]);
+  const add = async () => {
+    const n = name.trim();
+    if (!n) return;
+    const same = all.find(g => g.name.toLowerCase() === n.toLowerCase());
+    if (same) {
+      if (!on.has(same.id)) flip(same.id);
+      setName('');
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await call<{ ingredient: AIngredient }>('/api/admin/ingredients', { method: 'POST', json: { name: n, allergen } });
+      onAdded(r.ingredient);
+      setName('');
+      setAllergen(false);
+    } catch (e) {
+      toast(errText(e), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const groups = [
+    { title: 'Allergens', items: all.filter(g => g.allergen) },
+    { title: 'Other ingredients', items: all.filter(g => !g.allergen) },
+  ];
+  return (
+    <fieldset className="a-field">
+      <legend>Ingredients and allergens</legend>
+      <small className="a-field-note">
+        Tick what’s in it. Guests can leave out dishes with things they’re allergic to or don’t eat, and see the allergens under the dish name.
+      </small>
+      {groups.map(gr =>
+        gr.items.length ? (
+          <div key={gr.title} className="a-ing-group">
+            <span className="a-label">{gr.title}</span>
+            <div className="a-chips wrap">
+              {gr.items.map(g => (
+                <button key={g.id} type="button" className={on.has(g.id) ? 'on' : ''} aria-pressed={on.has(g.id)} onClick={() => flip(g.id)}>
+                  {g.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null,
+      )}
+      <div className="a-ing-add">
+        <input
+          className="a-input"
+          placeholder="Add one that isn’t here"
+          value={name}
+          maxLength={40}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), void add())}
+          aria-label="New ingredient"
+        />
+        <Toggle id="ing-new-allergen" checked={allergen} onChange={setAllergen} label={<small className="a-toggle-cap">Allergen</small>} />
+        <button type="button" className="a-btn a-btn-sm" disabled={busy || !name.trim()} onClick={() => void add()}>
+          Add
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+/** The shared list: rename, mark as an allergen, or delete (which takes it off every dish). */
+function IngredientsEditor({ ingredients, onClose, onChanged }: { ingredients: AIngredient[]; onClose: () => void; onChanged: () => void }) {
+  const { call } = useAuth();
+  const [names, setNames] = useState<Record<number, string>>({});
+  const [confirm, setConfirm] = useState<number | null>(null);
+  const [name, setName] = useState('');
+  const [allergen, setAllergen] = useState(false);
+  const run = async (what: () => Promise<unknown>, done?: string) => {
+    try {
+      await what();
+      if (done) toast(done);
+      onChanged();
+    } catch (e) {
+      toast(errText(e), 'bad');
+    }
+  };
+  const rename = (g: AIngredient) => {
+    const n = (names[g.id] ?? g.name).trim();
+    if (!n || n === g.name) return setNames(x => ({ ...x, [g.id]: g.name }));
+    void run(() => call(`/api/admin/ingredients/${g.id}`, { method: 'PATCH', json: { name: n } }), `Renamed to ${n}`);
+  };
+  const add = () => {
+    const n = name.trim();
+    if (!n) return;
+    void run(async () => {
+      await call('/api/admin/ingredients', { method: 'POST', json: { name: n, allergen } });
+      setName('');
+      setAllergen(false);
+    }, `${n} added`);
+  };
+  return (
+    <Modal title="Ingredients and allergens" onClose={onClose}>
+      <div className="a-form">
+        <p className="a-hint">
+          One list for every dish. Allergens show under the dish name on the menu, and guests can leave out dishes with anything here. Guests only see the
+          ones a dish on the live menu has.
+        </p>
+        <div className="a-ing-add">
+          <input className="a-input" placeholder="New ingredient" value={name} maxLength={40} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} aria-label="New ingredient" />
+          <Toggle id="ing-add-allergen" checked={allergen} onChange={setAllergen} label={<small className="a-toggle-cap">Allergen</small>} />
+          <button type="button" className="a-btn a-btn-primary a-btn-sm" disabled={!name.trim()} onClick={add}>
+            Add
+          </button>
+        </div>
+        <ul className="a-ing-list">
+          {ingredients.map(g => (
+            <li key={g.id}>
+              <input
+                className="a-input"
+                value={names[g.id] ?? g.name}
+                maxLength={40}
+                onChange={e => setNames(x => ({ ...x, [g.id]: e.target.value }))}
+                onBlur={() => rename(g)}
+                onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                aria-label={`Name of ${g.name}`}
+              />
+              <Toggle
+                id={`ing-al-${g.id}`}
+                checked={g.allergen}
+                onChange={v => void run(() => call(`/api/admin/ingredients/${g.id}`, { method: 'PATCH', json: { allergen: v } }))}
+                label={<small className="a-toggle-cap">Allergen</small>}
+              />
+              <small className="a-muted num">{g.dishes ? `${g.dishes} ${g.dishes === 1 ? 'dish' : 'dishes'}` : 'Not used'}</small>
+              {confirm === g.id ? (
+                <button
+                  type="button"
+                  className="a-btn a-btn-sm a-btn-danger"
+                  onClick={() => void run(() => call(`/api/admin/ingredients/${g.id}`, { method: 'DELETE' }), `${g.name} deleted`)}
+                >
+                  {g.dishes ? `Delete from ${g.dishes} ${g.dishes === 1 ? 'dish' : 'dishes'}` : 'Delete'}
+                </button>
+              ) : (
+                <button type="button" className="a-btn a-btn-sm a-btn-ghost" onClick={() => setConfirm(g.id)}>
+                  Delete
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
     </Modal>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import type { MenuCategory, MenuItem } from '../data/types';
+import type { Ingredient, MenuCategory, MenuItem } from '../data/types';
 import { Footer, Nav } from '../components/Chrome';
 import { DietMark } from '../components/DietMark';
 import { Stepper } from '../components/Panels';
@@ -22,15 +22,27 @@ function readClosed(): string[] {
   }
 }
 
+// Ingredients a guest leaves out (allergies, or just no onion), by name so it survives menu edits. Per phone.
+const LEAVE_KEY = 'lbs.menu.leaveOut';
+function readLeaveOut(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(LEAVE_KEY) ?? '[]') as string[];
+  } catch {
+    return [];
+  }
+}
+const key = (s: string) => s.trim().toLowerCase();
+
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
 
-function filterMenu(MENU: MenuCategory[], q: string, vegOnly: boolean): MenuCategory[] {
+function filterMenu(MENU: MenuCategory[], q: string, vegOnly: boolean, avoid: Set<number>): MenuCategory[] {
   const words = norm(q).split(/\s+/).filter(Boolean);
   return MENU.map(c => {
     const catHit = words.length > 0 && words.every(w => norm(c.name).includes(w));
     const items = c.items
       .map(i => (vegOnly ? { ...i, options: i.options.filter(o => o.diet === 'veg') } : i))
       .filter(i => i.options.length > 0)
+      .filter(i => !avoid.size || !(i.ingredients ?? []).some(g => avoid.has(g)))
       .filter(i => !words.length || catHit || words.every(w => norm(i.name + ' ' + (i.description ?? '')).includes(w)));
     return { ...c, items };
   }).filter(c => c.items.length > 0);
@@ -43,8 +55,21 @@ export default function Menu() {
   const { say } = useUi();
   const [params] = useSearchParams();
   const loc = useLocation();
-  const { menu: MENU, settings } = useLive();
-  const cats = useMemo(() => filterMenu(MENU, q, vegOnly), [MENU, q, vegOnly]);
+  const { menu: MENU, settings, ingredients } = useLive();
+  const [leaveOut, setLeaveOut] = useState<string[]>(readLeaveOut);
+  const [showLeave, setShowLeave] = useState(false);
+  const saveLeaveOut = (next: string[]) => {
+    setLeaveOut(next);
+    try {
+      localStorage.setItem(LEAVE_KEY, JSON.stringify(next));
+    } catch {
+      /* fine: it just won't be remembered */
+    }
+  };
+  // Only names that are still on the menu count.
+  const avoided = ingredients.filter(g => leaveOut.includes(key(g.name)));
+  const avoid = useMemo(() => new Set(avoided.map(g => g.id)), [avoided.map(g => g.id).join()]);
+  const cats = useMemo(() => filterMenu(MENU, q, vegOnly, avoid), [MENU, q, vegOnly, avoid]);
   const [active, setActive] = useState(MENU[0]?.id ?? '');
   const barRef = useRef<HTMLDivElement>(null);
   const [closed, setClosed] = useState<Set<string>>(() => new Set(readClosed()));
@@ -189,7 +214,17 @@ export default function Menu() {
             Veg only
           </label>
         </div>
-        {(q || vegOnly) && shown > 0 && (
+        {ingredients.length > 0 && (
+          <LeaveOut
+            ingredients={ingredients}
+            avoided={avoided}
+            open={showLeave}
+            onOpen={setShowLeave}
+            onToggle={g => saveLeaveOut(leaveOut.includes(key(g.name)) ? leaveOut.filter(n => n !== key(g.name)) : [...leaveOut, key(g.name)])}
+            onClear={() => saveLeaveOut([])}
+          />
+        )}
+        {(q || vegOnly || avoid.size > 0) && shown > 0 && (
           <p className="menu-count" aria-live="polite">
             Showing {shown} of {MENU.reduce((a, c) => a + c.items.length, 0)}
           </p>
@@ -268,7 +303,9 @@ export default function Menu() {
           <div className="empty empty-menu">
             <Turntable />
             <p>
-              Nothing on the menu matches “{q}”{vegOnly ? ' in veg' : ''}. Try a shorter word, or clear the search.
+              {q
+                ? `Nothing on the menu matches “${q}”${vegOnly ? ' in veg' : ''}${avoid.size ? ' without what you’re leaving out' : ''}. Try a shorter word, or clear the search.`
+                : 'Every dish has something you’re leaving out. Take one or two off the list to see more.'}
             </p>
             <button
               type="button"
@@ -276,6 +313,7 @@ export default function Menu() {
               onClick={() => {
                 setQ('');
                 setVegOnly(false);
+                saveLeaveOut([]);
               }}
             >
               Clear search
@@ -289,7 +327,87 @@ export default function Menu() {
   );
 }
 
+/**
+ * "Leave out": allergies and ingredients a guest doesn't want. Dishes with any of them drop off the menu.
+ * Opens in place under the search (no overlay), so it scrolls with the page in every browser.
+ */
+function LeaveOut({
+  ingredients,
+  avoided,
+  open,
+  onOpen,
+  onToggle,
+  onClear,
+}: {
+  ingredients: Ingredient[];
+  avoided: Ingredient[];
+  open: boolean;
+  onOpen: (v: boolean) => void;
+  onToggle: (g: Ingredient) => void;
+  onClear: () => void;
+}) {
+  const on = new Set(avoided.map(g => g.id));
+  const groups = [
+    { title: 'Allergies', items: ingredients.filter(g => g.allergen) },
+    { title: 'Ingredients', items: ingredients.filter(g => !g.allergen) },
+  ].filter(g => g.items.length);
+  return (
+    <div className={`leave ${open ? 'is-open' : ''}`}>
+      <button type="button" className="leave-toggle" aria-expanded={open} aria-controls="leave-panel" onClick={() => onOpen(!open)}>
+        <span>Allergies and ingredients</span>
+        {avoided.length > 0 && <span className="leave-summary">Leaving out {avoided.map(g => g.name.toLowerCase()).join(', ')}</span>}
+        <svg className="leave-chev" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="leave-panel" id="leave-panel">
+          <p className="leave-lede">Tap what you can’t or don’t want to eat. Dishes with it come off the menu on this phone.</p>
+          {groups.map(gr => (
+            <fieldset key={gr.title} className="leave-group">
+              <legend>{gr.title}</legend>
+              <div className="leave-chips">
+                {gr.items.map(g => (
+                  <button key={g.id} type="button" className="leave-chip" aria-pressed={on.has(g.id)} onClick={() => onToggle(g)}>
+                    {on.has(g.id) && (
+                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                      </svg>
+                    )}
+                    {g.name}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          ))}
+          <p className="leave-note">
+            Everything is made in one kitchen, so traces can get in. With a serious allergy, tell your server before you order.
+          </p>
+          <div className="leave-actions">
+            {avoided.length > 0 && (
+              <button type="button" className="linkish" onClick={onClear}>
+                Clear all
+              </button>
+            )}
+            <button type="button" className="btn btn-ink" onClick={() => onOpen(false)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The allergens a dish has, for a small line under its name. */
+function useAllergens(item: MenuItem) {
+  const { ingredients } = useLive();
+  const ids = new Set(item.ingredients ?? []);
+  return ingredients.filter(g => g.allergen && ids.has(g.id)).map(g => g.name.toLowerCase());
+}
+
 export function Track({ item }: { item: MenuItem }) {
+  const allergens = useAllergens(item);
   const paired = item.options.length > 1;
   const soldOut = item.available === false;
   const [big, setBig] = useState(false);
@@ -303,12 +421,14 @@ export function Track({ item }: { item: MenuItem }) {
           <button type="button" className="track-main track-main-btn" onClick={() => setBig(true)}>
             <span className="track-name">{item.name}</span>
             {item.description && <span className="track-desc">{item.description}</span>}
+            {allergens.length > 0 && <span className="track-allergens">Has {allergens.join(', ')}</span>}
           </button>
         </>
       ) : (
         <div className="track-main">
           <span className="track-name">{item.name}</span>
           {item.description && <span className="track-desc">{item.description}</span>}
+          {allergens.length > 0 && <span className="track-allergens">Has {allergens.join(', ')}</span>}
         </div>
       )}
       <span className="leader" aria-hidden="true" />
@@ -368,6 +488,7 @@ function Buy({ item }: { item: MenuItem }) {
 
 /** A bigger look at a dish: the photo, what's in it, and its add buttons. */
 function DishPhoto({ item, onClose }: { item: MenuItem; onClose: () => void }) {
+  const allergens = useAllergens(item);
   useEffect(() => {
     const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', key);
@@ -390,6 +511,7 @@ function DishPhoto({ item, onClose }: { item: MenuItem; onClose: () => void }) {
         <div className="dish-body">
           <h2>{item.name}</h2>
           {item.description && <p>{item.description}</p>}
+          {allergens.length > 0 && <p className="track-allergens">Has {allergens.join(', ')}</p>}
           <div className="dish-buy">
             <Buy item={item} />
           </div>

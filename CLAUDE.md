@@ -25,6 +25,9 @@ repo owner (Kaustav). Read `docs/HANDOVER.md` for status, decisions and the next
   - `src/orders.ts` order pricing/GST/payments; `src/routes/{public,auth,admin}.ts`.
   - Menus: one master list (categories/items/item_options); `menus` + `menu_items` + `menu_prices` select dishes and
     override prices. Exactly one menu is live; guests, pricing and staff order screens use it (`menuTree('live')`).
+  - Ingredients/allergens: one shared `ingredients` list (`allergen` flag), linked per dish in `item_ingredients`
+    (`017_ingredients.sql`). Managers edit them in Admin, Menu. `/api/public/menu` returns only those a live dish has;
+    guests leave dishes out by them on the Menu page (kept on the phone by name, `lbs.menu.leaveOut`).
   - LB's card: `src/loyalty.ts` (the bill's one discount, stamps on payment, linking), `src/routes/card.ts` (guest card),
     `src/messaging.ts` (WhatsApp sender; none in production yet, `CARD_CODES_IN_LOG=yes` in `.dev.vars` prints codes locally).
   - Staff phone notifications: `src/push.ts` (Web Push, RFC 8291/8292 with WebCrypto; `pushMessage()` decides who

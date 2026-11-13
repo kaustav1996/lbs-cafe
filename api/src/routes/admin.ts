@@ -10,7 +10,7 @@ import { audioKind, audioMagic, checkPhoto, checkUpload, FileRef, MAX_AUDIO_BYTE
 import { getInvoice, invoiceForOrder, payInvoice, publishInvoice, refuseInvoiced, settleInvoiceCheck } from '../invoices.js';
 import { applyInvoiceDiscount, LOYALTY_DEFAULTS, linkInvoice, loyaltySettings, reapplyOpenBills, setManualDiscount, welcomesTaken } from '../loyalty.js';
 import { addLines, addPayment, createOrder, freeTableCheck, refuseHeld, releaseDue, getOrder, getSettings, HttpError, lockTable, newSitting, normalisePhone, publishTable, publishUpdate, recalc, upsertCustomer } from '../orders.js';
-import { menuTree } from './public.js';
+import { ingredientList, menuTree } from './public.js';
 import { sendPush } from '../push.js';
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -402,7 +402,10 @@ export function adminRoutes() {
   });
 
   // ---------- Menu ----------
-  app.get('/menu', async c => c.json({ categories: await menuTree('all') }));
+  app.get('/menu', async c => {
+    const [categories, ingredients] = await Promise.all([menuTree('all'), ingredientList('all')]);
+    return c.json({ categories, ingredients });
+  });
   // The staff order picker (New order, Add items): the live menu at live prices, sold-out dishes included.
   app.get('/menu/live', async c => c.json({ categories: await menuTree('live') }));
 
@@ -563,8 +566,17 @@ export function adminRoutes() {
       .optional(),
     sort: z.number().int().optional(),
     options: z.array(OptionIn).min(1).max(8),
+    ingredientIds: z.array(z.number().int().positive()).max(40).optional(),
     menuId: z.number().int().positive().optional(),
   });
+
+  async function saveIngredients(tx: any, itemId: number, ids: number[]) {
+    await tx`delete from item_ingredients where item_id = ${itemId}`;
+    if (!ids.length) return;
+    const known = await tx<{ id: number }[]>`select id from ingredients where id = any(${[...new Set(ids)]})`;
+    if (known.length !== new Set(ids).size) throw new HttpError(400, 'One of those ingredients was just deleted. Refresh and try again.', 'bad_ingredient');
+    await tx`insert into item_ingredients ${tx(known.map((k: { id: number }) => ({ item_id: itemId, ingredient_id: k.id })))}`;
+  }
 
   async function saveOptions(tx: any, itemId: number, options: z.infer<typeof OptionIn>[]) {
     // Options that disappear are switched off rather than deleted, so old bills keep their links.
@@ -590,6 +602,7 @@ export function adminRoutes() {
                 ${b.active ?? true}, ${b.available ?? true}, ${b.featured ?? false}, ${b.imageUrl ?? null}, ${b.sort ?? max + 10})
         returning id`;
       await saveOptions(tx, it.id, b.options);
+      if (b.ingredientIds) await saveIngredients(tx, it.id, b.ingredientIds);
       // A new dish goes on the menu being edited (default: the live one).
       await tx`insert into menu_items (menu_id, item_id)
                select id, ${it.id} from menus where ${b.menuId ?? null}::int is null and live or id = ${b.menuId ?? null}
@@ -618,7 +631,37 @@ export function adminRoutes() {
         where id = ${id} returning id`;
       if (!it) throw new HttpError(404, 'Item not found.', 'not_found');
       if (b.options) await saveOptions(tx, id, b.options);
+      if (b.ingredientIds) await saveIngredients(tx, id, b.ingredientIds);
     });
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ ok: true });
+  });
+
+  // ---------- Ingredients and allergens (one shared list; dishes pick from it) ----------
+  const IngredientIn = z.object({ name: z.string().trim().min(1).max(40), allergen: z.boolean().optional() });
+  const dupIngredient = (e: unknown, name: string) => {
+    if ((e as { code?: string }).code === '23505') throw new HttpError(409, `"${name}" is already on the list.`, 'ingredient_exists');
+    throw e;
+  };
+  app.post('/ingredients', atLeast('manager'), async c => {
+    const b = IngredientIn.parse(await c.req.json());
+    const [g] = await sql`insert into ingredients (name, allergen) values (${b.name}, ${b.allergen ?? false}) returning id, name, allergen`.catch(e =>
+      dupIngredient(e, b.name),
+    );
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ ingredient: { ...g, dishes: 0 } }, 201);
+  });
+  app.patch('/ingredients/:id', atLeast('manager'), async c => {
+    const b = IngredientIn.partial().parse(await c.req.json());
+    const [g] = await sql`
+      update ingredients set name = coalesce(${b.name ?? null}, name), allergen = coalesce(${b.allergen ?? null}, allergen)
+      where id = ${Number(c.req.param('id'))} returning id, name, allergen`.catch(e => dupIngredient(e, b.name ?? ''));
+    if (!g) throw new HttpError(404, 'That ingredient isn’t on the list any more.', 'not_found');
+    bus.publish({ type: 'menu.updated' });
+    return c.json({ ingredient: g });
+  });
+  app.delete('/ingredients/:id', atLeast('manager'), async c => {
+    await sql`delete from ingredients where id = ${Number(c.req.param('id'))}`;
     bus.publish({ type: 'menu.updated' });
     return c.json({ ok: true });
   });

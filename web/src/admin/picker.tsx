@@ -3,18 +3,21 @@ import { useAuth, rs, errText } from './core';
 import { DietDot } from './ui';
 
 export interface AOption { id: number; label: string; diet: string; price_paise: number; active: boolean }
-export interface AItem { id: number; category_id: number; name: string; description: string | null; active: boolean; available: boolean; featured: boolean; image_url: string | null; sort: number; options: AOption[] }
+export interface AItem { id: number; category_id: number; name: string; description: string | null; active: boolean; available: boolean; featured: boolean; image_url: string | null; sort: number; ingredients?: number[]; options: AOption[] }
+export interface AIngredient { id: number; name: string; allergen: boolean; dishes?: number }
 export interface ACategory { id: number; slug: string; name: string; color: string; kind: string; sort: number; active: boolean; items: AItem[] }
 
 /** `live`: the live menu at live prices, for taking orders. `all`: the master list, for the menu editor. */
 export function useAdminMenu(source: 'live' | 'all') {
   const { call } = useAuth();
   const [menu, setMenu] = useState<ACategory[] | null>(null);
+  const [ingredients, setIngredients] = useState<AIngredient[]>([]);
   const [error, setError] = useState('');
   const load = async () => {
     try {
-      const r = await call<{ categories: ACategory[] }>(source === 'live' ? '/api/admin/menu/live' : '/api/admin/menu');
+      const r = await call<{ categories: ACategory[]; ingredients?: AIngredient[] }>(source === 'live' ? '/api/admin/menu/live' : '/api/admin/menu');
       setMenu(r.categories);
+      setIngredients(r.ingredients ?? []);
     } catch (e) {
       setError(errText(e));
     }
@@ -23,7 +26,7 @@ export function useAdminMenu(source: 'live' | 'all') {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return { menu, error, reload: load, setMenu };
+  return { menu, ingredients, error, reload: load, setMenu };
 }
 
 export interface PickedLine {

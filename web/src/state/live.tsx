@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { MENU } from '../data/menu';
-import type { MenuCategory, Diet } from '../data/types';
+import type { MenuCategory, Diet, Ingredient } from '../data/types';
 import { SITE, type DayHours } from '../data/site';
 import { api, HAS_API } from '../lib/api';
 
@@ -18,6 +18,8 @@ export interface LiveSettings {
 
 interface LiveApi {
   menu: MenuCategory[];
+  /** Ingredients that dishes on the live menu have, for the "leave out" filter. */
+  ingredients: Ingredient[];
   settings: LiveSettings;
   live: boolean; // true once the API answered
   loading: boolean;
@@ -36,7 +38,7 @@ const FALLBACK_SETTINGS: LiveSettings = {
 };
 
 interface ApiOption { id: number; label: string; diet: Diet; price_paise: number }
-interface ApiItem { id: number; slug: string; name: string; description: string | null; image_url?: string | null; available: boolean; options: ApiOption[] }
+interface ApiItem { id: number; slug: string; name: string; description: string | null; image_url?: string | null; available: boolean; ingredients?: number[]; options: ApiOption[] }
 interface ApiCategory { id: number; slug: string; name: string; color: string; kind: 'food' | 'drink'; items: ApiItem[] }
 
 function fromApi(cats: ApiCategory[]): MenuCategory[] {
@@ -48,6 +50,7 @@ function fromApi(cats: ApiCategory[]): MenuCategory[] {
       description: i.description ?? undefined,
       imageUrl: i.image_url ?? undefined,
       available: i.available,
+      ingredients: i.ingredients ?? [],
       options: i.options.map(o => ({ dbId: o.id, label: o.label, diet: o.diet, price: o.price_paise / 100 })),
     }));
     const prices = items.flatMap(i => i.options.map(o => o.price));
@@ -59,6 +62,7 @@ const Ctx = createContext<LiveApi | null>(null);
 
 export function LiveProvider({ children }: { children: ReactNode }) {
   const [menu, setMenu] = useState<MenuCategory[]>(MENU);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [settings, setSettings] = useState<LiveSettings>(FALLBACK_SETTINGS);
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(HAS_API);
@@ -72,13 +76,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const load = async () => {
       try {
         const [m, s] = await Promise.all([
-          api<{ categories: ApiCategory[] }>('/api/public/menu'),
+          api<{ categories: ApiCategory[]; ingredients?: Ingredient[] }>('/api/public/menu'),
           api<{ gstRate: number; hours: DayHours[]; orderingEnabled: boolean; takeawayEnabled: boolean; bookingEnabled: boolean; cafe?: { phone?: string }; music?: LiveSettings['music'] }>(
             '/api/public/settings',
           ),
         ]);
         if (stop) return;
         setMenu(fromApi(m.categories));
+        setIngredients(m.ingredients ?? []);
         setSettings({
           gstRate: s.gstRate,
           hours: s.hours,
@@ -108,7 +113,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     };
   }, [tick]);
 
-  const value = useMemo(() => ({ menu, settings, live, loading, refresh }), [menu, settings, live, loading, refresh]);
+  const value = useMemo(() => ({ menu, ingredients, settings, live, loading, refresh }), [menu, ingredients, settings, live, loading, refresh]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

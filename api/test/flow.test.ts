@@ -1288,3 +1288,40 @@ test('servers and chefs can cancel orders; a chef only while the order is in the
   const st = Object.fromEntries((await sql<{ id: number; status: string }[]>`select id, status from orders where id in (${a}, ${b}, ${c})`).map(r => [r.id, r.status]));
   assert.deepEqual(st, { [a]: 'cancelled', [b]: 'cancelled', [c]: 'served' });
 });
+
+test('ingredients: a dish gets its ingredients, guests see only the ones in use, and only managers edit them', async () => {
+  const all = (await app.inject({ method: 'GET', url: '/api/admin/menu', headers: auth() })).json();
+  const peanuts = all.ingredients.find((g: any) => g.name === 'Peanuts');
+  assert.ok(peanuts?.allergen, 'common allergens come ready to tick');
+  // A new one, and a duplicate in different case.
+  const add = await app.inject({ method: 'POST', url: '/api/admin/ingredients', headers: auth(), payload: { name: 'Coriander' } });
+  assert.equal(add.statusCode, 201, add.body);
+  const coriander = add.json().ingredient;
+  const dup = await app.inject({ method: 'POST', url: '/api/admin/ingredients', headers: auth(), payload: { name: 'coriander' } });
+  assert.equal(dup.statusCode, 409);
+
+  const dish = find('Espresso').itemId;
+  const save = await app.inject({ method: 'PATCH', url: `/api/admin/items/${dish}`, headers: auth(), payload: { ingredientIds: [peanuts.id, coriander.id] } });
+  assert.equal(save.statusCode, 200, save.body);
+  const pub = (await app.inject({ method: 'GET', url: '/api/public/menu' })).json();
+  const espresso = pub.categories.flatMap((c: any) => c.items).find((i: any) => i.id === dish);
+  assert.deepEqual([...espresso.ingredients].sort(), [peanuts.id, coriander.id].sort());
+  assert.deepEqual(pub.ingredients.map((g: any) => g.name).sort(), ['Coriander', 'Peanuts'], 'only ingredients a live dish has');
+
+  // Leaving ingredientIds out keeps them; an empty list clears them.
+  await app.inject({ method: 'PATCH', url: `/api/admin/items/${dish}`, headers: auth(), payload: { featured: false } });
+  assert.equal((await sql`select 1 from item_ingredients where item_id = ${dish}`).length, 2);
+  const bad = await app.inject({ method: 'PATCH', url: `/api/admin/items/${dish}`, headers: auth(), payload: { ingredientIds: [999999] } });
+  assert.equal(bad.statusCode, 400);
+
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'server@lbscafe.test', password: 'server-pass-1' } });
+  const st = { authorization: `Bearer ${login.json().token}` };
+  assert.equal((await app.inject({ method: 'PATCH', url: `/api/admin/items/${dish}`, headers: st, payload: { ingredientIds: [] } })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/ingredients', headers: st, payload: { name: 'Basil' } })).statusCode, 403);
+
+  // Deleting an ingredient takes it off every dish.
+  assert.equal((await app.inject({ method: 'DELETE', url: `/api/admin/ingredients/${coriander.id}`, headers: auth() })).statusCode, 200);
+  const after = (await app.inject({ method: 'GET', url: '/api/public/menu' })).json();
+  assert.deepEqual(after.categories.flatMap((c: any) => c.items).find((i: any) => i.id === dish).ingredients, [peanuts.id]);
+  await app.inject({ method: 'PATCH', url: `/api/admin/items/${dish}`, headers: auth(), payload: { ingredientIds: [] } });
+});

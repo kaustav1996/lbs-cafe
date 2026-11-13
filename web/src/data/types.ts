@@ -16,7 +16,16 @@ export interface MenuItem {
   hasVariants?: boolean;
   available?: boolean; // false = sold out today
   dbId?: number;
+  /** Ingredient ids (see `Ingredient`), set in Admin, Menu. Empty when nobody has added them. */
+  ingredients?: number[];
   options: MenuOption[];
+}
+
+/** An ingredient or allergen a guest can leave out of the menu. */
+export interface Ingredient {
+  id: number;
+  name: string;
+  allergen: boolean;
 }
 
 export interface MenuCategory {
