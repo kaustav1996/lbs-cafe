@@ -2578,3 +2578,6 @@ textarea.a-input {
     justify-self: start;
   }
 }
+.a-table-note {
+  margin: 8px 0 0;
+}

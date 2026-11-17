@@ -268,7 +268,8 @@ function TableCard({
   showStage?: boolean;
 }) {
   const [confirm, setConfirm] = useState<number | null>(null);
-  const allServed = orders.every(o => o.status === 'served' || o.status === 'completed');
+  // Guests can pay whenever they like, even with food still coming; the card says how many aren't out yet.
+  const notOut = orders.filter(o => o.status !== 'served' && o.status !== 'completed').length;
   const total = orders.reduce((a, o) => a + o.total_paise, 0);
   const due = orders.reduce((a, o) => a + Math.max(o.total_paise - o.paid_paise, 0), 0);
   const firstUnpaid = orders.find(o => o.payment_status !== 'paid') ?? orders[0];
@@ -311,9 +312,17 @@ function TableCard({
           <span className="num">Total {rs(total)}</span>
           <span className={`a-pay ${due === 0 ? 'paid' : due < total ? 'partial' : 'unpaid'}`}>{due === 0 ? 'Paid' : `${rs(due)} due`}</span>
         </footer>
+        {notOut > 0 && (
+          <p className="a-hint a-table-note">
+            {notOut === 1 ? '1 order isn’t served yet.' : `${notOut} orders aren’t served yet.`}{' '}
+            {due > 0
+              ? 'The table can still pay now: it covers everything on the bill so far.'
+              : `Close the table once ${notOut === 1 ? 'it’s' : 'they’re'} served.`}
+          </p>
+        )}
       </div>
       <div className="a-card-actions">
-        {due > 0 && allServed ? (
+        {due > 0 ? (
           <button type="button" className="a-btn a-btn-primary a-btn-sm" onClick={() => onInvoice(firstUnpaid.id)}>
             Take payment
           </button>
